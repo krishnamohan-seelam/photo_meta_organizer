@@ -29,7 +29,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/photo_meta_organizer.git
+git clone https://github.com/krishnamohan-seelam/photo_meta_organizer.git
 cd photo_meta_organizer
 
 # Create and activate virtual environment
