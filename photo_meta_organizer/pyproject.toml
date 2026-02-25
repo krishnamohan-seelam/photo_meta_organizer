@@ -1,0 +1,58 @@
+[project]
+name = "photo-meta-organizer"
+version = "0.1.0"
+description = "High-performance metadata indexing and organization system for large photo libraries"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "Pillow>=10.0.0",
+    "exifread>=3.0.0",
+    "tinydb>=4.8.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+    "black>=23.9.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=photo_meta_organizer --cov-report=term-missing --cov-report=html --strict-markers"
+markers = [
+    "unit: Unit tests for domain and application layers",
+    "integration: Integration tests for repositories and use cases",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
