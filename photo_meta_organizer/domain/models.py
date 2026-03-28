@@ -17,7 +17,7 @@ The EXIF model uses a three-tier architecture:
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 
 # =============================================================================
@@ -221,3 +221,77 @@ class ImageMetadata:
     exif: ImageExifData
     labels: list[str] = field(default_factory=list)
     added_at: datetime = field(default_factory=datetime.utcnow)
+
+
+# =============================================================================
+# Sync Domain Models
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class FileInfo:
+    """Lightweight file metadata from a disk scan (for fingerprinting).
+
+    Obtained cheaply via os.stat() without reading file content.
+    Used by MetadataStateAnalyzer to detect changes without hashing.
+
+    Attributes:
+        path: Normalised absolute file path.
+        size_bytes: File size in bytes (from stat.st_size).
+        modified_time: Last modification time (from stat.st_mtime).
+    """
+
+    path: str
+    size_bytes: int
+    modified_time: datetime
+
+
+@dataclass(frozen=True)
+class FileState:
+    """Represents the detected state of a single file during synchronization.
+
+    Produced by MetadataStateAnalyzer after comparing disk state against
+    the metadata DB. Consumed by SyncOrchestrator to decide the action
+    to take for each file.
+
+    Attributes:
+        file_path: Normalised absolute file path.
+        state: Classification — NEW, MODIFIED, UNCHANGED, or DELETED.
+        file_hash: Current content hash (None for DELETED files).
+        size_bytes: Current size in bytes (None for DELETED files).
+        last_modified: Current mtime (None for DELETED files).
+        previous_hash: Former DB hash, set only for MODIFIED files.
+    """
+
+    file_path: str
+    state: Literal["NEW", "MODIFIED", "UNCHANGED", "DELETED"]
+    file_hash: Optional[str] = None
+    size_bytes: Optional[int] = None
+    last_modified: Optional[datetime] = None
+    previous_hash: Optional[str] = None  # Only set for MODIFIED
+
+
+@dataclass
+class SyncResult:
+    """Summary returned after a metadata synchronization run.
+
+    Attributes:
+        new_files: Number of new files added to DB.
+        modified_files: Number of modified files updated in DB.
+        deleted_entries: Number of orphaned DB entries removed.
+        unchanged_files: Number of files skipped (identical fingerprint).
+        errors: List of error messages for files that failed processing.
+        duration_seconds: Wall-clock time for the full sync run.
+    """
+
+    new_files: int = 0
+    modified_files: int = 0
+    deleted_entries: int = 0
+    unchanged_files: int = 0
+    errors: List[str] = field(default_factory=list)
+    duration_seconds: float = 0.0
+
+    @property
+    def total_changes(self) -> int:
+        """Total number of records added, updated, or removed."""
+        return self.new_files + self.modified_files + self.deleted_entries

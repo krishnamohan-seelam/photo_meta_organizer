@@ -11,11 +11,12 @@ The repository pattern provides:
 - Query capabilities for metadata
 """
 
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, runtime_checkable
 
 from photo_meta_organizer.domain.models import ImageMetadata
 
 
+@runtime_checkable
 class ImageMetadataRepository(Protocol):
     """Protocol defining the contract for image metadata persistence.
 
@@ -28,6 +29,10 @@ class ImageMetadataRepository(Protocol):
         get_by_filehash: Retrieve metadata by file hash.
         get_by_path: Retrieve metadata by file path.
         list_all: Retrieve all stored metadata.
+        delete: Remove metadata by file hash.
+        delete_by_path: Remove metadata by file path (for deleted-file cleanup).
+        find_by_paths: Retrieve multiple records by paths (for sync comparison).
+        count: Return total number of stored records.
     """
 
     def save(self, metadata: ImageMetadata) -> None:
@@ -76,5 +81,47 @@ class ImageMetadataRepository(Protocol):
         Note:
             For large datasets, consider implementing pagination or
             streaming to avoid memory issues.
+        """
+        ...
+
+    def delete(self, file_hash: str) -> bool:
+        """Delete metadata by file hash.
+
+        Args:
+            file_hash: SHA-256 hash of the record to delete.
+
+        Returns:
+            True if a record was deleted, False if not found.
+        """
+        ...
+
+    def delete_by_path(self, file_path: str) -> bool:
+        """Delete metadata by file path (for deleted-file cleanup).
+
+        Args:
+            file_path: The original file path of the record to delete.
+
+        Returns:
+            True if a record was deleted, False if not found.
+        """
+        ...
+
+    def find_by_paths(self, paths: List[str]) -> List[ImageMetadata]:
+        """Find multiple records by their file paths.
+
+        Args:
+            paths: List of file paths to look up.
+
+        Returns:
+            List of ImageMetadata matching the provided paths.
+            Paths with no match are silently skipped.
+        """
+        ...
+
+    def count(self) -> int:
+        """Return the total number of stored records.
+
+        Returns:
+            Integer count of all records in storage.
         """
         ...

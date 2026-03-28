@@ -142,6 +142,43 @@ class TinyDBRepository:
         """Return the number of stored records."""
         return len(self._table)
 
+    def delete_by_path(self, file_path: str) -> bool:
+        """Delete metadata record by file path.
+
+        Args:
+            file_path: The original file path stored in file_info.path.
+
+        Returns:
+            True if a record was found and deleted, False otherwise.
+        """
+        q = Query()
+        removed = self._table.remove(q.file_info.path == file_path)
+        if removed:
+            logger.debug("Deleted metadata for path: %s", file_path)
+            return True
+        logger.debug("No record found for path: %s", file_path)
+        return False
+
+    def find_by_paths(self, paths: List[str]) -> List[ImageMetadata]:
+        """Find multiple metadata records by file paths.
+
+        Performs a single TinyDB scan filtered to the given path set,
+        making it more efficient than N separate get_by_path calls.
+
+        Args:
+            paths: List of file paths to look up.
+
+        Returns:
+            List of ImageMetadata for matching records.
+            Paths with no match are silently skipped.
+        """
+        if not paths:
+            return []
+        path_set = set(paths)
+        q = Query()
+        results = self._table.search(q.file_info.path.test(lambda p: p in path_set))
+        return [self._deserialize(doc) for doc in results]
+
     # =========================================================================
     # Serialization: Domain Models → TinyDB Documents
     # =========================================================================

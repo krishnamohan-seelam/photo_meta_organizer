@@ -221,6 +221,54 @@ def handle_stats_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_sync_command(args: argparse.Namespace) -> int:
+    """Handle 'sync' command — incremental metadata synchronization.
+
+    Detects NEW, MODIFIED, DELETED, and UNCHANGED files by comparing
+    the metadata DB against the current disk state.  Only changed files
+    are processed, making this significantly faster than a full reindex
+    for large libraries with few changes.
+
+    Args:
+        args: Parsed CLI arguments (--path, --db, sync flags).
+
+    Returns:
+        Exit code (0 = success, non-zero = error).
+    """
+    from photo_meta_organizer.application.use_cases import SynchronizeMetadataUseCase
+
+    retriever = build_retriever(args)
+    extractor = build_extractor()
+    repository = build_repository(args)
+
+    use_case = SynchronizeMetadataUseCase(
+        retriever=retriever,
+        extractor=extractor,
+        repository=repository,
+    )
+
+    result = use_case.execute(
+        cleanup_deleted=args.cleanup_deleted,
+        reprocess_modified=args.reprocess_modified,
+        index_new=args.index_new,
+        dry_run=args.dry_run,
+    )
+
+    prefix = "[DRY RUN] " if args.dry_run else ""
+    print(
+        f"{prefix}Sync complete in {result.duration_seconds:.2f}s: "
+        f"+{result.new_files} new, "
+        f"~{result.modified_files} modified, "
+        f"-{result.deleted_entries} deleted, "
+        f"{result.unchanged_files} unchanged"
+    )
+    if result.errors:
+        print(f"Errors ({len(result.errors)}):")
+        for err in result.errors:
+            print(f"  ✗ {err}")
+    return 0 if not result.errors else 2
+
+
 # ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
@@ -240,7 +288,7 @@ def main() -> int:
             "High-performance metadata indexing and organization system "
             "for large photo libraries (20GB+)"
         ),
-        epilog="For more info: https://github.com/example/photo-meta-organizer",
+        epilog="For more info: https://github.com/krishnamohan-seelam/photo_meta_organizer",
     )
 
     parser.add_argument(
@@ -295,6 +343,60 @@ def main() -> int:
     )
     search_parser.add_argument("--tags", help="Filter by tags (comma-separated)")
     search_parser.set_defaults(func=handle_search_command)
+
+    # Sync command (Phase 1.5 — Metadata Sync)
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Incrementally sync metadata DB with disk state",
+        description=(
+            "Detect and process changes (new, modified, deleted) between "
+            "the metadata DB and current disk contents. Much faster than "
+            "a full 'index' for large libraries with few changes."
+        ),
+    )
+    sync_parser.add_argument(
+        "--path",
+        required=False,
+        help="Path to photos directory",
+    )
+    sync_parser.add_argument(
+        "--db",
+        default="photo_metadata.json",
+        help="Path to metadata database file (default: photo_metadata.json)",
+    )
+    sync_parser.add_argument(
+        "--cleanup-deleted",
+        action="store_true",
+        default=False,
+        help="Remove DB entries for files no longer on disk (default: off)",
+    )
+    sync_parser.add_argument(
+        "--no-reprocess",
+        dest="reprocess_modified",
+        action="store_false",
+        default=True,
+        help="Skip re-extraction of modified files",
+    )
+    sync_parser.add_argument(
+        "--no-index",
+        dest="index_new",
+        action="store_false",
+        default=True,
+        help="Skip indexing of new files",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Analyse changes but do NOT write anything (preview mode)",
+    )
+    sync_parser.set_defaults(
+        func=handle_sync_command,
+        cleanup_deleted=False,
+        reprocess_modified=True,
+        index_new=True,
+        dry_run=False,
+    )
 
     # Stats command (Phase 2)
     stats_parser = subparsers.add_parser(

@@ -16,6 +16,7 @@ Example:
     >>> metadata_list = orchestrator.extract_all()
 """
 
+import logging
 from io import BytesIO
 from typing import List
 
@@ -24,8 +25,12 @@ from photo_meta_organizer.application.interfaces.image_extractor import (
 )
 from photo_meta_organizer.application.interfaces.image_retriever import (
     ImageRetriever,
+    RemoteFileHandle,
 )
-from photo_meta_organizer.domain.models import ImageMetadata
+from photo_meta_organizer.application.interfaces.image_repository import (
+    ImageMetadataRepository,
+)
+from photo_meta_organizer.domain.models import FileState, ImageMetadata, SyncResult
 
 
 class ExtractorOrchestrator:
@@ -111,3 +116,150 @@ class ExtractorOrchestrator:
                 metadata = self._extractor.extract(file_handle, stream)
             results.append(metadata)
         return results
+
+
+logger = logging.getLogger(__name__)
+
+
+class SyncOrchestrator:
+    """Orchestrates the application of sync changes to the metadata store.
+
+    Receives a pre-computed list of FileState objects (from MetadataStateAnalyzer)
+    and dispatches each one to the correct action:
+
+    - NEW      → extract metadata + repository.save()
+    - MODIFIED → extract metadata + repository.save() (upsert)
+    - DELETED  → repository.delete_by_path() / repository.delete()
+    - UNCHANGED → skip
+
+    Mirrors the structure of ExtractorOrchestrator but is change-aware,
+    so only files that actually changed are processed.
+
+    Attributes:
+        _retriever: Provides file streams for extraction.
+        _extractor: Stateless metadata extractor.
+        _repository: Persistence backend.
+    """
+
+    def __init__(
+        self,
+        retriever: ImageRetriever,
+        extractor: ImageMetadataExtractor,
+        repository: ImageMetadataRepository,
+    ) -> None:
+        """Initialise with injected dependencies.
+
+        Args:
+            retriever: File discovery and streaming backend.
+            extractor: Stateless metadata extractor.
+            repository: Metadata persistence backend.
+        """
+        self._retriever = retriever
+        self._extractor = extractor
+        self._repository = repository
+
+    def sync(
+        self,
+        file_states: List[FileState],
+        cleanup_deleted: bool = False,
+        reprocess_modified: bool = True,
+        index_new: bool = True,
+    ) -> SyncResult:
+        """Apply sync changes to the repository.
+
+        Iterates over the FileState list produced by MetadataStateAnalyzer
+        and performs the appropriate repository operation for each entry.
+
+        Args:
+            file_states: List of FileState objects (output of MetadataStateAnalyzer).
+            cleanup_deleted: Remove DELETED entries from the repository.
+            reprocess_modified: Re-extract and update MODIFIED files.
+            index_new: Extract and insert NEW files.
+
+        Returns:
+            SyncResult with counters for each action taken.
+        """
+        result = SyncResult()
+
+        for fs in file_states:
+            if fs.state == "UNCHANGED":
+                result.unchanged_files += 1
+                continue
+
+            if fs.state == "DELETED":
+                if cleanup_deleted:
+                    self._delete_entry(fs, result)
+                # If not cleaning up, just count as unchanged (orphaned but kept)
+                continue
+
+            if fs.state == "NEW" and index_new:
+                self._extract_and_save(fs, result)
+            elif fs.state == "MODIFIED" and reprocess_modified:
+                self._extract_and_save(fs, result)
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _delete_entry(self, fs: FileState, result: SyncResult) -> None:
+        """Remove a DELETED entry from the repository.
+
+        Tries delete_by_path first (path-based cleanup), then falls back
+        to delete-by-hash in case the path changed but the hash is known.
+
+        Args:
+            fs: FileState with state == "DELETED".
+            result: Mutable SyncResult to update.
+        """
+        try:
+            deleted = self._repository.delete_by_path(fs.file_path)
+            if not deleted and fs.file_hash:
+                deleted = self._repository.delete(fs.file_hash)
+            if deleted:
+                result.deleted_entries += 1
+                logger.debug("Deleted orphaned entry: %s", fs.file_path)
+            else:
+                logger.warning("Could not delete: %s (not found in DB)", fs.file_path)
+        except Exception as exc:  # noqa: BLE001
+            msg = f"delete error: {fs.file_path}: {exc}"
+            logger.error(msg)
+            result.errors.append(msg)
+
+    def _extract_and_save(self, fs: FileState, result: SyncResult) -> None:
+        """Extract metadata for a NEW or MODIFIED file and persist it.
+
+        The file path from the FileState is used to build a minimal
+        RemoteFileHandle, which the retriever then uses to open a stream.
+
+        Args:
+            fs: FileState with state in ("NEW", "MODIFIED").
+            result: Mutable SyncResult to update.
+        """
+        try:
+            from pathlib import Path as _Path
+            p = _Path(fs.file_path)
+            file_handle = RemoteFileHandle(
+                original_path=str(p),
+                filename=p.name,
+                size_bytes=fs.size_bytes or p.stat().st_size,
+            )
+            with self._retriever.get_file_stream(file_handle) as stream:
+                metadata = self._extractor.extract(file_handle, stream)
+            self._repository.save(metadata)
+            if fs.state == "NEW":
+                result.new_files += 1
+                logger.debug("Indexed new file: %s", fs.file_path)
+            else:
+                result.modified_files += 1
+                logger.debug("Re-indexed modified file: %s", fs.file_path)
+        except FileNotFoundError:
+            # Race condition: file deleted between scan and extract
+            msg = f"race-condition (file disappeared): {fs.file_path}"
+            logger.warning(msg)
+            result.errors.append(msg)
+        except Exception as exc:  # noqa: BLE001
+            msg = f"extract error [{fs.state}]: {fs.file_path}: {exc}"
+            logger.error(msg)
+            result.errors.append(msg)

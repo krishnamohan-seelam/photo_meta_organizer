@@ -16,6 +16,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 - **Extension Filtering** — Automatic filtering for image formats (JPEG, PNG, TIFF, RAW, HEIC, WebP, etc.)
 - **GPS Coordinate Parsing** — Automatic DMS → decimal conversion with WGS84 datum
 - **Stateless Extraction** — Extractors have zero dependencies; safe for parallel processing
+- **Incremental Synchronization** — Change-aware sync (NEW/MODIFIED/DELETED) using hybrid fingerprinting to avoid redundant hashing
 
 ---
 
@@ -58,6 +59,19 @@ python -m photo_meta_organizer.main index --path /photos --db metadata.json --lo
 python -m photo_meta_organizer.main --help
 ```
 
+### Sync Your Library (Incremental)
+
+```bash
+# Fast sync: index new photos and update modified ones
+python -m photo_meta_organizer.main sync --path "C:\your\photos" --db metadata.json
+
+# Sync with orphaned entry cleanup (removes records for deleted files)
+python -m photo_meta_organizer.main sync --path /photos --db metadata.json --cleanup-deleted
+
+# Preview changes without writing to DB
+python -m photo_meta_organizer.main sync --path /photos --db metadata.json --dry-run
+```
+
 ### Run Tests
 
 ```bash
@@ -85,15 +99,15 @@ The project follows **Clean Architecture** with strict dependency inversion. For
 │  ├── interfaces/      Protocols (ImageRetriever,             │
 │  │                    ImageMetadataExtractor,                 │
 │  │                    ImageMetadataRepository)                │
-│  ├── orchestrators.py ExtractorOrchestrator (batch extract)  │
-│  └── use_cases/       IndexPhotosUseCase (full pipeline)     │
+│  ├── orchestrators.py ExtractorOrchestrator, SyncOrchestrator │
+│  └── use_cases/       IndexPhotosUseCase,                     │
+│                       SynchronizeMetadataUseCase              │
 └────────────────────────────┬─────────────────────────────────┘
                              ↓
 ┌──────────────────────────────────────────────────────────────┐
 │  Domain Layer (zero external dependencies)                   │
-│  ├── models.py   ImageMetadata, ImageExifData,               │
-│  │               GpsCoordinates, CameraProfile, etc.         │
-│  └── services.py CameraClassifier (stateless)                │
+│  ├── models.py   ImageMetadata, SyncResult, FileState, etc.  │
+│  └── services.py CameraClassifier, MetadataStateAnalyzer     │
 └──────────────────────────────────────────────────────────────┘
                              ↓
 ┌──────────────────────────────────────────────────────────────┐
@@ -150,9 +164,10 @@ photo_meta_organizer/
 │   │   ├── image_extractor.py      # ImageMetadataExtractor protocol
 │   │   ├── image_retriever.py      # ImageRetriever + RemoteFileHandle
 │   │   └── image_repository.py     # ImageMetadataRepository protocol
-│   ├── orchestrators.py            # ExtractorOrchestrator (batch coordination)
+│   ├── orchestrators.py            # ExtractorOrchestrator & SyncOrchestrator
 │   └── use_cases/
-│       └── index_photos_use_case.py # Full pipeline: retrieve → extract → persist
+│       ├── index_photos_use_case.py # Full pipeline: retrieve → extract → persist
+│       └── synchronize_metadata_use_case.py # Incremental sync: change detection
 ├── infrastructure/
 │   ├── extractors/
 │   │   └── disk_metadata_extractor.py  # exifread + Pillow + SHA-256
@@ -220,6 +235,7 @@ Automatically inferred from camera make/model via `CameraClassifier` domain serv
 |-------|--------|-------------|
 | **Phase 0** | ✅ Complete | Foundation: domain models, interfaces, test infrastructure |
 | **Phase 1** | ✅ Complete | MVP: local disk indexing, TinyDB persistence, CLI |
+| **Phase 1.5**| ✅ Complete | Incremental Sync: NEW/MODIFIED/DELETED detection |
 | **Phase 2** | 🔲 Planned | Parallel processing (ThreadPoolExecutor + Queue) |
 | **Phase 3** | 🔲 Planned | Search/filtering + FastAPI REST API |
 | **Phase 4** | 🔲 Planned | MongoDB + S3 backends |
