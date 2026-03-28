@@ -12,3 +12,5 @@ ruff>=0.1.0
 black>=23.9.0
 setuptools>=61.0
 wheel>=0.41.0
+tqdm 
+memory-profiler

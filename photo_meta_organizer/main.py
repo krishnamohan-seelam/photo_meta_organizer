@@ -164,7 +164,7 @@ def build_repository(args: argparse.Namespace) -> ImageMetadataRepository:
 def handle_index_command(args: argparse.Namespace) -> int:
     """Handle 'index' command — scan photos and extract metadata.
 
-    Delegates to IndexPhotosUseCase for the full pipeline:
+    Delegates to IndexPhotosUseCase or ParallelIndexPhotosUseCase for the full pipeline:
     retrieve → extract → persist.
 
     Args:
@@ -173,17 +173,27 @@ def handle_index_command(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 = success, non-zero = error).
     """
-    from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
-
     retriever = build_retriever(args)
     extractor = build_extractor()
     repository = build_repository(args)
 
-    use_case = IndexPhotosUseCase(
-        retriever=retriever,
-        extractor=extractor,
-        repository=repository,
-    )
+    workers = getattr(args, "workers", 4)
+    if workers > 1:
+        from photo_meta_organizer.application.use_cases import ParallelIndexPhotosUseCase
+        use_case = ParallelIndexPhotosUseCase(
+            retriever=retriever,
+            extractor=extractor,
+            repository=repository,
+            num_workers=workers,
+        )
+    else:
+        from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
+        use_case = IndexPhotosUseCase(
+            retriever=retriever,
+            extractor=extractor,
+            repository=repository,
+        )
+        
     results = use_case.execute()
     print(f"Successfully indexed {len(results)} photos")
     return 0
@@ -216,8 +226,16 @@ def handle_stats_command(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 = success, non-zero = error).
     """
-    logger.info("Stats command received (Phase 2 — not yet implemented)")
-    print("Phase 2: Stats command — coming soon")
+    try:
+        repository = build_repository(args)
+        total_photos = repository.count()
+        print(f"--- Library Statistics ---")
+        print(f"Database: {args.db}")
+        print(f"Total Photos Indexed: {total_photos}")
+    except Exception as e:
+        logger.error("Failed to read statistics: %s", e)
+        print(f"Error reading statistics: {e}")
+        return 1
     return 0
 
 

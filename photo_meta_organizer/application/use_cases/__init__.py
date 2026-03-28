@@ -11,5 +11,8 @@ from photo_meta_organizer.application.use_cases.index_photos_use_case import (
 from photo_meta_organizer.application.use_cases.synchronize_metadata_use_case import (
     SynchronizeMetadataUseCase,
 )
+from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
+    ParallelIndexPhotosUseCase,
+)
 
-__all__ = ["IndexPhotosUseCase", "SynchronizeMetadataUseCase"]
+__all__ = ["IndexPhotosUseCase", "SynchronizeMetadataUseCase", "ParallelIndexPhotosUseCase"]
