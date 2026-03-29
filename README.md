@@ -49,14 +49,24 @@ pip install -r requirements.txt
 ### Index Your Photos
 
 ```bash
-# Index all images in a directory
+# Index all images in a directory (uses 4 workers by default)
 python -m photo_meta_organizer.main index --path "C:\your\photos" --db metadata.json
+
+# Index with specific number of worker threads (Parallel Processing)
+python -m photo_meta_organizer.main index --path "C:\your\photos" --db metadata.json --workers 8
 
 # With verbose logging
 python -m photo_meta_organizer.main index --path /photos --db metadata.json --log-level DEBUG
 
 # View help
 python -m photo_meta_organizer.main --help
+```
+
+### Library Statistics
+
+```bash
+# View library statistics (total photos indexed)
+python -m photo_meta_organizer.main stats --db metadata.json
 ```
 
 ### Sync Your Library (Incremental)
@@ -236,7 +246,7 @@ Automatically inferred from camera make/model via `CameraClassifier` domain serv
 | **Phase 0** | ✅ Complete | Foundation: domain models, interfaces, test infrastructure |
 | **Phase 1** | ✅ Complete | MVP: local disk indexing, TinyDB persistence, CLI |
 | **Phase 1.5**| ✅ Complete | Incremental Sync: NEW/MODIFIED/DELETED detection |
-| **Phase 2** | 🔲 Planned | Parallel processing (ThreadPoolExecutor + Queue) |
+| **Phase 2** | ✅ Complete | Parallel processing (ThreadPoolExecutor + Queue) |
 | **Phase 3** | 🔲 Planned | Search/filtering + FastAPI REST API |
 | **Phase 4** | 🔲 Planned | MongoDB + S3 backends |
 | **Phase 5** | 🔲 Planned | AI tagging + reverse geocoding |
