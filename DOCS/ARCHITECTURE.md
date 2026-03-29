@@ -1,7 +1,7 @@
 # Architecture and Wiring
 
-**Status:** ✅ Phase 1 Complete  
-**Last Updated:** February 25, 2026  
+**Status:** ✅ Phase 2 Complete  
+**Last Updated:** March 29, 2026  
 **Tests:** 98 passing
 
 ---
@@ -91,14 +91,16 @@ main.py (Composition Root)
   └── build_repository() → TinyDBRepository
          │
          ↓
-IndexPhotosUseCase
+IndexPhotosUseCase / ParallelIndexPhotosUseCase
   │
-  ├── ExtractorOrchestrator  (retrieve → extract)
-  │     ├── ImageRetriever.list_files()
-  │     ├── ImageRetriever.get_file_stream()  [context manager]
-  │     └── ImageMetadataExtractor.extract()  [stateless]
+  ├── ThreadPoolExecutor (Parallel extraction)
+  │     ├── ExtractorOrchestrator  (retrieve → extract)
+  │     │     ├── ImageRetriever.list_files()
+  │     │     ├── ImageRetriever.get_file_stream()  [context manager]
+  │     │     └── ImageMetadataExtractor.extract()  [stateless]
   │
-  └── ImageMetadataRepository.save()  (persist each result)
+  └── Queue + Dedicated DB Writer Thread
+        └── ImageMetadataRepository.save()  (persist each result)
 ```
 
 ---
@@ -114,7 +116,7 @@ IndexPhotosUseCase
 - **Depends only on Domain** — no infrastructure imports
 - `interfaces/`: Protocol definitions (ports) for retriever, extractor, repository
 - `orchestrators.py`: `ExtractorOrchestrator` — coordinates retriever + extractor
-- `use_cases/`: `IndexPhotosUseCase` — full retrieve→extract→persist pipeline
+- `use_cases/`: `IndexPhotosUseCase`, `ParallelIndexPhotosUseCase` — full retrieve→extract→persist pipelines
 
 ### Infrastructure Layer (`infrastructure/`)
 - **Implements protocols** — the only layer that touches external libraries
