@@ -57,7 +57,48 @@ class TinyDBRepository:
         """
         self._db = TinyDB(db_path, indent=2)
         self._table = self._db.table("metadata")
-        logger.info("TinyDB repository initialized at: %s", db_path)
+        
+        # Index data structures
+        self._hash_index: Dict[str, Dict[str, Any]] = {}
+        self._path_index: Dict[str, Dict[str, Any]] = {}
+        self._captured_at_index: List[tuple[datetime, Dict[str, Any]]] = []
+        self._size_index: List[tuple[int, Dict[str, Any]]] = []
+        
+        self.rebuild_indexes()
+        logger.info("TinyDB repository initialized at: %s with indexes built", db_path)
+
+    def rebuild_indexes(self) -> None:
+        """Rebuild all in-memory indexes from the TinyDB table records."""
+        self._hash_index.clear()
+        self._path_index.clear()
+        self._captured_at_index.clear()
+        self._size_index.clear()
+
+        for doc in self._table.all():
+            file_hash = doc.get("file_hash")
+            if file_hash:
+                self._hash_index[file_hash] = doc
+
+            file_info = doc.get("file_info", {})
+            file_path = file_info.get("path")
+            if file_path:
+                self._path_index[file_path] = doc
+
+            size_bytes = file_info.get("size_bytes")
+            if size_bytes is not None:
+                self._size_index.append((size_bytes, doc))
+
+            exif_doc = doc.get("exif", {})
+            captured_at_str = exif_doc.get("captured_at")
+            if captured_at_str:
+                try:
+                    captured_at_dt = datetime.fromisoformat(captured_at_str)
+                    self._captured_at_index.append((captured_at_dt, doc))
+                except (ValueError, TypeError):
+                    pass
+
+        self._captured_at_index.sort(key=lambda x: x[0])
+        self._size_index.sort(key=lambda x: x[0])
 
     def close(self) -> None:
         """Close the database connection."""
@@ -87,8 +128,10 @@ class TinyDBRepository:
             self._table.insert(doc)
             logger.debug("Inserted metadata for hash: %s", metadata.file_hash[:12])
 
+        self.rebuild_indexes()
+
     def get_by_filehash(self, file_hash: str) -> Optional[ImageMetadata]:
-        """Retrieve metadata by SHA-256 file hash.
+        """Retrieve metadata by SHA-256 file hash using fast O(1) index.
 
         Args:
             file_hash: The content hash to search for.
@@ -96,6 +139,10 @@ class TinyDBRepository:
         Returns:
             ImageMetadata if found, None otherwise.
         """
+        doc = self._hash_index.get(file_hash)
+        if doc is not None:
+            return self._deserialize(doc)
+
         q = Query()
         results = self._table.search(q.file_hash == file_hash)
         if not results:
@@ -103,7 +150,7 @@ class TinyDBRepository:
         return self._deserialize(results[0])
 
     def get_by_path(self, file_path: str) -> Optional[ImageMetadata]:
-        """Retrieve metadata by original file path.
+        """Retrieve metadata by original file path using fast O(1) index.
 
         Args:
             file_path: The file path to search for.
@@ -111,6 +158,10 @@ class TinyDBRepository:
         Returns:
             ImageMetadata if found, None otherwise.
         """
+        doc = self._path_index.get(file_path)
+        if doc is not None:
+            return self._deserialize(doc)
+
         q = Query()
         results = self._table.search(q.file_info.path == file_path)
         if not results:
@@ -126,7 +177,7 @@ class TinyDBRepository:
         return [self._deserialize(doc) for doc in self._table.all()]
 
     def delete(self, file_hash: str) -> bool:
-        """Delete metadata by file hash.
+        """Delete metadata by file hash and update indexes.
 
         Args:
             file_hash: The content hash of the record to delete.
@@ -136,14 +187,17 @@ class TinyDBRepository:
         """
         q = Query()
         removed = self._table.remove(q.file_hash == file_hash)
-        return len(removed) > 0
+        if removed:
+            self.rebuild_indexes()
+            return True
+        return False
 
     def count(self) -> int:
         """Return the number of stored records."""
         return len(self._table)
 
     def delete_by_path(self, file_path: str) -> bool:
-        """Delete metadata record by file path.
+        """Delete metadata record by file path and update indexes.
 
         Args:
             file_path: The original file path stored in file_info.path.
@@ -154,16 +208,14 @@ class TinyDBRepository:
         q = Query()
         removed = self._table.remove(q.file_info.path == file_path)
         if removed:
+            self.rebuild_indexes()
             logger.debug("Deleted metadata for path: %s", file_path)
             return True
         logger.debug("No record found for path: %s", file_path)
         return False
 
     def find_by_paths(self, paths: List[str]) -> List[ImageMetadata]:
-        """Find multiple metadata records by file paths.
-
-        Performs a single TinyDB scan filtered to the given path set,
-        making it more efficient than N separate get_by_path calls.
+        """Find multiple metadata records by file paths using path index.
 
         Args:
             paths: List of file paths to look up.
@@ -174,10 +226,59 @@ class TinyDBRepository:
         """
         if not paths:
             return []
-        path_set = set(paths)
-        q = Query()
-        results = self._table.search(q.file_info.path.test(lambda p: p in path_set))
-        return [self._deserialize(doc) for doc in results]
+
+        results = []
+        for p in paths:
+            doc = self._path_index.get(p)
+            if doc is not None:
+                results.append(self._deserialize(doc))
+        return results
+
+    def find_by_date_range(
+        self,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+    ) -> List[ImageMetadata]:
+        """Find metadata records captured within a date range using captured_at index.
+
+        Args:
+            date_start: Minimum captured_at datetime (inclusive).
+            date_end: Maximum captured_at datetime (inclusive).
+
+        Returns:
+            List of ImageMetadata records within the date range.
+        """
+        results = []
+        for captured_at_dt, doc in self._captured_at_index:
+            if date_start and captured_at_dt < date_start:
+                continue
+            if date_end and captured_at_dt > date_end:
+                continue
+            results.append(self._deserialize(doc))
+        return results
+
+    def find_by_size_range(
+        self,
+        min_bytes: Optional[int] = None,
+        max_bytes: Optional[int] = None,
+    ) -> List[ImageMetadata]:
+        """Find metadata records with file size in bytes within a specified range using size index.
+
+        Args:
+            min_bytes: Minimum file size in bytes (inclusive).
+            max_bytes: Maximum file size in bytes (inclusive).
+
+        Returns:
+            List of ImageMetadata records within the size range.
+        """
+        results = []
+        for size_bytes, doc in self._size_index:
+            if min_bytes is not None and size_bytes < min_bytes:
+                continue
+            if max_bytes is not None and size_bytes > max_bytes:
+                continue
+            results.append(self._deserialize(doc))
+        return results
 
     # =========================================================================
     # Serialization: Domain Models → TinyDB Documents

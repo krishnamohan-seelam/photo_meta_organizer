@@ -14,5 +14,18 @@ from photo_meta_organizer.application.use_cases.synchronize_metadata_use_case im
 from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
     ParallelIndexPhotosUseCase,
 )
+from photo_meta_organizer.application.use_cases.search_photos_use_case import (
+    SearchPhotosUseCase,
+    SearchPhotosQuery,
+    PaginatedResult,
+)
 
-__all__ = ["IndexPhotosUseCase", "SynchronizeMetadataUseCase", "ParallelIndexPhotosUseCase"]
+__all__ = [
+    "IndexPhotosUseCase",
+    "SynchronizeMetadataUseCase",
+    "ParallelIndexPhotosUseCase",
+    "SearchPhotosUseCase",
+    "SearchPhotosQuery",
+    "PaginatedResult",
+]
+

@@ -22,6 +22,7 @@ Example:
 """
 
 import argparse
+from datetime import datetime, timezone
 import logging
 import sys
 from logging.config import dictConfig
@@ -199,26 +200,129 @@ def handle_index_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_date_arg(date_str: Optional[str]) -> Optional[datetime]:
+    """Parse date string into a UTC datetime object."""
+    if not date_str:
+        return None
+    date_str = date_str.strip()
+    try:
+        if len(date_str) == 7:  # YYYY-MM
+            return datetime.strptime(date_str, "%Y-%m").replace(tzinfo=timezone.utc)
+        elif len(date_str) == 10:  # YYYY-MM-DD
+            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+    except ValueError:
+        logger.warning("Failed to parse date string: %s", date_str)
+        return None
+
+
 def handle_search_command(args: argparse.Namespace) -> int:
     """Handle 'search' command — query indexed photos.
 
-    Phase 3 deliverable.
-
     Args:
-        args: Parsed CLI arguments (--date-from, --camera, etc.).
+        args: Parsed CLI arguments (--camera, --date, --sort, etc.).
 
     Returns:
         Exit code (0 = success, non-zero = error).
     """
-    logger.info("Search command received (Phase 3 — not yet implemented)")
-    print("Phase 3: Search command — coming soon")
+    from tabulate import tabulate
+    from photo_meta_organizer.application.use_cases import SearchPhotosUseCase, SearchPhotosQuery
+
+    repository = build_repository(args)
+
+    # Date parsing logic
+    date_start = _parse_date_arg(getattr(args, "date_from", None))
+    date_end = _parse_date_arg(getattr(args, "date_to", None))
+    single_date = getattr(args, "date", None)
+    if single_date and not date_start and not date_end:
+        if len(single_date.strip()) == 7:  # YYYY-MM
+            dt = _parse_date_arg(single_date)
+            if dt:
+                date_start = dt
+                # End of month
+                month = dt.month
+                year = dt.year + (1 if month == 12 else 0)
+                next_month = 1 if month == 12 else month + 1
+                date_end = datetime(year, next_month, 1, tzinfo=timezone.utc)
+        else:
+            dt = _parse_date_arg(single_date)
+            if dt:
+                date_start = dt
+                date_end = datetime(dt.year, dt.month, dt.day, 23, 59, 59, tzinfo=timezone.utc)
+
+    # Location radius parsing
+    loc_lat = getattr(args, "lat", None)
+    loc_lon = getattr(args, "lon", None)
+    radius_km = getattr(args, "radius", None)
+
+    loc_arg = getattr(args, "location", None)
+    if loc_arg and (loc_lat is None or loc_lon is None or radius_km is None):
+        parts = [p.strip() for p in loc_arg.split(",")]
+        if len(parts) >= 3:
+            try:
+                loc_lat, loc_lon, radius_km = float(parts[0]), float(parts[1]), float(parts[2])
+            except ValueError:
+                pass
+
+    # Tags parsing
+    tags_arg = getattr(args, "tags", None)
+    tags_list = [t.strip() for t in tags_arg.split(",")] if tags_arg else None
+
+    query = SearchPhotosQuery(
+        date_start=date_start,
+        date_end=date_end,
+        camera_make=getattr(args, "camera", None),
+        camera_model=getattr(args, "camera", None),
+        location_lat=loc_lat,
+        location_lon=loc_lon,
+        radius_km=radius_km,
+        tags=tags_list,
+        sort_by=getattr(args, "sort", "captured_at"),
+        sort_order=getattr(args, "order", "asc"),
+        page=getattr(args, "page", 1),
+        page_size=getattr(args, "page_size", 50),
+    )
+
+    use_case = SearchPhotosUseCase(repository=repository)
+    result = use_case.execute(query)
+
+    print(f"\nSearch Results (Page {result.page} of {result.total_pages} | Total: {result.total_count}):\n")
+
+    if not result.items:
+        print("No photos found matching the search criteria.")
+        return 0
+
+    table_data = []
+    for item in result:
+        exif = item.exif
+        cam = f"{exif.camera_make or ''} {exif.camera_model or ''}".strip() or "Unknown"
+        dt_str = exif.captured_at.strftime("%Y-%m-%d %H:%M") if exif and exif.captured_at else "N/A"
+        size_mb = (item.file_info.size_bytes or 0) / (1024 * 1024)
+        size_str = f"{size_mb:.2f} MB"
+        loc_str = (
+            f"{exif.location.latitude:.4f}, {exif.location.longitude:.4f}"
+            if exif and exif.location
+            else "N/A"
+        )
+        labels_str = ", ".join(item.labels) if item.labels else ""
+
+        table_data.append([
+            item.file_info.name,
+            dt_str,
+            cam,
+            size_str,
+            loc_str,
+            labels_str,
+        ])
+
+    headers = ["Filename", "Captured At", "Camera Make/Model", "Size", "GPS (Lat, Lon)", "Labels"]
+    print(tabulate(table_data, headers=headers, tablefmt="grid"))
+    print(f"\nDisplaying {len(result.items)} item(s) on Page {result.page}.\n")
     return 0
 
 
 def handle_stats_command(args: argparse.Namespace) -> int:
     """Handle 'stats' command — show library statistics.
-
-    Phase 2 deliverable.
 
     Args:
         args: Parsed CLI arguments (--db, etc.).
@@ -227,6 +331,7 @@ def handle_stats_command(args: argparse.Namespace) -> int:
         Exit code (0 = success, non-zero = error).
     """
     from collections import Counter
+    from tabulate import tabulate
 
     try:
         repository = build_repository(args)
@@ -236,19 +341,29 @@ def handle_stats_command(args: argparse.Namespace) -> int:
         total_bytes = 0
         mime_counts = Counter()
         camera_counts = Counter()
+        dates = []
 
         for item in all_metadata:
             if hasattr(item, "file_info") and item.file_info:
                 total_bytes += getattr(item.file_info, "size_bytes", 0)
                 mime_counts[getattr(item.file_info, "mime_type", "unknown")] += 1
             if hasattr(item, "exif") and item.exif:
-                camera = getattr(item.exif, "camera_profile", None)
-                cam_name = camera.value if hasattr(camera, "value") else str(camera or "Unknown")
+                make = getattr(item.exif, "camera_make", "") or ""
+                model = getattr(item.exif, "camera_model", "") or ""
+                cam_name = f"{make} {model}".strip() or "Unknown"
                 camera_counts[cam_name] += 1
+                if item.exif.captured_at:
+                    dates.append(item.exif.captured_at)
 
         # Format size in human-readable units
         size_mb = total_bytes / (1024 * 1024)
         size_str = f"{size_mb / 1024:.2f} GB" if size_mb >= 1024 else f"{size_mb:.2f} MB"
+
+        date_range_str = "N/A"
+        if dates:
+            min_date = min(dates).strftime("%Y-%m-%d")
+            max_date = max(dates).strftime("%Y-%m-%d")
+            date_range_str = f"{min_date} to {max_date}"
 
         print(f"\n=======================================================")
         print(f"       PHOTO META ORGANIZER - LIBRARY STATISTICS       ")
@@ -256,16 +371,17 @@ def handle_stats_command(args: argparse.Namespace) -> int:
         print(f" Database File         : {args.db}")
         print(f" Total Photos Indexed  : {total_photos}")
         print(f" Total Storage Size    : {size_str} ({total_bytes:,} bytes)")
+        print(f" Date Range            : {date_range_str}")
 
         if mime_counts:
-            print(f"\n Format Distribution:")
-            for mime, count in mime_counts.most_common():
-                print(f"   - {mime:<20}: {count}")
+            print(f"\nFormat Distribution:")
+            format_table = [[mime, count] for mime, count in mime_counts.most_common()]
+            print(tabulate(format_table, headers=["Format", "Count"], tablefmt="simple"))
 
         if camera_counts:
-            print(f"\n Camera Distribution:")
-            for cam, count in camera_counts.most_common():
-                print(f"   - {cam:<20}: {count}")
+            print(f"\nCamera Distribution:")
+            camera_table = [[cam, count] for cam, count in camera_counts.most_common()]
+            print(tabulate(camera_table, headers=["Camera Make/Model", "Count"], tablefmt="simple"))
 
         print(f"=======================================================\n")
     except Exception as e:
@@ -388,14 +504,30 @@ def main() -> int:
         "search",
         help="Search indexed photos (Phase 3)",
     )
-    search_parser.add_argument("--db", default="photo_metadata.json")
+    search_parser.add_argument("--db", default="photo_metadata.json", help="Path to metadata database file")
+    search_parser.add_argument("--date", help="Date filter (YYYY-MM or YYYY-MM-DD)")
     search_parser.add_argument("--date-from", help="Start date (YYYY-MM-DD)")
     search_parser.add_argument("--date-to", help="End date (YYYY-MM-DD)")
-    search_parser.add_argument("--camera", help="Filter by camera model")
-    search_parser.add_argument(
-        "--location", help="Filter by location (lat,lon,radius_km)"
-    )
+    search_parser.add_argument("--camera", help="Filter by camera make/model")
+    search_parser.add_argument("--location", help="Filter by location (lat,lon,radius_km)")
+    search_parser.add_argument("--lat", type=float, help="Latitude for radius search")
+    search_parser.add_argument("--lon", type=float, help="Longitude for radius search")
+    search_parser.add_argument("--radius", type=float, help="Radius in km for location search")
     search_parser.add_argument("--tags", help="Filter by tags (comma-separated)")
+    search_parser.add_argument(
+        "--sort",
+        default="captured_at",
+        choices=["captured_at", "size_bytes", "camera_model", "file_name"],
+        help="Field to sort by (default: captured_at)",
+    )
+    search_parser.add_argument(
+        "--order",
+        default="asc",
+        choices=["asc", "desc"],
+        help="Sort order (default: asc)",
+    )
+    search_parser.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
+    search_parser.add_argument("--page-size", type=int, default=50, help="Results per page (default: 50)")
     search_parser.set_defaults(func=handle_search_command)
 
     # Sync command (Phase 1.5 — Metadata Sync)

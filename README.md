@@ -3,8 +3,8 @@
 Metadata indexing and organization system built specifically for large-scale photo collections (20GB+). It automates the extraction of comprehensive EXIF data, performs content-based deduplication using SHA-256 hashing, and persists results in a structured, queryable JSON repository. Built with **Clean Architecture** principles — swap storage backends, retrievers, and extractors without touching business logic.
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/Tests-142%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/Coverage-88%25-green)
+![Tests](https://img.shields.io/badge/Tests-180%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/Coverage-90%25-green)
 ![Throughput](https://img.shields.io/badge/Throughput-21%2C710%20imgs%2Fmin-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -12,6 +12,10 @@ Metadata indexing and organization system built specifically for large-scale pho
 
 ## ✨ Features
 
+- **CLI Search & Library Statistics** — `python main.py search` and `python main.py stats` formatted using `tabulate` for date, camera, location radius, tag, and size filtering
+- **In-Memory Database Indexing** — `TinyDBRepository` indexes `file_hash` ($O(1)$ lookup), `file_path`, `captured_at`, and `size_bytes` range queries for high-performance retrieval
+- **REST API** — FastAPI with 4 endpoints: `GET /api/photos`, `GET /api/photos/{hash}`, `POST /api/search`, `DELETE /api/photos/{hash}` — full Pydantic validation, 100% integration test coverage
+- **Multi-Criteria Search & Querying** — `SearchPhotosUseCase` supporting date ranges, camera make/model, location radius (Haversine distance), tags, custom sorting, and paginated result streaming (`Iterator` protocol)
 - **Multi-Threaded Parallel Indexing** — `ThreadPoolExecutor` worker pool + bounded queue + dedicated DB writer thread (21,000+ imgs/min)
 - **Real-Time Progress & Metrics** — Progress reporting (`tqdm`), error tracking, and comprehensive library statistics
 - **Performance Benchmarking Suite** — Built-in benchmarking script (`scripts/benchmark_performance.py`)
@@ -252,7 +256,7 @@ Automatically inferred from camera make/model via `CameraClassifier` domain serv
 | **Phase 1** | ✅ Complete | MVP: local disk indexing, TinyDB persistence, CLI |
 | **Phase 1.5**| ✅ Complete | Incremental Sync: NEW/MODIFIED/DELETED detection |
 | **Phase 2** | ✅ Complete | Parallel processing (ThreadPoolExecutor + Queue) |
-| **Phase 3** | 🔲 Planned | Search/filtering + FastAPI REST API |
+| **Phase 3** | ✅ Complete | Search & indexing + FastAPI REST API + CLI search & stats |
 | **Phase 4** | 🔲 Planned | MongoDB + S3 backends |
 | **Phase 5** | 🔲 Planned | AI tagging + reverse geocoding |
 | **Phase 6** | 🔲 Planned | React web gallery UI |
@@ -267,7 +271,9 @@ Automatically inferred from camera make/model via `CameraClassifier` domain serv
 | EXIF Parsing | exifread |
 | Image Processing | Pillow (PIL) |
 | Hashing | hashlib (SHA-256) |
-| Persistence | TinyDB (Phase 1) |
+| Persistence | TinyDB (Indexed) |
+| REST API Framework | FastAPI + Pydantic |
+| CLI Table Formatting | tabulate |
 | Testing | pytest + pytest-cov |
 | Type Checking | mypy (strict) |
 

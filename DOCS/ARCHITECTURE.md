@@ -1,8 +1,8 @@
 # Architecture and Wiring
 
-**Status:** ✅ Phase 2 (Performance) Complete & Verified  
+**Status:** ✅ Phase 3 (Search & Querying) Complete & Verified  
 **Last Updated:** August 23, 2026  
-**Tests:** 142 passing (88% coverage)  
+**Tests:** 180 passing (90% coverage)  
 **Throughput:** 21,710 imgs/min (8 workers)
 
 ---
@@ -28,6 +28,9 @@ concrete implementations (adapters) injected at the composition root (`main.py`)
 - **Repository uses upsert**: `save()` updates if `file_hash` exists, inserts otherwise
 - **Three-tier EXIF model**: Universal → Common → Camera-Specific (raw_tags)
 - **Camera profile inference**: `CameraClassifier` domain service (no infra dependencies)
+- **Multi-criteria Search**: `SearchPhotosUseCase` with `SearchPhotosQuery` DTO & `PaginatedResult` iterator
+- **TinyDB In-Memory Indexing**: `TinyDBRepository` maintains $O(1)$ hash/path lookups (`_hash_index`, `_path_index`) and sorted range indexes (`_captured_at_index`, `_size_index`) for accelerated queries
+- **REST API**: `FastAPI` factory `create_app(db_path)` with four endpoints (`GET/DELETE /api/photos`, `GET /api/photos/{hash}`, `POST /api/search`) backed by Pydantic schemas
 
 ---
 
@@ -72,6 +75,26 @@ use_case = IndexPhotosUseCase(
 )
 results = use_case.execute()  # Extracts and persists all metadata
 print(f"Indexed {len(results)} photos")
+```
+
+### 4. Searching metadata via `SearchPhotosUseCase`
+
+```python
+from photo_meta_organizer.application.use_cases import SearchPhotosUseCase, SearchPhotosQuery
+
+search_use_case = SearchPhotosUseCase(repository=repository)
+query = SearchPhotosQuery(
+    camera_make="Sony",
+    location_lat=37.7749,
+    location_lon=-122.4194,
+    radius_km=20.0,
+    sort_by="captured_at",
+    page=1,
+    page_size=20
+)
+result = search_use_case.execute(query)
+for photo in result:  # Implements Iterator protocol
+    print(photo.file_info.name, photo.exif.captured_at)
 ```
 
 ### 4. CLI (end-user)

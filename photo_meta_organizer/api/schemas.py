@@ -1,0 +1,98 @@
+"""Pydantic schemas for API request/response models."""
+
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
+
+
+class GpsCoordinatesSchema(BaseModel):
+    """GPS coordinates for API responses."""
+
+    latitude: float
+    longitude: float
+    altitude: Optional[float] = None
+    datum: str = "WGS84"
+
+
+class FileInfoSchema(BaseModel):
+    """File-level metadata schema for API responses."""
+
+    name: str
+    path: str
+    size_bytes: int
+    mime_type: str
+
+
+class DimensionsSchema(BaseModel):
+    """Image dimensions schema."""
+
+    width: int
+    height: int
+
+
+class ExifDataSchema(BaseModel):
+    """EXIF metadata schema for API responses."""
+
+    camera_make: Optional[str] = None
+    camera_model: Optional[str] = None
+    f_stop: Optional[float] = None
+    exposure_time: Optional[str] = None
+    iso: Optional[int] = None
+    focal_length: Optional[str] = None
+    captured_at: Optional[datetime] = None
+    camera_profile: str = "unknown"
+    location: Optional[GpsCoordinatesSchema] = None
+    flash_fired: Optional[bool] = None
+    focal_length_35mm: Optional[str] = None
+    white_balance_mode: Optional[str] = None
+    exposure_program: Optional[str] = None
+    metering_mode: Optional[str] = None
+    orientation: Optional[int] = None
+    raw_tags: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PhotoMetadataResponse(BaseModel):
+    """Full photo metadata response schema."""
+
+    file_hash: str
+    file_info: FileInfoSchema
+    dimensions: DimensionsSchema
+    exif: ExifDataSchema
+    labels: List[str] = Field(default_factory=list)
+    added_at: datetime
+
+
+class PaginatedPhotosResponse(BaseModel):
+    """Paginated list of photo metadata."""
+
+    items: List[PhotoMetadataResponse]
+    total_count: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class SearchRequest(BaseModel):
+    """Advanced search request body schema."""
+
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+    camera_make: Optional[str] = None
+    camera_model: Optional[str] = None
+    location_lat: Optional[float] = None
+    location_lon: Optional[float] = None
+    radius_km: Optional[float] = None
+    tags: Optional[List[str]] = None
+    sort_by: str = "captured_at"
+    sort_order: str = "asc"
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=50, ge=1, le=500)
+
+
+class DeleteResponse(BaseModel):
+    """Response for delete operations."""
+
+    deleted: bool
+    file_hash: str
+    message: str
