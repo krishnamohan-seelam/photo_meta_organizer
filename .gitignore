@@ -160,7 +160,7 @@ metadata.json
 image_metadata.json
 design_docs/
 PRDS/
-
+DOCS/
 #.github folders
 .github/chatmodes/
 .github/instructions/
@@ -170,4 +170,7 @@ PRDS/
 # Antigravity
 .antigravity/
 .agent/
+.agents/
+
+
 

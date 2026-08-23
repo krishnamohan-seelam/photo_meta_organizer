@@ -3,13 +3,18 @@
 Metadata indexing and organization system built specifically for large-scale photo collections (20GB+). It automates the extraction of comprehensive EXIF data, performs content-based deduplication using SHA-256 hashing, and persists results in a structured, queryable JSON repository. Built with **Clean Architecture** principles — swap storage backends, retrievers, and extractors without touching business logic.
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/Tests-98%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-142%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/Coverage-88%25-green)
+![Throughput](https://img.shields.io/badge/Throughput-21%2C710%20imgs%2Fmin-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
 ## ✨ Features
 
+- **Multi-Threaded Parallel Indexing** — `ThreadPoolExecutor` worker pool + bounded queue + dedicated DB writer thread (21,000+ imgs/min)
+- **Real-Time Progress & Metrics** — Progress reporting (`tqdm`), error tracking, and comprehensive library statistics
+- **Performance Benchmarking Suite** — Built-in benchmarking script (`scripts/benchmark_performance.py`)
 - **Comprehensive EXIF Extraction** — Three-tier model (Universal → Common → Camera-Specific) supporting DSLR, mirrorless, mobile, action cam, and film scanner profiles
 - **Content-Based Deduplication** — SHA-256 file hashing as primary key
 - **Pluggable Backends** — Swap retrievers (local disk → S3) and repositories (TinyDB → MongoDB) via factory functions

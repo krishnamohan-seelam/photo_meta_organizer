@@ -8,6 +8,7 @@ system statistics like error counts and processed formats.
 """
 
 import logging
+import threading
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -70,6 +71,7 @@ class ProgressReporter:
         self.stats = IndexingStatistics()
         self._pbar: Optional[Any] = None
         self._disable_bar = disable_bar
+        self._lock = threading.Lock()
         
         if total_files:
             self.stats.total_files_discovered = total_files
@@ -101,33 +103,35 @@ class ProgressReporter:
             n: Number of items processed since last update.
             metadata: ImageMetadata object (if successful) to track stats.
         """
-        self.stats.total_files_processed += n
-        
-        if metadata is not None:
-            try:
-                # Assuming ImageMetadata structure from Phase 1
-                if hasattr(metadata, 'file_info'):
-                    self.stats.total_size_bytes += getattr(metadata.file_info, 'size_bytes', 0)
-                    mime = getattr(metadata.file_info, 'mime_type', 'unknown')
-                    self.stats.mime_type_counts[mime] += 1
-            except Exception as e:
-                logger.debug("Failed to track metrics for metadata: %s", e)
-                
-        if self._pbar is not None:
-            self._pbar.update(n)
-        elif self.stats.total_files_processed % 100 == 0:
-            # Fallback progress logging
-            logger.info("Processed %d / %s files", 
-                        self.stats.total_files_processed, 
-                        self.stats.total_files_discovered or '?')
+        with self._lock:
+            self.stats.total_files_processed += n
+            
+            if metadata is not None:
+                try:
+                    # Assuming ImageMetadata structure from Phase 1
+                    if hasattr(metadata, 'file_info'):
+                        self.stats.total_size_bytes += getattr(metadata.file_info, 'size_bytes', 0)
+                        mime = getattr(metadata.file_info, 'mime_type', 'unknown')
+                        self.stats.mime_type_counts[mime] += 1
+                except Exception as e:
+                    logger.debug("Failed to track metrics for metadata: %s", e)
+                    
+            if self._pbar is not None:
+                self._pbar.update(n)
+            elif self.stats.total_files_processed % 100 == 0:
+                # Fallback progress logging
+                logger.info("Processed %d / %s files", 
+                            self.stats.total_files_processed, 
+                            self.stats.total_files_discovered or '?')
             
     def record_error(self, error_type: str = "unknown") -> None:
         """Track an error during processing."""
-        self.stats.total_errors += 1
-        self.stats.error_types[error_type] += 1
-        
-        if self._pbar is not None:
-            self._pbar.set_postfix_str(f"Errors: {self.stats.total_errors}", refresh=False)
+        with self._lock:
+            self.stats.total_errors += 1
+            self.stats.error_types[error_type] += 1
+            
+            if self._pbar is not None:
+                self._pbar.set_postfix_str(f"Errors: {self.stats.total_errors}", refresh=False)
             
     def stop(self) -> IndexingStatistics:
         """Stop tracking and finalize statistics."""

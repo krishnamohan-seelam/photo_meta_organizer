@@ -226,12 +226,48 @@ def handle_stats_command(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 = success, non-zero = error).
     """
+    from collections import Counter
+
     try:
         repository = build_repository(args)
-        total_photos = repository.count()
-        print(f"--- Library Statistics ---")
-        print(f"Database: {args.db}")
-        print(f"Total Photos Indexed: {total_photos}")
+        all_metadata = repository.list_all()
+        total_photos = len(all_metadata)
+
+        total_bytes = 0
+        mime_counts = Counter()
+        camera_counts = Counter()
+
+        for item in all_metadata:
+            if hasattr(item, "file_info") and item.file_info:
+                total_bytes += getattr(item.file_info, "size_bytes", 0)
+                mime_counts[getattr(item.file_info, "mime_type", "unknown")] += 1
+            if hasattr(item, "exif") and item.exif:
+                camera = getattr(item.exif, "camera_profile", None)
+                cam_name = camera.value if hasattr(camera, "value") else str(camera or "Unknown")
+                camera_counts[cam_name] += 1
+
+        # Format size in human-readable units
+        size_mb = total_bytes / (1024 * 1024)
+        size_str = f"{size_mb / 1024:.2f} GB" if size_mb >= 1024 else f"{size_mb:.2f} MB"
+
+        print(f"\n=======================================================")
+        print(f"       PHOTO META ORGANIZER - LIBRARY STATISTICS       ")
+        print(f"=======================================================")
+        print(f" Database File         : {args.db}")
+        print(f" Total Photos Indexed  : {total_photos}")
+        print(f" Total Storage Size    : {size_str} ({total_bytes:,} bytes)")
+
+        if mime_counts:
+            print(f"\n Format Distribution:")
+            for mime, count in mime_counts.most_common():
+                print(f"   - {mime:<20}: {count}")
+
+        if camera_counts:
+            print(f"\n Camera Distribution:")
+            for cam, count in camera_counts.most_common():
+                print(f"   - {cam:<20}: {count}")
+
+        print(f"=======================================================\n")
     except Exception as e:
         logger.error("Failed to read statistics: %s", e)
         print(f"Error reading statistics: {e}")
