@@ -125,3 +125,35 @@ class ImageMetadataRepository(Protocol):
             Integer count of all records in storage.
         """
         ...
+
+    def update_metadata(self, file_hash: str, updates: dict) -> Optional[ImageMetadata]:
+        """Update specific fields of an ImageMetadata entity (e.g. rating, flagged, labels).
+
+        Args:
+            file_hash: SHA-256 hash of the record to update.
+            updates: Dictionary of fields to update.
+
+        Returns:
+            Updated ImageMetadata entity if found, None otherwise.
+        """
+        ...
+
+    def batch_update(self, file_hashes: List[str], updates: dict) -> int:
+        """Apply batch updates across multiple image records atomically.
+
+        Args:
+            file_hashes: List of SHA-256 hashes.
+            updates: Dictionary of fields to update or actions.
+
+        Returns:
+            Count of successfully updated records.
+        """
+        ...
+
+    def get_collections(self) -> List[dict]:
+        """Retrieve all stored collections/albums."""
+        ...
+
+    def save_collection(self, name: str, photo_hashes: List[str], description: str = "") -> dict:
+        """Create or update a named photo collection/album."""
+        ...

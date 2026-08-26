@@ -11,9 +11,16 @@ Usage:
     client = TestClient(app)
 """
 
-from fastapi import FastAPI
+from pathlib import Path
 
-from photo_meta_organizer.api.routes.photos_router import photos_router, search_router
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+
+from photo_meta_organizer.api.routes.photos_router import (
+    collections_router,
+    photos_router,
+    search_router,
+)
 from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
     TinyDBRepository,
 )
@@ -35,7 +42,7 @@ def create_app(db_path: str = "metadata.json") -> FastAPI:
             "REST API for querying, searching, and managing photo metadata "
             "indexed by the Photo Meta Organizer."
         ),
-        version="3.0.0",
+        version="4.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
     )
@@ -51,11 +58,38 @@ def create_app(db_path: str = "metadata.json") -> FastAPI:
 
     # Mount routers
     app.include_router(photos_router)
+    app.include_router(collections_router)
     app.include_router(search_router)
+
+    frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    assets_dir = frontend_dist / "assets"
+    if assets_dir.exists():
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     @app.get("/health", tags=["health"])
     def health_check():
         """Health check endpoint."""
         return {"status": "ok", "photo_count": repository.count()}
+
+    @app.get("/", tags=["frontend"], response_class=HTMLResponse)
+    def serve_frontend():
+        """Serve Phase 4 Production React Frontend application."""
+        index_html = frontend_dist / "index.html"
+        if index_html.exists():
+            return HTMLResponse(content=index_html.read_text(encoding="utf-8"))
+        # Fallback to prototype if React dist has not been built
+        prototype_path = Path(__file__).resolve().parent.parent.parent / "frontend_prototype.html"
+        if prototype_path.exists():
+            return HTMLResponse(content=prototype_path.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>Frontend not built. Run 'npm run build' in frontend/</h1>", status_code=404)
+
+    @app.get("/prototype", tags=["prototype"], response_class=HTMLResponse)
+    def serve_prototype():
+        """Serve Phase 4 Standalone HTML Prototype."""
+        prototype_path = Path(__file__).resolve().parent.parent.parent / "frontend_prototype.html"
+        if prototype_path.exists():
+            return HTMLResponse(content=prototype_path.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>Prototype file not found.</h1>", status_code=404)
 
     return app

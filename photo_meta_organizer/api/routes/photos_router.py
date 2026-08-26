@@ -1,19 +1,36 @@
 """Photo metadata REST API router.
 
 Endpoints:
-    GET  /api/photos             - List all photos with optional filters/pagination
-    GET  /api/photos/{file_hash} - Get single photo metadata by SHA-256 hash
-    POST /api/search             - Advanced search with SearchRequest body
-    DELETE /api/photos/{file_hash} - Remove photo from index
+    GET   /api/photos                 - List all photos with optional filters/pagination
+    GET   /api/photos/{file_hash}     - Get single photo metadata by SHA-256 hash
+    GET   /api/photos/{file_hash}/thumbnail - Stream cached WebP thumbnail
+    GET   /api/photos/{file_hash}/raw - Stream full-resolution source image
+    PATCH /api/photos/{file_hash}     - Update rating, flag, or labels for a photo
+    POST  /api/photos/batch           - Atomic batch operations across photos
+    GET   /api/collections            - List all curated collections
+    POST  /api/collections            - Create or update a curated collection
+    POST  /api/search                 - Advanced search with SearchRequest body
+    DELETE /api/photos/{file_hash}    - Remove photo from index
 """
 
-from typing import Optional
+import os
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 
 from photo_meta_organizer.api.schemas import (
+    BatchPhotoRequest,
+    BatchPhotoResponse,
+    CollectionCreateRequest,
+    CollectionResponse,
     DeleteResponse,
+    DimensionsSchema,
+    ExifDataSchema,
+    FileInfoSchema,
+    GpsCoordinatesSchema,
     PaginatedPhotosResponse,
+    PatchPhotoRequest,
     PhotoMetadataResponse,
     SearchRequest,
 )
@@ -26,9 +43,13 @@ from photo_meta_organizer.domain.models import ImageMetadata
 from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
     TinyDBRepository,
 )
+from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 photos_router = APIRouter(prefix="/api/photos", tags=["photos"])
+collections_router = APIRouter(prefix="/api/collections", tags=["collections"])
 search_router = APIRouter(prefix="/api", tags=["search"])
+
+_thumbnail_service = ThumbnailService()
 
 
 def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
@@ -36,19 +57,12 @@ def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
     exif = metadata.exif
     location_schema = None
     if exif.location:
-        from photo_meta_organizer.api.schemas import GpsCoordinatesSchema
         location_schema = GpsCoordinatesSchema(
             latitude=exif.location.latitude,
             longitude=exif.location.longitude,
             altitude=exif.location.altitude,
             datum=exif.location.datum,
         )
-
-    from photo_meta_organizer.api.schemas import (
-        DimensionsSchema,
-        ExifDataSchema,
-        FileInfoSchema,
-    )
 
     return PhotoMetadataResponse(
         file_hash=metadata.file_hash,
@@ -81,6 +95,8 @@ def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
             raw_tags=dict(exif.raw_tags) if exif.raw_tags else {},
         ),
         labels=list(metadata.labels),
+        rating=metadata.rating,
+        flagged=metadata.flagged,
         added_at=metadata.added_at,
     )
 
@@ -111,6 +127,23 @@ def list_photos(
     )
 
 
+@photos_router.post("/batch", response_model=BatchPhotoResponse, summary="Batch update photos")
+def batch_update_photos(
+    request: BatchPhotoRequest,
+    repository: TinyDBRepository = Depends(),
+) -> BatchPhotoResponse:
+    """Apply batch actions across multiple photos atomically."""
+    count = repository.batch_update(
+        request.photo_hashes,
+        {"action": request.action, "value": request.value},
+    )
+    return BatchPhotoResponse(
+        updated_count=count,
+        action=request.action,
+        message=f"Successfully applied '{request.action}' to {count} photo(s).",
+    )
+
+
 @photos_router.get(
     "/{file_hash}",
     response_model=PhotoMetadataResponse,
@@ -128,6 +161,79 @@ def get_photo(
             detail=f"Photo with hash '{file_hash}' not found.",
         )
     return _to_response(metadata)
+
+
+@photos_router.get(
+    "/{file_hash}/thumbnail",
+    summary="Stream WebP thumbnail",
+)
+def get_photo_thumbnail(
+    file_hash: str,
+    w: int = Query(default=320, ge=64, le=1200, description="Thumbnail width in pixels"),
+    h: int = Query(default=320, ge=64, le=1200, description="Thumbnail height in pixels"),
+    repository: TinyDBRepository = Depends(),
+):
+    """Stream an optimized WebP thumbnail for the specified photo."""
+    metadata = repository.get_by_filehash(file_hash)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+
+    thumb_bytes = _thumbnail_service.generate_thumbnail(
+        source_path=metadata.file_info.path,
+        file_hash=file_hash,
+        width=w,
+        height=h,
+    )
+    if not thumb_bytes:
+        raise HTTPException(status_code=404, detail="Thumbnail could not be generated (source file missing).")
+
+    return Response(
+        content=thumb_bytes,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@photos_router.get(
+    "/{file_hash}/raw",
+    summary="Stream full-resolution image",
+)
+def get_photo_raw(
+    file_hash: str,
+    repository: TinyDBRepository = Depends(),
+):
+    """Stream the full-resolution original image from storage."""
+    metadata = repository.get_by_filehash(file_hash)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+
+    file_path = metadata.file_info.path
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"Source file '{file_path}' does not exist on disk.")
+
+    return FileResponse(
+        path=file_path,
+        media_type=metadata.file_info.mime_type,
+        filename=metadata.file_info.name,
+    )
+
+
+@photos_router.patch(
+    "/{file_hash}",
+    response_model=PhotoMetadataResponse,
+    summary="Update photo metadata",
+)
+def patch_photo(
+    file_hash: str,
+    request: PatchPhotoRequest,
+    repository: TinyDBRepository = Depends(),
+) -> PhotoMetadataResponse:
+    """Update user ratings, flags, or tags for a single photo."""
+    updates = request.model_dump(exclude_unset=True)
+    updated = repository.update_metadata(file_hash, updates)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+    return _to_response(updated)
 
 
 @photos_router.delete(
@@ -150,6 +256,42 @@ def delete_photo(
         deleted=True,
         file_hash=file_hash,
         message=f"Photo '{file_hash}' removed from index.",
+    )
+
+
+@collections_router.get("", response_model=List[CollectionResponse], summary="List all collections")
+def list_collections(
+    repository: TinyDBRepository = Depends(),
+) -> List[CollectionResponse]:
+    """Retrieve all curated photo collections."""
+    cols = repository.get_collections()
+    return [
+        CollectionResponse(
+            name=c.get("name", ""),
+            description=c.get("description", ""),
+            photo_hashes=c.get("photo_hashes", []),
+            updated_at=c.get("updated_at", ""),
+        )
+        for c in cols
+    ]
+
+
+@collections_router.post("", response_model=CollectionResponse, summary="Create or update collection")
+def create_collection(
+    request: CollectionCreateRequest,
+    repository: TinyDBRepository = Depends(),
+) -> CollectionResponse:
+    """Create or update a named photo collection."""
+    saved = repository.save_collection(
+        name=request.name,
+        photo_hashes=request.photo_hashes,
+        description=request.description,
+    )
+    return CollectionResponse(
+        name=saved["name"],
+        description=saved["description"],
+        photo_hashes=saved["photo_hashes"],
+        updated_at=saved["updated_at"],
     )
 
 

@@ -60,6 +60,8 @@ class PhotoMetadataResponse(BaseModel):
     dimensions: DimensionsSchema
     exif: ExifDataSchema
     labels: List[str] = Field(default_factory=list)
+    rating: Optional[int] = None
+    flagged: bool = False
     added_at: datetime
 
 
@@ -76,6 +78,7 @@ class PaginatedPhotosResponse(BaseModel):
 class SearchRequest(BaseModel):
     """Advanced search request body schema."""
 
+    search_term: Optional[str] = None
     date_start: Optional[datetime] = None
     date_end: Optional[datetime] = None
     camera_make: Optional[str] = None
@@ -84,10 +87,56 @@ class SearchRequest(BaseModel):
     location_lon: Optional[float] = None
     radius_km: Optional[float] = None
     tags: Optional[List[str]] = None
+    city: Optional[str] = None
+    rating: Optional[int] = None
+    flagged: Optional[bool] = None
     sort_by: str = "captured_at"
     sort_order: str = "asc"
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=500)
+
+
+class PatchPhotoRequest(BaseModel):
+    """Request schema for updating metadata of a single photo."""
+
+    rating: Optional[int] = Field(default=None, ge=1, le=5)
+    flagged: Optional[bool] = None
+    labels: Optional[List[str]] = None
+    add_tags: Optional[List[str]] = None
+    remove_tags: Optional[List[str]] = None
+
+
+class BatchPhotoRequest(BaseModel):
+    """Request schema for atomic batch operations across photos."""
+
+    photo_hashes: List[str]
+    action: str = Field(description="Action to perform: add_tag, remove_tag, set_rating, set_flag, delete")
+    value: Optional[Any] = None
+
+
+class BatchPhotoResponse(BaseModel):
+    """Response schema for batch operations."""
+
+    updated_count: int
+    action: str
+    message: str
+
+
+class CollectionCreateRequest(BaseModel):
+    """Request schema for creating or updating a collection."""
+
+    name: str
+    description: str = ""
+    photo_hashes: List[str] = Field(default_factory=list)
+
+
+class CollectionResponse(BaseModel):
+    """Response schema for collection data."""
+
+    name: str
+    description: str
+    photo_hashes: List[str]
+    updated_at: str
 
 
 class DeleteResponse(BaseModel):

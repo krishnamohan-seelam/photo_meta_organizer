@@ -79,6 +79,13 @@ def test_health_check(client):
     assert data["photo_count"] == 2
 
 
+def test_get_prototype_endpoint(client):
+    resp = client.get("/prototype")
+    assert resp.status_code == 200
+    assert "Photo Meta Organizer" in resp.text
+    assert "prototypeSwitcher" in resp.text
+
+
 # ============================================================
 # GET /api/photos
 # ============================================================

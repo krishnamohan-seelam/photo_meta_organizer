@@ -309,6 +309,8 @@ class TinyDBRepository:
             },
             "exif": TinyDBRepository._serialize_exif(metadata.exif),
             "labels": list(metadata.labels),
+            "rating": metadata.rating,
+            "flagged": metadata.flagged,
             "added_at": metadata.added_at.isoformat(),
         }
         return doc
@@ -349,6 +351,88 @@ class TinyDBRepository:
         return exif_doc
 
     # =========================================================================
+    # Mutation & Collection Operations
+    # =========================================================================
+
+    def update_metadata(self, file_hash: str, updates: dict) -> Optional[ImageMetadata]:
+        """Update specific fields of an ImageMetadata entity."""
+        doc = self._hash_index.get(file_hash)
+        if not doc:
+            return None
+
+        if "rating" in updates:
+            doc["rating"] = updates["rating"]
+        if "flagged" in updates:
+            doc["flagged"] = bool(updates["flagged"])
+        if "labels" in updates:
+            doc["labels"] = list(updates["labels"])
+        if "add_tags" in updates:
+            current_tags = set(doc.get("labels", []))
+            current_tags.update(updates["add_tags"])
+            doc["labels"] = list(current_tags)
+        if "remove_tags" in updates:
+            current_tags = set(doc.get("labels", []))
+            current_tags.difference_update(updates["remove_tags"])
+            doc["labels"] = list(current_tags)
+
+        q = Query()
+        self._table.update(doc, q.file_hash == file_hash)
+        self.rebuild_indexes()
+        return self._deserialize(doc)
+
+    def batch_update(self, file_hashes: List[str], updates: dict) -> int:
+        """Apply batch updates across multiple image records atomically."""
+        count = 0
+        q = Query()
+        action = updates.get("action")
+        value = updates.get("value")
+
+        for f_hash in file_hashes:
+            doc = self._hash_index.get(f_hash)
+            if not doc:
+                continue
+            if action == "add_tag" and isinstance(value, str):
+                current_tags = set(doc.get("labels", []))
+                current_tags.add(value)
+                doc["labels"] = list(current_tags)
+            elif action == "remove_tag" and isinstance(value, str):
+                current_tags = set(doc.get("labels", []))
+                current_tags.discard(value)
+                doc["labels"] = list(current_tags)
+            elif action == "set_rating":
+                doc["rating"] = value
+            elif action == "set_flag":
+                doc["flagged"] = bool(value)
+            elif action == "delete":
+                self.delete(f_hash)
+                count += 1
+                continue
+
+            self._table.update(doc, q.file_hash == f_hash)
+            count += 1
+
+        self.rebuild_indexes()
+        return count
+
+    def get_collections(self) -> List[dict]:
+        """Retrieve all stored collections."""
+        col_table = self._db.table("collections")
+        return col_table.all()
+
+    def save_collection(self, name: str, photo_hashes: List[str], description: str = "") -> dict:
+        """Save or update a named collection."""
+        col_table = self._db.table("collections")
+        q = Query()
+        col_doc = {
+            "name": name,
+            "description": description,
+            "photo_hashes": list(photo_hashes),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        col_table.upsert(col_doc, q.name == name)
+        return col_doc
+
+    # =========================================================================
     # Deserialization: TinyDB Documents → Domain Models
     # =========================================================================
 
@@ -377,6 +461,8 @@ class TinyDBRepository:
             dimensions=dimensions,
             exif=exif,
             labels=doc.get("labels", []),
+            rating=doc.get("rating"),
+            flagged=doc.get("flagged", False),
             added_at=added_at,
         )
 
@@ -426,3 +512,7 @@ class TinyDBRepository:
             orientation=exif_doc.get("orientation"),
             raw_tags=exif_doc.get("raw_tags", {}),
         )
+
+    def close(self) -> None:
+        """Close the underlying TinyDB database file."""
+        self._db.close()

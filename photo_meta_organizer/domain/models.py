@@ -220,6 +220,8 @@ class ImageMetadata:
     dimensions: ImageDimensions
     exif: ImageExifData
     labels: list[str] = field(default_factory=list)
+    rating: Optional[int] = None
+    flagged: bool = False
     added_at: datetime = field(default_factory=datetime.utcnow)
 
 
