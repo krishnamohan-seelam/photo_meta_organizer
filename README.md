@@ -3,7 +3,8 @@
 Metadata indexing and organization system built specifically for large-scale photo collections (20GB+). It automates the extraction of comprehensive EXIF data, performs content-based deduplication using SHA-256 hashing, and persists results in a structured, queryable JSON repository. Built with **Clean Architecture** principles — swap storage backends, retrievers, and extractors without touching business logic.
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/Tests-180%20passing-brightgreen)
+![React 19](https://img.shields.io/badge/React-19.0-61dafb)
+![Tests](https://img.shields.io/badge/Tests-195%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/Coverage-90%25-green)
 ![Throughput](https://img.shields.io/badge/Throughput-21%2C710%20imgs%2Fmin-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -12,20 +13,32 @@ Metadata indexing and organization system built specifically for large-scale pho
 
 ## ✨ Features
 
-- **CLI Search & Library Statistics** — `python main.py search` and `python main.py stats` formatted using `tabulate` for date, camera, location radius, tag, and size filtering
-- **In-Memory Database Indexing** — `TinyDBRepository` indexes `file_hash` ($O(1)$ lookup), `file_path`, `captured_at`, and `size_bytes` range queries for high-performance retrieval
-- **REST API** — FastAPI with 4 endpoints: `GET /api/photos`, `GET /api/photos/{hash}`, `POST /api/search`, `DELETE /api/photos/{hash}` — full Pydantic validation, 100% integration test coverage
-- **Multi-Criteria Search & Querying** — `SearchPhotosUseCase` supporting date ranges, camera make/model, location radius (Haversine distance), tags, custom sorting, and paginated result streaming (`Iterator` protocol)
-- **Multi-Threaded Parallel Indexing** — `ThreadPoolExecutor` worker pool + bounded queue + dedicated DB writer thread (21,000+ imgs/min)
-- **Real-Time Progress & Metrics** — Progress reporting (`tqdm`), error tracking, and comprehensive library statistics
-- **Performance Benchmarking Suite** — Built-in benchmarking script (`scripts/benchmark_performance.py`)
-- **Comprehensive EXIF Extraction** — Three-tier model (Universal → Common → Camera-Specific) supporting DSLR, mirrorless, mobile, action cam, and film scanner profiles
-- **Content-Based Deduplication** — SHA-256 file hashing as primary key
-- **Pluggable Backends** — Swap retrievers (local disk → S3) and repositories (TinyDB → MongoDB) via factory functions
-- **Extension Filtering** — Automatic filtering for image formats (JPEG, PNG, TIFF, RAW, HEIC, WebP, etc.)
-- **GPS Coordinate Parsing** — Automatic DMS → decimal conversion with WGS84 datum
-- **Stateless Extraction** — Extractors have zero dependencies; safe for parallel processing
-- **Incremental Synchronization** — Change-aware sync (NEW/MODIFIED/DELETED) using hybrid fingerprinting to avoid redundant hashing
+- **Phase 4 React 19 Production Frontend Studio** — Complete, high-performance Web UI built with React 19, TypeScript, Vite, Zustand, and TanStack Virtualization.
+  - **Light & Dark Themes** with tokenized CSS variables, sleek contrast palettes, and system theme synchronization.
+  - **Lights Out Dimmer (`L`)** — Cinema-grade ambient mode dimming sidebars and controls to emphasize photo viewing.
+  - **Global Command Palette (`Ctrl + K`)** — Instant fuzzy search across camera makes, tags, cities, and actions.
+  - **Studio Grid View** — Virtualized 60fps gallery with live density zoom slider (160px–320px), flag badges, and star ratings.
+  - **Deep EXIF Inspector** — Real-time canvas RGB/Luminance histogram, exposure triangle dials (Aperture, Shutter, ISO, Focal Length), technical telemetry, and raw JSON export.
+  - **Interactive Filter Accordions** — Collapsible dropdowns for Camera Brands, Tags & Labels, and Curated Collections with active count badges and instant reset links.
+  - **Floating Selection Dock** — Multi-select bar with cumulative size calculator, batch tagging, flag all, and ZIP export.
+  - **Geospatial Map Explorer** — Interactive world map with GPS clusters and adjustable radius filter slider.
+  - **Chronological Timeline Feed** — Date-grouped photo stream with year scrubber.
+  - **Kanban Staging Board** — 3-stage visual workflow (`Inbox`, `Picks & Flagged`, `Export Ready`).
+  - **Library Analytics Dashboard** — KPI metrics and interactive SVG charts with click-to-filter drilldowns.
+  - **Fullscreen Lightbox** — Fullscreen image stage, bottom filmstrip thumbnails, and keyboard navigation (`Space`, `Esc`, `P`, `1-5`).
+- **WebP Thumbnail Cache & Streaming Service** — SHA-256 hash-addressed thumbnail generator with EXIF transpose correction and `.cache/thumbnails/` persistent disk caching.
+- **Curation & Batch Mutations REST API** — `PATCH /api/photos/{hash}` for star ratings/flags/tags and `POST /api/photos/batch` for atomic batch updates.
+- **Curated Collections API** — `GET/POST /api/collections` for creating and organizing named photo sets.
+- **CLI Search & Library Statistics** — `python main.py search` and `python main.py stats` formatted using `tabulate` for date, camera, location radius, tag, and size filtering.
+- **In-Memory Database Indexing** — `TinyDBRepository` indexes `file_hash` ($O(1)$ lookup), `file_path`, `captured_at`, and `size_bytes` range queries for high-performance retrieval.
+- **Multi-Threaded Parallel Indexing** — `ThreadPoolExecutor` worker pool + bounded queue + dedicated DB writer thread (21,000+ imgs/min).
+- **Comprehensive EXIF Extraction** — Three-tier model (Universal → Common → Camera-Specific) supporting DSLR, mirrorless, mobile, action cam, and film scanner profiles.
+- **Content-Based Deduplication** — SHA-256 file hashing as primary key.
+- **Pluggable Backends** — Swap retrievers (local disk → S3) and repositories (TinyDB → MongoDB) via factory functions.
+- **Extension Filtering** — Automatic filtering for image formats (JPEG, PNG, TIFF, RAW, HEIC, WebP, etc.).
+- **GPS Coordinate Parsing** — Automatic DMS → decimal conversion with WGS84 datum.
+- **Stateless Extraction** — Extractors have zero dependencies; safe for parallel processing.
+- **Incremental Synchronization** — Change-aware sync (NEW/MODIFIED/DELETED) using hybrid fingerprinting to avoid redundant hashing.
 
 ---
 
@@ -33,6 +46,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 
 ### Prerequisites
 - Python 3.11+
+- Node.js 18+ & npm (for frontend development)
 - pip
 
 ### Installation
@@ -51,9 +65,60 @@ python -m venv .venv
 # macOS/Linux
 source .venv/bin/activate
 
-# Install dependencies
+# Install Python backend dependencies
 pip install -r requirements.txt
 ```
+
+---
+
+## 🖥️ Running the Application (Backend & Frontend)
+
+### Option A: Development Mode (Two Terminals with Hot-Reload)
+
+#### Terminal 1 — Backend REST API:
+```bash
+# 1. Activate virtual environment
+.venv\Scripts\activate
+
+# 2. Seed sample demo photos and metadata (optional)
+python -m scripts.seed_demo_data
+
+# 3. Start FastAPI backend on port 8000
+python -m uvicorn photo_meta_organizer.api.app:create_app --factory --port 8000 --reload
+```
+*API Swagger Documentation is available at:* **`http://localhost:8000/docs`**
+
+#### Terminal 2 — React 19 Frontend:
+```bash
+# 1. Enter frontend directory
+cd frontend
+
+# 2. Install node packages
+npm install
+
+# 3. Start Vite dev server on port 5173 (proxies /api to localhost:8000)
+npm run dev
+```
+*Open your browser at:* **`http://localhost:5173`**
+
+---
+
+### Option B: Standalone Production Mode (Single Port)
+
+Build the React frontend once and have FastAPI serve both the REST API and the React SPA on `http://localhost:8000`:
+
+```bash
+# 1. Build the production React SPA
+cd frontend
+npm run build
+cd ..
+
+# 2. Start the FastAPI server (serves the SPA at /)
+python -m uvicorn photo_meta_organizer.api.app:create_app --factory --port 8000
+```
+*Open your browser at:* **`http://localhost:8000`**
+
+---
 
 ### Index Your Photos
 
@@ -71,11 +136,20 @@ python -m photo_meta_organizer.main index --path /photos --db metadata.json --lo
 python -m photo_meta_organizer.main --help
 ```
 
-### Library Statistics
+### Library Statistics & CLI Search
 
 ```bash
-# View library statistics (total photos indexed)
+# View library statistics
 python -m photo_meta_organizer.main stats --db metadata.json
+
+# Search photos by camera make
+python -m photo_meta_organizer.main search --camera-make Sony --db metadata.json
+
+# Search photos by date range
+python -m photo_meta_organizer.main search --date-from 2026-01-01 --date-to 2026-12-31 --db metadata.json
+
+# Search photos near GPS coordinate within 25km radius
+python -m photo_meta_organizer.main search --lat 35.6586 --lon 139.7454 --radius 25 --db metadata.json
 ```
 
 ### Sync Your Library (Incremental)
@@ -94,23 +168,29 @@ python -m photo_meta_organizer.main sync --path /photos --db metadata.json --dry
 ### Run Tests
 
 ```bash
-# Run all tests
-python -m pytest photo_meta_organizer/tests/ -v
+# Run all 195 unit and integration tests
+python -m pytest -v
 
-# With coverage
-python -m pytest photo_meta_organizer/tests/ --cov=photo_meta_organizer --cov-report=term-missing
+# With coverage report
+python -m pytest --cov=photo_meta_organizer --cov-report=term-missing
 ```
 
 ---
 
 ## 🏗️ Architecture
 
-The project follows **Clean Architecture** with strict dependency inversion. For a detailed breakdown of wiring examples and component diagrams, see **[DOCS/ARCHITECTURE.md](DOCS/ARCHITECTURE.md)**.
+The project follows **Clean Architecture** with strict dependency inversion:
+- **System Architecture & Data Flows:** **[DOCS/ARCHITECTURE.md](DOCS/ARCHITECTURE.md)**
+- **Phase 3 Search & API Design:** **[design_docs/PHASE_3_DESIGN.md](design_docs/PHASE_3_DESIGN.md)**
+- **Phase 4 Frontend UI Design:** **[design_docs/PHASE_4_UI_DESIGN.md](design_docs/PHASE_4_UI_DESIGN.md)**
+- **Phase 4 Completion Report:** **[design_docs/PHASE_4_COMPLETION.md](design_docs/PHASE_4_COMPLETION.md)**
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Presentation Layer (main.py)                                │
-│  CLI interface, logging, factory functions (composition root)│
+│  Presentation Layer (FastAPI & React 19 Frontend)            │
+│  ├── frontend/        React 19 + TypeScript + Vite + Zustand │
+│  ├── api/routes/      REST Endpoints (/photos, /collections) │
+│  └── main.py          CLI interface, composition root        │
 └────────────────────────────┬─────────────────────────────────┘
                              ↓
 ┌──────────────────────────────────────────────────────────────┐
@@ -119,7 +199,7 @@ The project follows **Clean Architecture** with strict dependency inversion. For
 │  │                    ImageMetadataExtractor,                 │
 │  │                    ImageMetadataRepository)                │
 │  ├── orchestrators.py ExtractorOrchestrator, SyncOrchestrator │
-│  └── use_cases/       IndexPhotosUseCase,                     │
+│  └── use_cases/       IndexPhotosUseCase, SearchPhotosUseCase,│
 │                       SynchronizeMetadataUseCase              │
 └────────────────────────────┬─────────────────────────────────┘
                              ↓
@@ -128,123 +208,7 @@ The project follows **Clean Architecture** with strict dependency inversion. For
 │  ├── models.py   ImageMetadata, SyncResult, FileState, etc.  │
 │  └── services.py CameraClassifier, MetadataStateAnalyzer     │
 └──────────────────────────────────────────────────────────────┘
-                             ↓
-┌──────────────────────────────────────────────────────────────┐
-│  Infrastructure Layer (adapters)                             │
-│  ├── retriever/       LocalDiskRetriever,                    │
-│  │                    ExtensionFilteredRetriever              │
-│  ├── extractors/      DiskMetaDataExtractor (exifread+PIL)   │
-│  └── repositories/    TinyDBRepository (JSON persistence)    │
-└──────────────────────────────────────────────────────────────┘
 ```
-
-### Data Flow
-
-```
-Discovery → Extraction → Persistence
-LocalDiskRetriever   DiskMetaDataExtractor   TinyDBRepository
-   │                       │                       │
-   ├─ list_files()         │                       │
-   ├─ get_file_stream()  ──┤                       │
-   │                       ├─ extract(handle, stream)
-   │                       │  → ImageMetadata    ──┤
-   │                       │                       ├─ save(metadata)
-   │                       │                       └─ → metadata.json
-```
-
-### Backend Swapping
-
-The factory functions in `main.py` make it trivial to swap backends:
-
-```python
-# main.py
-def build_retriever(args):
-    # Phase 1: Local disk (current)
-    return ExtensionFilteredRetriever(LocalDiskRetriever(args.path), IMAGE_EXTENSIONS)
-    # Phase 4: return S3Retriever(bucket=args.bucket)
-
-def build_repository(args):
-    # Phase 1: TinyDB (current)
-    return TinyDBRepository(db_path=args.db)
-    # Phase 4: return MongoDBRepository(connection_url=args.db)
-```
-
----
-
-## 📁 Project Structure
-
-```
-photo_meta_organizer/
-├── domain/
-│   ├── models.py                   # Core entities (ImageMetadata, ImageExifData, GpsCoordinates, etc.)
-│   └── services.py                 # CameraClassifier domain service
-├── application/
-│   ├── interfaces/                 # Protocol definitions (ports)
-│   │   ├── image_extractor.py      # ImageMetadataExtractor protocol
-│   │   ├── image_retriever.py      # ImageRetriever + RemoteFileHandle
-│   │   └── image_repository.py     # ImageMetadataRepository protocol
-│   ├── orchestrators.py            # ExtractorOrchestrator & SyncOrchestrator
-│   └── use_cases/
-│       ├── index_photos_use_case.py # Full pipeline: retrieve → extract → persist
-│       └── synchronize_metadata_use_case.py # Incremental sync: change detection
-├── infrastructure/
-│   ├── extractors/
-│   │   └── disk_metadata_extractor.py  # exifread + Pillow + SHA-256
-│   ├── retriever/
-│   │   ├── local_disk_retriever.py     # Recursive local filesystem discovery
-│   │   └── filtered_retriever.py       # Extension-based filtering decorator
-│   └── repositories/
-│       └── tinydb_repository.py        # TinyDB JSON persistence with upsert
-├── tests/
-│   ├── conftest.py                 # Fixtures + mock implementations
-│   └── unit/
-│       ├── domain/                 # test_models.py, test_services.py
-│       ├── application/            # test_interfaces.py, test_use_cases.py
-│       └── infrastructure/         # test_extractors.py
-├── main.py                         # CLI entry point + composition root
-├── pyproject.toml
-├── requirements.txt
-└── pytest.ini
-```
-
----
-
-## 📊 Domain Model
-
-### ImageMetadata (Primary Entity)
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `file_hash` | `str` | SHA-256 content hash (primary key) |
-| `file_info` | `ImageFileInfo` | Name, path, size, MIME type |
-| `dimensions` | `ImageDimensions` | Width, height, aspect ratio |
-| `exif` | `ImageExifData` | Three-tier EXIF model |
-| `labels` | `list[str]` | User/AI tags |
-| `added_at` | `datetime` | Indexing timestamp |
-
-### ImageExifData (Three-Tier EXIF Model)
-
-| Tier | Fields | Coverage |
-|------|--------|----------|
-| **Tier 1 (Universal)** | camera_make, camera_model, iso, f_stop, exposure_time, focal_length, captured_at | >95% of images |
-| **Tier 2 (Common)** | camera_profile, location (GPS), flash_fired, focal_length_35mm, white_balance, exposure_program, metering_mode, orientation | 50-95% |
-| **Tier 3 (Camera-specific)** | raw_tags dict | Everything else |
-
-### CameraProfile Enum
-
-`DSLR` · `MIRRORLESS` · `MOBILE` · `ACTION_CAM` · `FILM_SCANNER` · `UNKNOWN`
-
-Automatically inferred from camera make/model via `CameraClassifier` domain service.
-
----
-
-## 💡 Key Design Decisions
-
-- **Stateless Extractors** — Extractors have zero dependencies and no internal state; they receive streams and return metadata, making them perfectly safe for parallel execution.
-- **Context Manager Streams** — Retrievers provide file streams via context managers, ensuring resources like file handles are always properly closed.
-- **Dependency Injection** — All major components are injected via factory functions in `main.py`, allowing you to swap any part of the system (Storage, Extraction, Retrieval) with a single line change.
-- **Three-Tier EXIF Model** — Data is organized into Universal (ISO, Aperture), Common (GPS, White Balance), and Camera-Specific (Raw Tags) tiers to balance structure with flexibility.
-- **Domain-Driven Inference** — Camera profiles are inferred using internal domain services, keeping infrastructure logic out of the core models.
 
 ---
 
@@ -255,27 +219,29 @@ Automatically inferred from camera make/model via `CameraClassifier` domain serv
 | **Phase 0** | ✅ Complete | Foundation: domain models, interfaces, test infrastructure |
 | **Phase 1** | ✅ Complete | MVP: local disk indexing, TinyDB persistence, CLI |
 | **Phase 1.5**| ✅ Complete | Incremental Sync: NEW/MODIFIED/DELETED detection |
-| **Phase 2** | ✅ Complete | Parallel processing (ThreadPoolExecutor + Queue) |
+| **Phase 2** | ✅ Complete | Parallel processing (ThreadPoolExecutor + Queue, 21k+ imgs/min) |
 | **Phase 3** | ✅ Complete | Search & indexing + FastAPI REST API + CLI search & stats |
-| **Phase 4** | 🔲 Planned | MongoDB + S3 backends |
-| **Phase 5** | 🔲 Planned | AI tagging + reverse geocoding |
-| **Phase 6** | 🔲 Planned | React web gallery UI |
+| **Phase 4** | ✅ Complete | Production React 19 Studio UI, WebP Thumbnail Cache & Curation API |
+| **Phase 5** | 🔲 Planned | AI Tagging, Neural Image Embeddings & Semantic Search |
+| **Phase 6** | 🔲 Planned | Cloud S3 / MinIO Blob Storage & Distributed MongoDB Scale-Out |
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Language | Python 3.11+ |
-| EXIF Parsing | exifread |
-| Image Processing | Pillow (PIL) |
-| Hashing | hashlib (SHA-256) |
-| Persistence | TinyDB (Indexed) |
-| REST API Framework | FastAPI + Pydantic |
-| CLI Table Formatting | tabulate |
-| Testing | pytest + pytest-cov |
-| Type Checking | mypy (strict) |
+| Layer | Technology |
+|-------|-----------|
+| **Frontend Framework** | React 19 + TypeScript + Vite |
+| **State & Virtualization** | Zustand + TanStack Virtualization |
+| **Styling & Icons** | Tokenized CSS Variable System (Light/Dark) + Lucide Icons |
+| **Backend Runtime** | Python 3.11+ |
+| **REST API Server** | FastAPI + Uvicorn + Pydantic v2 |
+| **Image Processing** | Pillow (PIL) + WebP Thumbnail Cache |
+| **EXIF Extraction** | exifread (Three-Tier Universal/Common/Raw Model) |
+| **Deduplication** | SHA-256 Content-Based File Fingerprinting |
+| **Embedded Database** | TinyDB (In-Memory Hash & Range Indexed) |
+| **Testing & Quality** | pytest + pytest-cov (195 tests, 90% coverage) |
+| **Type System** | mypy (strict) + TypeScript |
 
 ---
 

@@ -161,6 +161,7 @@ image_metadata.json
 design_docs/
 PRDS/
 DOCS/
+DOCS/*.md
 #.github folders
 .github/chatmodes/
 .github/instructions/
