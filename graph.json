@@ -1,0 +1,1125 @@
+{
+  "root": "d:\\apps\\photo_meta_organizer",
+  "nodes": [
+    {
+      "id": "photo_meta_organizer\\main.py:main",
+      "label": "main",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 447,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_index_command",
+      "label": "handle_index_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 165,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_search_command",
+      "label": "handle_search_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 219,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_sync_command",
+      "label": "handle_sync_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 394,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_stats_command",
+      "label": "handle_stats_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 324,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_organize_command",
+      "label": "handle_organize_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": null,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_serve_command",
+      "label": "handle_serve_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": null,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_validate_command",
+      "label": "handle_validate_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": null,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_benchmark_command",
+      "label": "handle_benchmark_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": null,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:handle_export_command",
+      "label": "handle_export_command",
+      "file": "photo_meta_organizer\\main.py",
+      "line": null,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\app.py:create_app",
+      "label": "create_app",
+      "file": "photo_meta_organizer\\api\\app.py",
+      "line": 29,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.api.app"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\routes\\photos_router.py:list_photos",
+      "label": "list_photos",
+      "file": "photo_meta_organizer\\api\\routes\\photos_router.py",
+      "line": 105,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.api.routes.photos_router"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo",
+      "label": "get_photo",
+      "file": "photo_meta_organizer\\api\\routes\\photos_router.py",
+      "line": 152,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.api.routes.photos_router"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo_thumbnail",
+      "label": "get_photo_thumbnail",
+      "file": "photo_meta_organizer\\api\\routes\\photos_router.py",
+      "line": 170,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.api.routes.photos_router"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\routes\\photos_router.py:batch_update_photos",
+      "label": "batch_update_photos",
+      "file": "photo_meta_organizer\\api\\routes\\photos_router.py",
+      "line": 131,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.api.routes.photos_router"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+      "label": "IndexPhotosUseCase.execute",
+      "file": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py",
+      "line": 67,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.use_cases.index_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+      "label": "ParallelIndexPhotosUseCase.execute",
+      "file": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py",
+      "line": 62,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.use_cases.parallel_index_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase.execute",
+      "label": "SearchPhotosUseCase.execute",
+      "file": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py",
+      "line": 71,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.use_cases.search_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+      "label": "SynchronizeMetadataUseCase.execute",
+      "file": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py",
+      "line": 87,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.use_cases.synchronize_metadata_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\orchestrators.py:PipelineOrchestrator.run",
+      "label": "PipelineOrchestrator.run",
+      "file": "photo_meta_organizer\\application\\orchestrators.py",
+      "line": null,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.application.orchestrators"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase",
+      "label": "IndexPhotosUseCase",
+      "file": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py",
+      "line": 36,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.application.use_cases.index_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase",
+      "label": "ParallelIndexPhotosUseCase",
+      "file": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py",
+      "line": 32,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.application.use_cases.parallel_index_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:build_extractor",
+      "label": "build_extractor",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 125,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:build_repository",
+      "label": "build_repository",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 141,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:build_retriever",
+      "label": "build_retriever",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 94,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosQuery",
+      "label": "SearchPhotosQuery",
+      "file": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py",
+      "line": 31,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.application.use_cases.search_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase",
+      "label": "SearchPhotosUseCase",
+      "file": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py",
+      "line": 65,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.application.use_cases.search_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\main.py:_parse_date_arg",
+      "label": "_parse_date_arg",
+      "file": "photo_meta_organizer\\main.py",
+      "line": 203,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.main"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase",
+      "label": "SynchronizeMetadataUseCase",
+      "file": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py",
+      "line": 41,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.application.use_cases.synchronize_metadata_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.list_all",
+      "label": "ImageMetadataRepository.list_all",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_repository.py",
+      "line": 75,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py:TinyDBRepository",
+      "label": "TinyDBRepository",
+      "file": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py",
+      "line": 36,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.infrastructure.repositories.tinydb_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.count",
+      "label": "ImageMetadataRepository.count",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_repository.py",
+      "line": 121,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\schemas.py:PaginatedPhotosResponse",
+      "label": "PaginatedPhotosResponse",
+      "file": "photo_meta_organizer\\api\\schemas.py",
+      "line": 68,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.api.schemas"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "label": "_to_response",
+      "file": "photo_meta_organizer\\api\\routes\\photos_router.py",
+      "line": 55,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.api.routes.photos_router"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.get_by_filehash",
+      "label": "ImageMetadataRepository.get_by_filehash",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_repository.py",
+      "line": 53,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\thumbnail_service.py:ThumbnailService.generate_thumbnail",
+      "label": "ThumbnailService.generate_thumbnail",
+      "file": "photo_meta_organizer\\infrastructure\\thumbnail_service.py",
+      "line": 39,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.infrastructure.thumbnail_service"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\schemas.py:BatchPhotoResponse",
+      "label": "BatchPhotoResponse",
+      "file": "photo_meta_organizer\\api\\schemas.py",
+      "line": 117,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.api.schemas"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.batch_update",
+      "label": "ImageMetadataRepository.batch_update",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_repository.py",
+      "line": 141,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\orchestrators.py:ExtractorOrchestrator.extract_all",
+      "label": "ExtractorOrchestrator.extract_all",
+      "file": "photo_meta_organizer\\application\\orchestrators.py",
+      "line": 88,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.orchestrators"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.save",
+      "label": "ImageMetadataRepository.save",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_repository.py",
+      "line": 38,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter",
+      "label": "ProgressReporter",
+      "file": "photo_meta_organizer\\infrastructure\\metrics.py",
+      "line": 57,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.infrastructure.metrics"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:ImageRetriever.list_files",
+      "label": "ImageRetriever.list_files",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_retriever.py",
+      "line": 58,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_retriever"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.record_error",
+      "label": "ProgressReporter.record_error",
+      "file": "photo_meta_organizer\\infrastructure\\metrics.py",
+      "line": 127,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.infrastructure.metrics"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.start",
+      "label": "ProgressReporter.start",
+      "file": "photo_meta_organizer\\infrastructure\\metrics.py",
+      "line": 79,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.infrastructure.metrics"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.stop",
+      "label": "ProgressReporter.stop",
+      "file": "photo_meta_organizer\\infrastructure\\metrics.py",
+      "line": 136,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.infrastructure.metrics"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.update",
+      "label": "ProgressReporter.update",
+      "file": "photo_meta_organizer\\infrastructure\\metrics.py",
+      "line": 99,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.infrastructure.metrics"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:PaginatedResult",
+      "label": "PaginatedResult",
+      "file": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py",
+      "line": 49,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.application.use_cases.search_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase._matches_query",
+      "label": "SearchPhotosUseCase._matches_query",
+      "file": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py",
+      "line": 104,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.use_cases.search_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase._sort_records",
+      "label": "SearchPhotosUseCase._sort_records",
+      "file": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py",
+      "line": 161,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.use_cases.search_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\domain\\models.py:FileInfo",
+      "label": "FileInfo",
+      "file": "photo_meta_organizer\\domain\\models.py",
+      "line": 234,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.domain.models"
+    },
+    {
+      "id": "photo_meta_organizer\\domain\\models.py:SyncResult",
+      "label": "SyncResult",
+      "file": "photo_meta_organizer\\domain\\models.py",
+      "line": 277,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.domain.models"
+    },
+    {
+      "id": "photo_meta_organizer\\domain\\services.py:MetadataStateAnalyzer.analyze_changes",
+      "label": "MetadataStateAnalyzer.analyze_changes",
+      "file": "photo_meta_organizer\\domain\\services.py",
+      "line": 115,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.domain.services"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator.sync",
+      "label": "SyncOrchestrator.sync",
+      "file": "photo_meta_organizer\\application\\orchestrators.py",
+      "line": 161,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.orchestrators"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\extractors\\disk_metadata_extractor.py:DiskMetaDataExtractor",
+      "label": "DiskMetaDataExtractor",
+      "file": "photo_meta_organizer\\infrastructure\\extractors\\disk_metadata_extractor.py",
+      "line": 292,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\retriever\\filtered_retriever.py:ExtensionFilteredRetriever",
+      "label": "ExtensionFilteredRetriever",
+      "file": "photo_meta_organizer\\infrastructure\\retriever\\filtered_retriever.py",
+      "line": 18,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.infrastructure.retriever.filtered_retriever"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\retriever\\local_disk_retriever.py:LocalDiskRetriever",
+      "label": "LocalDiskRetriever",
+      "file": "photo_meta_organizer\\infrastructure\\retriever\\local_disk_retriever.py",
+      "line": 18,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.infrastructure.retriever.local_disk_retriever"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\schemas.py:DimensionsSchema",
+      "label": "DimensionsSchema",
+      "file": "photo_meta_organizer\\api\\schemas.py",
+      "line": 27,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.api.schemas"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\schemas.py:ExifDataSchema",
+      "label": "ExifDataSchema",
+      "file": "photo_meta_organizer\\api\\schemas.py",
+      "line": 34,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.api.schemas"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\schemas.py:FileInfoSchema",
+      "label": "FileInfoSchema",
+      "file": "photo_meta_organizer\\api\\schemas.py",
+      "line": 18,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.api.schemas"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\schemas.py:GpsCoordinatesSchema",
+      "label": "GpsCoordinatesSchema",
+      "file": "photo_meta_organizer\\api\\schemas.py",
+      "line": 9,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.api.schemas"
+    },
+    {
+      "id": "photo_meta_organizer\\api\\schemas.py:PhotoMetadataResponse",
+      "label": "PhotoMetadataResponse",
+      "file": "photo_meta_organizer\\api\\schemas.py",
+      "line": 55,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.api.schemas"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\thumbnail_service.py:ThumbnailService.get_thumbnail_path",
+      "label": "ThumbnailService.get_thumbnail_path",
+      "file": "photo_meta_organizer\\infrastructure\\thumbnail_service.py",
+      "line": 34,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.infrastructure.thumbnail_service"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_extractor.py:ImageMetadataExtractor.extract",
+      "label": "ImageMetadataExtractor.extract",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_extractor.py",
+      "line": 65,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_extractor"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:ImageRetriever.get_file_stream",
+      "label": "ImageRetriever.get_file_stream",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_retriever.py",
+      "line": 69,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_retriever"
+    },
+    {
+      "id": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py:TinyDBRepository.close",
+      "label": "TinyDBRepository.close",
+      "file": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py",
+      "line": 516,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.infrastructure.repositories.tinydb_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:haversine_distance_km",
+      "label": "haversine_distance_km",
+      "file": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py",
+      "line": 14,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "function",
+      "module": "photo_meta_organizer.application.use_cases.search_photos_use_case"
+    },
+    {
+      "id": "photo_meta_organizer\\domain\\models.py:FileState",
+      "label": "FileState",
+      "file": "photo_meta_organizer\\domain\\models.py",
+      "line": 252,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.domain.models"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._delete_entry",
+      "label": "SyncOrchestrator._delete_entry",
+      "file": "photo_meta_organizer\\application\\orchestrators.py",
+      "line": 206,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.orchestrators"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._extract_and_save",
+      "label": "SyncOrchestrator._extract_and_save",
+      "file": "photo_meta_organizer\\application\\orchestrators.py",
+      "line": 230,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.orchestrators"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.delete_by_path",
+      "label": "ImageMetadataRepository.delete_by_path",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_repository.py",
+      "line": 98,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "method",
+      "module": "photo_meta_organizer.application.interfaces.image_repository"
+    },
+    {
+      "id": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:RemoteFileHandle",
+      "label": "RemoteFileHandle",
+      "file": "photo_meta_organizer\\application\\interfaces\\image_retriever.py",
+      "line": 28,
+      "language": "python",
+      "fidelity": "ast",
+      "kind": "class",
+      "module": "photo_meta_organizer.application.interfaces.image_retriever"
+    }
+  ],
+  "edges": [
+    {
+      "from": "photo_meta_organizer\\main.py:handle_index_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_index_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_index_command",
+      "to": "photo_meta_organizer\\main.py:build_extractor",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_index_command",
+      "to": "photo_meta_organizer\\main.py:build_repository",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_index_command",
+      "to": "photo_meta_organizer\\main.py:build_retriever",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_index_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_search_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosQuery",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_search_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_search_command",
+      "to": "photo_meta_organizer\\main.py:_parse_date_arg",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_search_command",
+      "to": "photo_meta_organizer\\main.py:build_repository",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_search_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_sync_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_sync_command",
+      "to": "photo_meta_organizer\\main.py:build_extractor",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_sync_command",
+      "to": "photo_meta_organizer\\main.py:build_repository",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_sync_command",
+      "to": "photo_meta_organizer\\main.py:build_retriever",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_sync_command",
+      "to": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_stats_command",
+      "to": "photo_meta_organizer\\main.py:build_repository",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:handle_stats_command",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.list_all",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\app.py:create_app",
+      "to": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py:TinyDBRepository",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\app.py:create_app",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.count",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:list_photos",
+      "to": "photo_meta_organizer\\api\\schemas.py:PaginatedPhotosResponse",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:list_photos",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosQuery",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:list_photos",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:list_photos",
+      "to": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:list_photos",
+      "to": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo",
+      "to": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.get_by_filehash",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo_thumbnail",
+      "to": "photo_meta_organizer\\infrastructure\\thumbnail_service.py:ThumbnailService.generate_thumbnail",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo_thumbnail",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.get_by_filehash",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:batch_update_photos",
+      "to": "photo_meta_organizer\\api\\schemas.py:BatchPhotoResponse",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:batch_update_photos",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.batch_update",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\application\\orchestrators.py:ExtractorOrchestrator.extract_all",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.save",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:ImageRetriever.list_files",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.record_error",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.start",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.stop",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.update",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:PaginatedResult",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase._matches_query",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase._sort_records",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase.execute",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.list_all",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+      "to": "photo_meta_organizer\\domain\\models.py:FileInfo",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+      "to": "photo_meta_organizer\\domain\\models.py:SyncResult",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+      "to": "photo_meta_organizer\\domain\\services.py:MetadataStateAnalyzer.analyze_changes",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.list_all",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:ImageRetriever.list_files",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+      "to": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator.sync",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:build_extractor",
+      "to": "photo_meta_organizer\\infrastructure\\extractors\\disk_metadata_extractor.py:DiskMetaDataExtractor",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:build_repository",
+      "to": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py:TinyDBRepository",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:build_retriever",
+      "to": "photo_meta_organizer\\infrastructure\\retriever\\filtered_retriever.py:ExtensionFilteredRetriever",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\main.py:build_retriever",
+      "to": "photo_meta_organizer\\infrastructure\\retriever\\local_disk_retriever.py:LocalDiskRetriever",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "to": "photo_meta_organizer\\api\\schemas.py:DimensionsSchema",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "to": "photo_meta_organizer\\api\\schemas.py:ExifDataSchema",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "to": "photo_meta_organizer\\api\\schemas.py:FileInfoSchema",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "to": "photo_meta_organizer\\api\\schemas.py:GpsCoordinatesSchema",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\api\\routes\\photos_router.py:_to_response",
+      "to": "photo_meta_organizer\\api\\schemas.py:PhotoMetadataResponse",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\infrastructure\\thumbnail_service.py:ThumbnailService.generate_thumbnail",
+      "to": "photo_meta_organizer\\infrastructure\\thumbnail_service.py:ThumbnailService.get_thumbnail_path",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\infrastructure\\thumbnail_service.py:ThumbnailService.generate_thumbnail",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.save",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:ExtractorOrchestrator.extract_all",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_extractor.py:ImageMetadataExtractor.extract",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:ExtractorOrchestrator.extract_all",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:ImageRetriever.get_file_stream",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:ExtractorOrchestrator.extract_all",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:ImageRetriever.list_files",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.stop",
+      "to": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py:TinyDBRepository.close",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.update",
+      "to": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.update",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase._matches_query",
+      "to": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:haversine_distance_km",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase._matches_query",
+      "to": "photo_meta_organizer\\infrastructure\\metrics.py:ProgressReporter.update",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\domain\\services.py:MetadataStateAnalyzer.analyze_changes",
+      "to": "photo_meta_organizer\\domain\\models.py:FileState",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator.sync",
+      "to": "photo_meta_organizer\\domain\\models.py:SyncResult",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator.sync",
+      "to": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._delete_entry",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator.sync",
+      "to": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._extract_and_save",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py:TinyDBRepository.close",
+      "to": "photo_meta_organizer\\infrastructure\\repositories\\tinydb_repository.py:TinyDBRepository.close",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._delete_entry",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.delete_by_path",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._extract_and_save",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:RemoteFileHandle",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._extract_and_save",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_extractor.py:ImageMetadataExtractor.extract",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._extract_and_save",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_retriever.py:ImageRetriever.get_file_stream",
+      "kind": "calls"
+    },
+    {
+      "from": "photo_meta_organizer\\application\\orchestrators.py:SyncOrchestrator._extract_and_save",
+      "to": "photo_meta_organizer\\application\\interfaces\\image_repository.py:ImageMetadataRepository.save",
+      "kind": "calls"
+    }
+  ],
+  "entry_ids": [
+    "photo_meta_organizer\\main.py:main",
+    "photo_meta_organizer\\main.py:handle_index_command",
+    "photo_meta_organizer\\main.py:handle_search_command",
+    "photo_meta_organizer\\main.py:handle_sync_command",
+    "photo_meta_organizer\\main.py:handle_stats_command",
+    "photo_meta_organizer\\main.py:handle_organize_command",
+    "photo_meta_organizer\\main.py:handle_serve_command",
+    "photo_meta_organizer\\main.py:handle_validate_command",
+    "photo_meta_organizer\\main.py:handle_benchmark_command",
+    "photo_meta_organizer\\main.py:handle_export_command",
+    "photo_meta_organizer\\api\\app.py:create_app",
+    "photo_meta_organizer\\api\\routes\\photos_router.py:list_photos",
+    "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo",
+    "photo_meta_organizer\\api\\routes\\photos_router.py:get_photo_thumbnail",
+    "photo_meta_organizer\\api\\routes\\photos_router.py:batch_update_photos",
+    "photo_meta_organizer\\application\\use_cases\\index_photos_use_case.py:IndexPhotosUseCase.execute",
+    "photo_meta_organizer\\application\\use_cases\\parallel_index_photos_use_case.py:ParallelIndexPhotosUseCase.execute",
+    "photo_meta_organizer\\application\\use_cases\\search_photos_use_case.py:SearchPhotosUseCase.execute",
+    "photo_meta_organizer\\application\\use_cases\\synchronize_metadata_use_case.py:SynchronizeMetadataUseCase.execute",
+    "photo_meta_organizer\\application\\orchestrators.py:PipelineOrchestrator.run"
+  ],
+  "truncated": false
+}

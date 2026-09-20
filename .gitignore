@@ -173,5 +173,7 @@ DOCS/*.md
 .agent/
 .agents/
 
+desktop/node_modules/
 
+CLAUDE.md
 

@@ -1,0 +1,328 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+const electron_1 = require("electron");
+const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
+const child_process_1 = require("child_process");
+const http = __importStar(require("http"));
+const net = __importStar(require("net"));
+let mainWindow = null;
+let backendProcess = null;
+let backendPort = 8000;
+let isOwnBackendProcess = false;
+const isDev = process.argv.includes('--dev') || !electron_1.app.isPackaged;
+/**
+ * Check if a Photo Meta Organizer backend is already running and healthy on the given port.
+ */
+function checkExistingBackend(port) {
+    return new Promise((resolve) => {
+        const req = http.get(`http://127.0.0.1:${port}/health`, (res) => {
+            let data = '';
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(data);
+                    resolve(json.status === 'ok');
+                }
+                catch {
+                    resolve(false);
+                }
+            });
+        });
+        req.on('error', () => resolve(false));
+        req.setTimeout(1200, () => {
+            req.destroy();
+            resolve(false);
+        });
+    });
+}
+/**
+ * Find an available TCP port starting from the given port.
+ */
+function getAvailablePort(startingPort = 8000) {
+    return new Promise((resolve) => {
+        const server = net.createServer();
+        server.listen(startingPort, '127.0.0.1', () => {
+            const addr = server.address();
+            const port = addr.port;
+            server.close(() => resolve(port));
+        });
+        server.on('error', () => {
+            // Starting port is in use; find any free ephemeral port
+            const ephemeralServer = net.createServer();
+            ephemeralServer.listen(0, '127.0.0.1', () => {
+                const addr = ephemeralServer.address();
+                const port = addr.port;
+                ephemeralServer.close(() => resolve(port));
+            });
+        });
+    });
+}
+/**
+ * Determine the command and arguments to launch the Python backend.
+ */
+function getBackendCommand(port) {
+    const rootDir = path.resolve(__dirname, '..', '..');
+    if (electron_1.app.isPackaged) {
+        // Packaged production mode: look for packaged executable in resources
+        const packagedExe = path.join(process.resourcesPath, 'backend', 'photo_meta_organizer_backend.exe');
+        if (fs.existsSync(packagedExe)) {
+            return {
+                cmd: packagedExe,
+                args: ['--port', port.toString(), '--host', '127.0.0.1'],
+                cwd: process.resourcesPath,
+            };
+        }
+    }
+    // Development / Local mode: locate python in .venv
+    const venvPythonWin = path.join(rootDir, '.venv', 'Scripts', 'python.exe');
+    const pythonCmd = fs.existsSync(venvPythonWin) ? venvPythonWin : 'python';
+    const entryScript = path.join(rootDir, 'scripts', 'desktop_backend.py');
+    return {
+        cmd: pythonCmd,
+        args: [entryScript, '--port', port.toString(), '--host', '127.0.0.1'],
+        cwd: rootDir,
+    };
+}
+/**
+ * Poll the backend health endpoint until it responds or times out.
+ */
+function waitForBackendReady(port, timeoutMs = 15000) {
+    const startTime = Date.now();
+    return new Promise((resolve) => {
+        const check = () => {
+            const req = http.get(`http://127.0.0.1:${port}/health`, (res) => {
+                if (res.statusCode === 200) {
+                    resolve(true);
+                }
+                else if (Date.now() - startTime < timeoutMs) {
+                    setTimeout(check, 300);
+                }
+                else {
+                    resolve(false);
+                }
+            });
+            req.on('error', () => {
+                if (Date.now() - startTime < timeoutMs) {
+                    setTimeout(check, 300);
+                }
+                else {
+                    resolve(false);
+                }
+            });
+            req.end();
+        };
+        check();
+    });
+}
+/**
+ * Spawn the backend child process (or attach to an existing running backend).
+ */
+async function startBackend() {
+    // 1. Check if backend is already running on port 8000
+    const isAlreadyRunning = await checkExistingBackend(8000);
+    if (isAlreadyRunning) {
+        console.log('[Desktop Main] Active backend detected on port 8000. Reusing existing instance.');
+        backendPort = 8000;
+        isOwnBackendProcess = false;
+        return true;
+    }
+    // 2. Otherwise find an open port
+    backendPort = await getAvailablePort(8000);
+    const { cmd, args, cwd } = getBackendCommand(backendPort);
+    console.log(`[Desktop Main] Spawning backend: ${cmd} ${args.join(' ')} (cwd: ${cwd})`);
+    try {
+        backendProcess = (0, child_process_1.spawn)(cmd, args, {
+            cwd,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true,
+        });
+        isOwnBackendProcess = true;
+        backendProcess.stdout?.on('data', (data) => {
+            console.log(`[Backend stdout] ${data.toString().trim()}`);
+        });
+        backendProcess.stderr?.on('data', (data) => {
+            console.error(`[Backend stderr] ${data.toString().trim()}`);
+        });
+        backendProcess.on('exit', (code) => {
+            console.log(`[Desktop Main] Backend exited with code: ${code}`);
+            backendProcess = null;
+        });
+        const ready = await waitForBackendReady(backendPort, 15000);
+        return ready;
+    }
+    catch (err) {
+        console.error('[Desktop Main] Failed to spawn backend:', err);
+        return false;
+    }
+}
+/**
+ * Terminate backend process tree cleanly on Windows.
+ */
+function killBackend() {
+    if (!isOwnBackendProcess || !backendProcess || !backendProcess.pid)
+        return;
+    const pid = backendProcess.pid;
+    console.log(`[Desktop Main] Terminating backend process tree (PID: ${pid})...`);
+    if (process.platform === 'win32') {
+        (0, child_process_1.exec)(`taskkill /pid ${pid} /T /F`, (err) => {
+            if (err)
+                console.warn('[Desktop Main] Taskkill warning:', err.message);
+        });
+    }
+    else {
+        backendProcess.kill('SIGTERM');
+    }
+    backendProcess = null;
+}
+/**
+ * Create the main desktop window.
+ */
+async function createWindow() {
+    mainWindow = new electron_1.BrowserWindow({
+        width: 1440,
+        height: 900,
+        minWidth: 1024,
+        minHeight: 700,
+        title: 'Photo Meta Organizer',
+        autoHideMenuBar: true,
+        backgroundColor: '#0f172a',
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: false,
+        },
+    });
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
+    // Forward renderer console logs to terminal
+    mainWindow.webContents.on('console-message', (_event, _level, message, line, sourceId) => {
+        console.log(`[Renderer] ${message} (${sourceId}:${line})`);
+    });
+    // Allow F12 to toggle DevTools
+    mainWindow.webContents.on('before-input-event', (_event, input) => {
+        if (input.key === 'F12' && input.type === 'keyDown') {
+            mainWindow?.webContents.toggleDevTools();
+        }
+    });
+    // Load UI: in dev mode check Vite dev server or fallback to FastAPI root
+    if (isDev) {
+        const devUrl = 'http://localhost:5173';
+        // Verify Vite is actually running by checking the response body
+        const checkVite = () => new Promise((resolve) => {
+            const req = http.get(devUrl, (res) => {
+                if (res.statusCode !== 200) {
+                    res.destroy();
+                    return resolve(false);
+                }
+                let body = '';
+                res.on('data', (c) => { body += c; });
+                res.on('end', () => {
+                    // Vite dev server always injects /@vite/client or serves <div id="root">
+                    const isVite = body.includes('/@vite/client') || body.includes('@vite');
+                    resolve(isVite);
+                });
+            });
+            req.on('error', () => resolve(false));
+            req.setTimeout(1500, () => { req.destroy(); resolve(false); });
+            req.end();
+        });
+        checkVite().then((isVite) => {
+            if (isVite) {
+                console.log(`[Desktop Main] Loading Vite dev server at ${devUrl}`);
+                mainWindow?.loadURL(devUrl);
+            }
+            else {
+                console.log(`[Desktop Main] Vite dev server not detected; loading backend server at http://127.0.0.1:${backendPort}/`);
+                mainWindow?.loadURL(`http://127.0.0.1:${backendPort}/`);
+            }
+        });
+    }
+    else {
+        mainWindow.loadURL(`http://127.0.0.1:${backendPort}/`);
+    }
+}
+// Register IPC handlers
+electron_1.ipcMain.handle('dialog:open-directory', async () => {
+    if (!mainWindow)
+        return null;
+    const result = await electron_1.dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory'],
+        title: 'Select Photo Directory to Index',
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+        return null;
+    }
+    return result.filePaths[0];
+});
+electron_1.ipcMain.handle('shell:show-item-in-folder', async (_, filePath) => {
+    if (filePath && fs.existsSync(filePath)) {
+        electron_1.shell.showItemInFolder(filePath);
+    }
+});
+electron_1.ipcMain.handle('app:get-backend-info', async () => {
+    return {
+        port: backendPort,
+        host: '127.0.0.1',
+        baseUrl: `http://127.0.0.1:${backendPort}`,
+    };
+});
+electron_1.app.whenReady().then(async () => {
+    console.log('[Desktop Main] Application initializing...');
+    const backendReady = await startBackend();
+    if (!backendReady) {
+        console.warn('[Desktop Main] Backend did not respond to health check in time, proceeding anyway...');
+    }
+    await createWindow();
+    electron_1.app.on('activate', () => {
+        if (electron_1.BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
+    });
+});
+electron_1.app.on('before-quit', () => {
+    killBackend();
+});
+electron_1.app.on('window-all-closed', () => {
+    killBackend();
+    if (process.platform !== 'darwin') {
+        electron_1.app.quit();
+    }
+});

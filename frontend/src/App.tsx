@@ -150,23 +150,45 @@ export const App: React.FC = () => {
   const [photos, setPhotos] = useState<PhotoMetadata[]>(SAMPLE_PHOTOS)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Fetch real photos from FastAPI backend, fallback to demo dataset if empty
+  // Fetch real photos from FastAPI backend, fallback to demo dataset if empty.
+  // Uses page_size=500 (backend max) and fetches all pages to ensure every
+  // indexed photo is visible — not just the first 100.
   const loadData = async () => {
     try {
       setIsLoading(true)
-      const data = await fetchPhotos(1, 100)
-      if (data && data.items && data.items.length > 0) {
-        setPhotos(data.items)
-        if (!inspectedPhoto) {
-          setInspectedPhoto(data.items[0])
+
+      // Fetch first page
+      const PAGE_SIZE = 500
+      const firstPage = await fetchPhotos(1, PAGE_SIZE, 'captured_at', 'desc')
+
+      if (!firstPage || !firstPage.items || firstPage.items.length === 0) {
+        // No real data — keep demo photos
+        if (!inspectedPhoto) setInspectedPhoto(SAMPLE_PHOTOS[0])
+        return
+      }
+
+      let allPhotos = [...firstPage.items]
+
+      // Fetch remaining pages if any
+      if (firstPage.total_pages > 1) {
+        const pageRequests = []
+        for (let p = 2; p <= firstPage.total_pages; p++) {
+          pageRequests.push(fetchPhotos(p, PAGE_SIZE, 'captured_at', 'desc'))
         }
-      } else {
-        if (!inspectedPhoto) {
-          setInspectedPhoto(SAMPLE_PHOTOS[0])
+        const additionalPages = await Promise.all(pageRequests)
+        for (const page of additionalPages) {
+          if (page && page.items) {
+            allPhotos = allPhotos.concat(page.items)
+          }
         }
       }
+
+      setPhotos(allPhotos)
+      if (!inspectedPhoto) {
+        setInspectedPhoto(allPhotos[0])
+      }
     } catch {
-      // Fallback
+      // Fallback to demo dataset on API error
       if (!inspectedPhoto) {
         setInspectedPhoto(SAMPLE_PHOTOS[0])
       }
@@ -178,6 +200,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     loadData()
+
+    const handleReload = () => {
+      loadData()
+    }
+    window.addEventListener('photos-updated', handleReload)
+    return () => window.removeEventListener('photos-updated', handleReload)
   }, [])
 
   // Keyboard shortcut listener for 'L' (Lights Out)

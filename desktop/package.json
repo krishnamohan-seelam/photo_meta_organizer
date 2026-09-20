@@ -1,0 +1,21 @@
+{
+  "name": "photo-meta-organizer-desktop",
+  "version": "1.0.0",
+  "description": "Standalone Windows Desktop Application for Photo Meta Organizer",
+  "main": "dist-electron/main.js",
+  "author": "Photo Meta Organizer Team",
+  "license": "MIT",
+  "scripts": {
+    "build:electron": "tsc -p tsconfig.json",
+    "dev": "npm run build:electron && electron . --dev",
+    "start": "npm run build:electron && electron .",
+    "package": "npm run build:electron && electron-builder --win"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.3"
+  }
+}

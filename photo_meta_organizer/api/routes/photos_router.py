@@ -29,10 +29,15 @@ from photo_meta_organizer.api.schemas import (
     ExifDataSchema,
     FileInfoSchema,
     GpsCoordinatesSchema,
+    IndexFolderRequest,
+    IndexFolderResponse,
     PaginatedPhotosResponse,
     PatchPhotoRequest,
     PhotoMetadataResponse,
     SearchRequest,
+)
+from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
+    ParallelIndexPhotosUseCase,
 )
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     PaginatedResult,
@@ -40,14 +45,21 @@ from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosUseCase,
 )
 from photo_meta_organizer.domain.models import ImageMetadata
+from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
+    DiskMetaDataExtractor,
+)
 from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
     TinyDBRepository,
+)
+from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
+    LocalDiskRetriever,
 )
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 photos_router = APIRouter(prefix="/api/photos", tags=["photos"])
 collections_router = APIRouter(prefix="/api/collections", tags=["collections"])
 search_router = APIRouter(prefix="/api", tags=["search"])
+index_router = APIRouter(prefix="/api/index", tags=["indexing"])
 
 _thumbnail_service = ThumbnailService()
 
@@ -328,3 +340,33 @@ def search_photos(
         page_size=result.page_size,
         total_pages=result.total_pages,
     )
+
+
+@index_router.post("", response_model=IndexFolderResponse, summary="Index local photo directory")
+def index_directory(
+    request: IndexFolderRequest,
+    repository: TinyDBRepository = Depends(),
+) -> IndexFolderResponse:
+    """Index image files from a local directory into the metadata repository."""
+    folder_path = os.path.abspath(request.folder_path)
+    if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Directory '{request.folder_path}' does not exist or is not a directory.",
+        )
+
+    retriever = LocalDiskRetriever(base_path=folder_path)
+    extractor = DiskMetaDataExtractor()
+    use_case = ParallelIndexPhotosUseCase(
+        retriever=retriever,
+        extractor=extractor,
+        repository=repository,
+        num_workers=request.num_workers,
+    )
+    results = use_case.execute()
+    return IndexFolderResponse(
+        indexed_count=len(results),
+        folder_path=folder_path,
+        message=f"Successfully indexed {len(results)} photo(s) from '{folder_path}'.",
+    )
+

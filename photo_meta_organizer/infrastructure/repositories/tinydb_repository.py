@@ -15,7 +15,9 @@ Example:
     >>> found = repo.get_by_filehash("e3b0c44298fc...")
 """
 
+import json
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -48,6 +50,22 @@ class TinyDBRepository:
         _table: Default TinyDB table for metadata storage.
     """
 
+    @staticmethod
+    def _repair_corrupted_db(db_path: str) -> None:
+        """Self-heal a JSON file that has extra trailing data or corrupted duplicate blocks."""
+        if not os.path.exists(db_path):
+            return
+        try:
+            with open(db_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            decoder = json.JSONDecoder()
+            obj, _ = decoder.raw_decode(content)
+            with open(db_path, "w", encoding="utf-8") as f:
+                json.dump(obj, f, indent=2)
+            logger.info("Successfully repaired corrupted database at %s", db_path)
+        except Exception as repair_err:
+            logger.error("Failed to auto-repair %s: %s", db_path, repair_err)
+
     def __init__(self, db_path: str) -> None:
         """Initialize with path to the JSON database file.
 
@@ -55,15 +73,22 @@ class TinyDBRepository:
             db_path: File path for the TinyDB JSON file.
                      Created automatically if it doesn't exist.
         """
-        self._db = TinyDB(db_path, indent=2)
-        self._table = self._db.table("metadata")
-        
+        self._db_path = db_path
+        try:
+            self._db = TinyDB(db_path, indent=2)
+            self._table = self._db.table("metadata")
+        except json.decoder.JSONDecodeError as e:
+            logger.warning("JSONDecodeError in %s: %s. Performing auto-repair...", db_path, e)
+            self._repair_corrupted_db(db_path)
+            self._db = TinyDB(db_path, indent=2)
+            self._table = self._db.table("metadata")
+
         # Index data structures
         self._hash_index: Dict[str, Dict[str, Any]] = {}
         self._path_index: Dict[str, Dict[str, Any]] = {}
         self._captured_at_index: List[tuple[datetime, Dict[str, Any]]] = []
         self._size_index: List[tuple[int, Dict[str, Any]]] = []
-        
+
         self.rebuild_indexes()
         logger.info("TinyDB repository initialized at: %s with indexes built", db_path)
 
@@ -174,7 +199,13 @@ class TinyDBRepository:
         Returns:
             List of all ImageMetadata entities in storage.
         """
-        return [self._deserialize(doc) for doc in self._table.all()]
+        try:
+            return [self._deserialize(doc) for doc in self._table.all()]
+        except json.decoder.JSONDecodeError as e:
+            logger.warning("JSON corruption detected during list_all: %s. Auto-healing...", e)
+            self._repair_corrupted_db(self._db_path)
+            self.rebuild_indexes()
+            return [self._deserialize(doc) for doc in self._table.all()]
 
     def delete(self, file_hash: str) -> bool:
         """Delete metadata by file hash and update indexes.

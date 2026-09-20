@@ -1,6 +1,7 @@
 import React from 'react'
 import { useUiStore } from '../../stores/useUiStore'
 import type { ViewMode } from '../../stores/useUiStore'
+import { indexFolderApi } from '../../api/client'
 import {
   Camera,
   Search,
@@ -15,9 +16,11 @@ import {
   PanelLeftClose,
   PanelRightClose,
   Download,
+  FolderPlus,
 } from 'lucide-react'
 
 export const AppHeader: React.FC = () => {
+  const [isIndexing, setIsIndexing] = React.useState(false)
   const {
     theme,
     toggleTheme,
@@ -32,6 +35,29 @@ export const AppHeader: React.FC = () => {
     setCommandPaletteOpen,
     showToast,
   } = useUiStore()
+
+  const handleScanFolder = async () => {
+    let folderPath: string | null = null
+    if (window.electronAPI?.openDirectory) {
+      folderPath = await window.electronAPI.openDirectory()
+    } else {
+      folderPath = window.prompt('Enter absolute folder path to index:')
+    }
+
+    if (!folderPath) return
+
+    try {
+      setIsIndexing(true)
+      showToast(`Indexing folder: ${folderPath}...`)
+      const res = await indexFolderApi(folderPath)
+      showToast(res.message)
+      window.dispatchEvent(new CustomEvent('photos-updated'))
+    } catch (err: any) {
+      showToast(`Error indexing folder: ${err.message}`)
+    } finally {
+      setIsIndexing(false)
+    }
+  }
 
   const views: { key: ViewMode; label: string; icon: React.ReactNode }[] = [
     { key: 'studio', label: 'Studio Grid', icon: <LayoutGrid size={15} /> },
@@ -139,6 +165,17 @@ export const AppHeader: React.FC = () => {
             </button>
           </>
         )}
+
+        <button
+          className="btn btn-secondary"
+          onClick={handleScanFolder}
+          disabled={isIndexing}
+          title="Scan and index photos from a local folder"
+          style={{ padding: '6px 12px', gap: '6px' }}
+        >
+          <FolderPlus size={15} color="var(--accent-primary)" />
+          <span>{isIndexing ? 'Indexing...' : 'Scan Folder'}</span>
+        </button>
 
         <button className="btn btn-primary" onClick={handleExportJson}>
           <Download size={15} />

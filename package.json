@@ -1,0 +1,15 @@
+{
+  "name": "photo-meta-organizer-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root workspace orchestrator for Photo Meta Organizer",
+  "scripts": {
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "desktop:build": "npm --prefix desktop run build:electron",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:start": "npm --prefix desktop run start",
+    "desktop:package": "npm run frontend:build && npm --prefix desktop run package",
+    "backend:package": ".\\.venv\\Scripts\\python.exe scripts/build_backend.py"
+  }
+}

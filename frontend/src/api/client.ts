@@ -90,3 +90,26 @@ export function getThumbnailUrl(fileHash: string, width: number = 320, height: n
 export function getRawImageUrl(fileHash: string): string {
   return `${BASE_URL}/photos/${fileHash}/raw`
 }
+
+export interface IndexFolderResponse {
+  indexed_count: number
+  folder_path: string
+  message: string
+}
+
+export async function indexFolderApi(
+  folderPath: string,
+  numWorkers: number = 4
+): Promise<IndexFolderResponse> {
+  const res = await fetch(`${BASE_URL}/index`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder_path: folderPath, num_workers: numWorkers }),
+  })
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}))
+    throw new Error(errorData.detail || `Failed to index folder: ${res.statusText}`)
+  }
+  return res.json()
+}
+

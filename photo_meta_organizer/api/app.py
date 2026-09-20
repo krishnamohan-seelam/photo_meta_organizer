@@ -14,10 +14,12 @@ Usage:
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
 
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
+    index_router,
     photos_router,
     search_router,
 )
@@ -47,6 +49,15 @@ def create_app(db_path: str = "metadata.json") -> FastAPI:
         redoc_url="/redoc",
     )
 
+    # Enable CORS for desktop/local environments
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     # Build shared repository
     repository = TinyDBRepository(db_path=db_path)
 
@@ -60,12 +71,28 @@ def create_app(db_path: str = "metadata.json") -> FastAPI:
     app.include_router(photos_router)
     app.include_router(collections_router)
     app.include_router(search_router)
+    app.include_router(index_router)
 
     frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
     assets_dir = frontend_dist / "assets"
     if assets_dir.exists():
         from fastapi.staticfiles import StaticFiles
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    # Serve root-level static files produced by Vite (favicon, icons, etc.)
+    for _static_file in ("favicon.svg", "icons.svg"):
+        _path = frontend_dist / _static_file
+        if _path.exists():
+            _captured_path = str(_path)  # capture for closure
+            _captured_name = _static_file
+
+            def _make_static_route(file_path: str, file_name: str):
+                @app.get(f"/{file_name}", tags=["frontend"], include_in_schema=False)
+                def _static_route(fp=file_path):
+                    return FileResponse(fp)
+                return _static_route
+
+            _make_static_route(_captured_path, _captured_name)
 
     @app.get("/health", tags=["health"])
     def health_check():

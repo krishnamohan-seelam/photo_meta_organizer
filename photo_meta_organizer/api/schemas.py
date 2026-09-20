@@ -145,3 +145,19 @@ class DeleteResponse(BaseModel):
     deleted: bool
     file_hash: str
     message: str
+
+
+class IndexFolderRequest(BaseModel):
+    """Request schema for indexing photos from a local directory."""
+
+    folder_path: str = Field(description="Absolute path to directory containing photos")
+    num_workers: int = Field(default=4, ge=1, le=32, description="Concurrent extraction threads")
+
+
+class IndexFolderResponse(BaseModel):
+    """Response schema for folder indexing operation."""
+
+    indexed_count: int
+    folder_path: str
+    message: str
+

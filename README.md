@@ -5,7 +5,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![React 19](https://img.shields.io/badge/React-19.0-61dafb)
 ![Tests](https://img.shields.io/badge/Tests-195%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/Coverage-90%25-green)
+![Coverage](https://img.shields.io/badge/Coverage-93%25-green)
 ![Throughput](https://img.shields.io/badge/Throughput-21%2C710%20imgs%2Fmin-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -13,6 +13,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 
 ## ✨ Features
 
+- **Interactive C4 Architecture Topology** — Comprehensive, self-contained HTML architecture document adhering to Simon Brown's C4 model standard ([DOCS/c4-architecture.html](DOCS/c4-architecture.html)) featuring interactive SVG pan/zoom, fullscreen maximization, and narrative tables across System Context (L1), Containers (L2), Components (L3), and Ingestion Flow (L4).
 - **Phase 4 React 19 Production Frontend Studio** — Complete, high-performance Web UI built with React 19, TypeScript, Vite, Zustand, and TanStack Virtualization.
   - **Light & Dark Themes** with tokenized CSS variables, sleek contrast palettes, and system theme synchronization.
   - **Lights Out Dimmer (`L`)** — Cinema-grade ambient mode dimming sidebars and controls to emphasize photo viewing.
@@ -26,7 +27,13 @@ Metadata indexing and organization system built specifically for large-scale pho
   - **Kanban Staging Board** — 3-stage visual workflow (`Inbox`, `Picks & Flagged`, `Export Ready`).
   - **Library Analytics Dashboard** — KPI metrics and interactive SVG charts with click-to-filter drilldowns.
   - **Fullscreen Lightbox** — Fullscreen image stage, bottom filmstrip thumbnails, and keyboard navigation (`Space`, `Esc`, `P`, `1-5`).
+- **Standalone Windows Desktop Application (Electron Shell)** — High-performance desktop application bundling the entire React 19 UI and Python backend engine into an installable desktop experience:
+  - **Native Windows Folder Selection** — Direct integration with Windows File Explorer directory picker dialogs to scan and index local photo albums without terminal commands.
+  - **Auto-Managed Backend Sidecar** — Automatically starts the Python FastAPI service on an ephemeral port upon launch and gracefully terminates the process tree on window close.
+  - **Zero-Rewrite Desktop Port** — Full 100% preservation of React 19 components, Zustand state, TanStack Virtual grid, and HTML5 Canvas EXIF histograms.
+  - **Standalone Windows Executable Packaging** — Production-ready `electron-builder` and `PyInstaller` pipeline generating an NSIS installer (`.exe`) and portable standalone binary.
 - **WebP Thumbnail Cache & Streaming Service** — SHA-256 hash-addressed thumbnail generator with EXIF transpose correction and `.cache/thumbnails/` persistent disk caching.
+- **Folder Indexing REST API** — `POST /api/index` endpoint for programmatically triggering multi-threaded parallel extraction of arbitrary disk directories.
 - **Curation & Batch Mutations REST API** — `PATCH /api/photos/{hash}` for star ratings/flags/tags and `POST /api/photos/batch` for atomic batch updates.
 - **Curated Collections API** — `GET/POST /api/collections` for creating and organizing named photo sets.
 - **CLI Search & Library Statistics** — `python main.py search` and `python main.py stats` formatted using `tabulate` for date, camera, location radius, tag, and size filtering.
@@ -117,6 +124,30 @@ cd ..
 python -m uvicorn photo_meta_organizer.api.app:create_app --factory --port 8000
 ```
 *Open your browser at:* **`http://localhost:8000`**
+
+---
+
+### Option C: Standalone Windows Desktop Application (Electron)
+
+Launch the native Windows desktop application with auto-managed backend sidecar:
+
+```bash
+# 1. Build frontend and launch desktop application
+npm run frontend:build
+npm run desktop:start
+```
+
+To run in live development mode with hot-reloading:
+```bash
+npm run desktop:dev
+```
+
+To package into a Windows standalone installer (`.exe` / NSIS) & portable executable:
+```bash
+npm run desktop:package
+```
+*Output binaries are generated in:* `desktop/dist-package/`
+
 
 ---
 

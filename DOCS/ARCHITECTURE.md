@@ -1,9 +1,10 @@
 # Architecture and Wiring
 
-**Status:** ✅ Phase 3 (Search & Querying) Complete & Verified  
-**Last Updated:** August 23, 2026  
-**Tests:** 180 passing (90% coverage)  
-**Throughput:** 21,710 imgs/min (8 workers)
+**Status:** ✅ Phase 4 (Web-Based Studio Gallery UI & Thumbnail Streaming) Complete & Verified  
+**Last Updated:** September 5, 2026  
+**Tests:** 195 passing (93% coverage)  
+**Throughput:** 21,710 imgs/min (8 workers)  
+**Interactive C4 Model:** [c4-architecture.html](c4-architecture.html)
 
 ---
 
@@ -13,13 +14,19 @@ This project uses **Clean Architecture** with a stateless extractor design.
 All components communicate through Protocol-based interfaces (ports), with
 concrete implementations (adapters) injected at the composition root (`main.py`).
 
+An interactive, multi-level architectural topology document adhering to Simon Brown's C4 model standard is available at [DOCS/c4-architecture.html](c4-architecture.html), featuring zoom/pan diagrams and component tables across:
+- **Level 1: System Context** (Photographers, Dataset Managers, Filesystem & S3 Storage, Browser & Desktop Clients)
+- **Level 2: Container Topology** (Electron Desktop Host, React 19 SPA, FastAPI REST API, CLI Runner, WebP Thumbnail Cache, TinyDB Document DB)
+- **Level 3: Component Architecture** (Controllers, Use Cases, Domain Models/Services, Infrastructure Adapters)
+- **Level 4: Code & Parallel Ingestion Execution Flow** (Worker ThreadPool, Bounded Queue, Dedicated Single-Writer Thread)
+
 ### Core Abstractions
 
 | Protocol | Responsibility | Implementation |
 |----------|---------------|----------------|
-| `ImageRetriever` | File discovery + stream access | `LocalDiskRetriever`, `ExtensionFilteredRetriever` |
+| `ImageRetriever` | File discovery + stream access | `LocalDiskRetriever`, `ExtensionFilteredRetriever`, `S3Retriever` |
 | `ImageMetadataExtractor` | Stateless metadata parsing | `DiskMetaDataExtractor` |
-| `ImageMetadataRepository` | Persistence (CRUD) | `TinyDBRepository` |
+| `ImageMetadataRepository` | Persistence (CRUD, batch, collections) | `TinyDBRepository` |
 
 ### Key Design Decisions
 
@@ -29,8 +36,12 @@ concrete implementations (adapters) injected at the composition root (`main.py`)
 - **Three-tier EXIF model**: Universal → Common → Camera-Specific (raw_tags)
 - **Camera profile inference**: `CameraClassifier` domain service (no infra dependencies)
 - **Multi-criteria Search**: `SearchPhotosUseCase` with `SearchPhotosQuery` DTO & `PaginatedResult` iterator
-- **TinyDB In-Memory Indexing**: `TinyDBRepository` maintains $O(1)$ hash/path lookups (`_hash_index`, `_path_index`) and sorted range indexes (`_captured_at_index`, `_size_index`) for accelerated queries
-- **REST API**: `FastAPI` factory `create_app(db_path)` with four endpoints (`GET/DELETE /api/photos`, `GET /api/photos/{hash}`, `POST /api/search`) backed by Pydantic schemas
+- **TinyDB In-Memory Indexing & Self-Healing Storage**: `TinyDBRepository` maintains $O(1)$ hash/path lookups (`_hash_index`, `_path_index`) and sorted range indexes (`_captured_at_index`, `_size_index`) for accelerated queries, with automated self-healing JSON repair for cross-process recovery
+- **REST API**: `FastAPI` factory `create_app(db_path)` with endpoints (`GET/DELETE /api/photos`, `GET /api/photos/{hash}`, `POST /api/search`, `PATCH /api/photos/{hash}`, `POST /api/photos/batch`, `GET/POST /api/collections`, `POST /api/index`, `GET /api/photos/{hash}/thumbnail`, `GET /api/photos/{hash}/raw`) backed by Pydantic schemas
+- **Thumbnail Cache & Streaming**: `ThumbnailService` generates on-the-fly WebP thumbnails with Pillow LANCZOS resampling, EXIF orientation transpose, and persistent disk caching in `.cache/thumbnails/`
+- **React 19 Studio Frontend**: Headless, virtualized gallery UI colocated in `frontend/` powered by TanStack Virtual, Tailwind CSS v4, Zustand, and OffscreenCanvas histogram generation
+- **Standalone Windows Desktop Application**: Electron-based desktop shell (`desktop/`) orchestrating the FastAPI backend as a managed sidecar process with automatic port discovery, conflict resolution (attaching to existing instances or dynamically finding open ports), native Windows folder picker dialogs, and OS shell actions via context-isolated IPC channels
+- **Desktop Packaging**: Automated multi-stage packaging using `PyInstaller` (freezing Python runtime into `photo_meta_organizer_backend.exe`) and `electron-builder` producing standalone Windows NSIS installers and portable executables
 
 ---
 
