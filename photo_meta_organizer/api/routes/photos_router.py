@@ -10,6 +10,7 @@ Endpoints:
     GET   /api/collections            - List all curated collections
     POST  /api/collections            - Create or update a curated collection
     POST  /api/search                 - Advanced search with SearchRequest body
+    GET   /api/facets                 - Aggregate camera/tag/year counts and GPS bounds
     DELETE /api/photos/{file_hash}    - Remove photo from index
 """
 
@@ -26,7 +27,10 @@ from photo_meta_organizer.api.schemas import (
     DeleteResponse,
     DimensionsSchema,
     ExifDataSchema,
+    FacetCountSchema,
+    FacetsResponse,
     FileInfoSchema,
+    GpsBoundsSchema,
     GpsCoordinatesSchema,
     IndexFolderRequest,
     IndexFolderResponse,
@@ -377,6 +381,34 @@ def create_collection(
         description=saved.description,
         photo_hashes=saved.photo_hashes,
         updated_at=saved.updated_at,
+    )
+
+
+@search_router.get(
+    "/facets",
+    response_model=FacetsResponse,
+    summary="Aggregate counts for filter UIs",
+)
+def get_facets(
+    repository: ImageMetadataRepository = Depends(get_repository),
+) -> FacetsResponse:
+    """Camera, tag, and year counts (plus GPS bounds) over the whole library."""
+    facets = repository.facets()
+    gps_bounds = (
+        GpsBoundsSchema(
+            min_lat=facets.gps_bounds.min_lat,
+            max_lat=facets.gps_bounds.max_lat,
+            min_lon=facets.gps_bounds.min_lon,
+            max_lon=facets.gps_bounds.max_lon,
+        )
+        if facets.gps_bounds
+        else None
+    )
+    return FacetsResponse(
+        cameras=[FacetCountSchema(name=f.name, count=f.count) for f in facets.cameras],
+        tags=[FacetCountSchema(name=f.name, count=f.count) for f in facets.tags],
+        years=[FacetCountSchema(name=f.name, count=f.count) for f in facets.years],
+        gps_bounds=gps_bounds,
     )
 
 

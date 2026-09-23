@@ -176,6 +176,36 @@ def test_delete_photo_not_found(client):
 
 
 # ============================================================
+# GET /api/facets
+# ============================================================
+
+
+def test_facets_counts_cameras_tags_and_years(client):
+    resp = client.get("/api/facets")
+    assert resp.status_code == 200
+    data = resp.json()
+    camera_counts = {f["name"]: f["count"] for f in data["cameras"]}
+    tag_counts = {f["name"]: f["count"] for f in data["tags"]}
+    year_counts = {f["name"]: f["count"] for f in data["years"]}
+    assert camera_counts == {"Sony": 1, "Canon": 1}
+    assert tag_counts == {"beach": 1, "vacation": 1, "mountain": 1, "landscape": 1}
+    assert year_counts == {"2024": 2}
+
+
+def test_facets_gps_bounds_from_geotagged_photos(client):
+    resp = client.get("/api/facets")
+    assert resp.status_code == 200
+    bounds = resp.json()["gps_bounds"]
+    # Only beach.jpg is geotagged, so the bounds collapse to its single point.
+    assert bounds == {
+        "min_lat": 37.7749,
+        "max_lat": 37.7749,
+        "min_lon": -122.4194,
+        "max_lon": -122.4194,
+    }
+
+
+# ============================================================
 # POST /api/search
 # ============================================================
 

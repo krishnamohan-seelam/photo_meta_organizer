@@ -185,3 +185,28 @@ class IndexFolderResponse(BaseModel):
     indexed_count: int
     folder_path: str
     message: str
+
+
+class FacetCountSchema(BaseModel):
+    """One value of a facet and how many records carry it."""
+
+    name: str
+    count: int
+
+
+class GpsBoundsSchema(BaseModel):
+    """The bounding box of every geotagged record."""
+
+    min_lat: float
+    max_lat: float
+    min_lon: float
+    max_lon: float
+
+
+class FacetsResponse(BaseModel):
+    """Aggregate counts used to populate filter UIs (PMO-10)."""
+
+    cameras: list[FacetCountSchema] = Field(default_factory=list)
+    tags: list[FacetCountSchema] = Field(default_factory=list)
+    years: list[FacetCountSchema] = Field(default_factory=list)
+    gps_bounds: GpsBoundsSchema | None = None
