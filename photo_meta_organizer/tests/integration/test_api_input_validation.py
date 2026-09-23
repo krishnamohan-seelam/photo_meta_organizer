@@ -4,6 +4,7 @@ Regression coverage for design flaw B-03: an unvalidated batch ``set_rating`` va
 was persisted and then made every listing fail while building the response.
 """
 
+import sqlite3
 from datetime import datetime
 
 import pytest
@@ -16,7 +17,9 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import TinyDBRepository
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
+)
 
 
 def _photo(file_hash: str, name: str) -> ImageMetadata:
@@ -34,8 +37,8 @@ def _photo(file_hash: str, name: str) -> ImageMetadata:
 
 @pytest.fixture
 def db_path(tmp_path):
-    path = str(tmp_path / "validation.json")
-    repo = TinyDBRepository(path)
+    path = str(tmp_path / "validation.db")
+    repo = SqliteRepository(path)
     repo.save(_photo("h1", "one.jpg"))
     repo.save(_photo("h2", "two.jpg"))
     repo.close()
@@ -123,17 +126,50 @@ class TestPatchValidation:
 class TestPoisonedStoreIsTolerated:
     """Records already damaged on disk (by an older version) must not break listings."""
 
-    def test_listing_survives_a_corrupt_stored_rating(self, db_path):
-        repo = TinyDBRepository(db_path)
-        from tinydb import Query
-
-        repo._table.update({"rating": "abc"}, Query().file_hash == "h1")
+    def test_sqlite_rejects_a_bad_rating_at_write_time(self, db_path):
+        """SQLite's CHECK constraint (ADR-001) enforces this invariant itself now: a
+        corrupt rating can no longer even be written, let alone break a later listing.
+        """
+        repo = SqliteRepository(db_path)
+        with pytest.raises(sqlite3.IntegrityError):
+            with repo.lock, repo.connection:
+                repo.connection.execute(
+                    "UPDATE photos SET rating = 'abc' WHERE file_hash = 'h1'"
+                )
         repo.close()
 
         client = TestClient(create_app(db_path=db_path))
         listing = client.get("/api/photos")
         assert listing.status_code == 200
         ratings = {p["file_hash"]: p["rating"] for p in listing.json()["items"]}
-        assert ratings["h1"] is None
+        assert ratings["h1"] == 3  # untouched: the bad write never landed
         assert ratings["h2"] == 3
-        assert client.get("/api/photos/h1").status_code == 200
+
+    def test_a_rating_already_poisoned_before_import_does_not_break_the_import(
+        self, tmp_path
+    ):
+        """A rating poisoned by an older TinyDB-era bug, seen only through the legacy
+        JSON importer (PMO-08), must be dropped rather than aborting the whole import.
+        """
+        from photo_meta_organizer.infrastructure.importers.legacy_json_importer import (
+            import_legacy_json,
+        )
+        from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
+            TinyDBRepository,
+        )
+
+        from tinydb import Query
+
+        json_path = str(tmp_path / "legacy.json")
+        legacy = TinyDBRepository(json_path)
+        legacy.save(_photo("h1", "one.jpg"))
+        legacy._table.update({"rating": "abc"}, Query().file_hash == "h1")
+        legacy.close()
+
+        sqlite_path = str(tmp_path / "legacy.db")
+        result = import_legacy_json(json_path, sqlite_path)
+        assert result.ok
+
+        imported = SqliteRepository(sqlite_path)
+        assert imported.get_by_filehash("h1").rating is None
+        imported.close()

@@ -17,7 +17,7 @@ DEV = "http://localhost:5173"
 
 @pytest.fixture
 def client(tmp_path):
-    return TestClient(create_app(db_path=str(tmp_path / "sec.json")))
+    return TestClient(create_app(db_path=str(tmp_path / "sec.db")))
 
 
 def _preflight(client, origin, method="POST", path="/api/index"):
@@ -57,21 +57,36 @@ class TestCors:
         assert "access-control-allow-credentials" not in resp.headers
 
     def test_defaults_are_only_local_dev_origins(self):
-        assert all(o.startswith(("http://localhost:", "http://127.0.0.1:")) for o in DEFAULT_CORS_ORIGINS)
+        assert all(
+            o.startswith(("http://localhost:", "http://127.0.0.1:"))
+            for o in DEFAULT_CORS_ORIGINS
+        )
 
     def test_origins_are_configurable(self, tmp_path):
-        app = create_app(db_path=str(tmp_path / "s.json"), cors_origins=["http://myhost:9000"])
+        app = create_app(
+            db_path=str(tmp_path / "s.db"), cors_origins=["http://myhost:9000"]
+        )
         client = TestClient(app)
         assert _preflight(client, "http://myhost:9000").status_code == 200
         assert _preflight(client, DEV).status_code == 400
 
 
 class TestHostHeader:
-    @pytest.mark.parametrize("host", ["localhost:8000", "127.0.0.1:53211", "localhost", "127.0.0.1"])
+    @pytest.mark.parametrize(
+        "host", ["localhost:8000", "127.0.0.1:53211", "localhost", "127.0.0.1"]
+    )
     def test_local_hosts_are_accepted(self, client, host):
         assert client.get("/health", headers={"Host": host}).status_code == 200
 
-    @pytest.mark.parametrize("host", ["evil.example", "evil.example:8000", "192.168.1.20:8000", "localhost.evil.example"])
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "evil.example",
+            "evil.example:8000",
+            "192.168.1.20:8000",
+            "localhost.evil.example",
+        ],
+    )
     def test_other_hosts_are_rejected(self, client, host):
         resp = client.get("/health", headers={"Host": host})
         assert resp.status_code == 400
@@ -82,13 +97,18 @@ class TestHostHeader:
         assert "items" not in resp.text
 
     def test_hosts_are_configurable(self, tmp_path):
-        app = create_app(db_path=str(tmp_path / "h.json"), allowed_hosts=["photos.lan"])
+        app = create_app(db_path=str(tmp_path / "h.db"), allowed_hosts=["photos.lan"])
         client = TestClient(app)
-        assert client.get("/health", headers={"Host": "photos.lan:8000"}).status_code == 200
-        assert client.get("/health", headers={"Host": "localhost:8000"}).status_code == 400
+        assert (
+            client.get("/health", headers={"Host": "photos.lan:8000"}).status_code
+            == 200
+        )
+        assert (
+            client.get("/health", headers={"Host": "localhost:8000"}).status_code == 400
+        )
 
     def test_environment_override(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PMO_ALLOWED_HOSTS", "a.lan, b.lan")
-        client = TestClient(create_app(db_path=str(tmp_path / "e.json")))
+        client = TestClient(create_app(db_path=str(tmp_path / "e.db")))
         assert client.get("/health", headers={"Host": "b.lan"}).status_code == 200
         assert client.get("/health", headers={"Host": "localhost"}).status_code == 400

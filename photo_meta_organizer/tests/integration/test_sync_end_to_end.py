@@ -2,8 +2,8 @@
 
 These tests exercise the complete flow from disk scan through change detection
 to repository updates, using real files on a temporary file system and a real
-TinyDB repository.  No mocks — only the image extractor is stubbed to avoid
-requiring actual image files with EXIF data.
+SQLite repository (ADR-001).  No mocks — only the image extractor is stubbed to
+avoid requiring actual image files with EXIF data.
 """
 
 import shutil
@@ -25,10 +25,15 @@ from photo_meta_organizer.domain.models import (
     ImageMetadata,
 )
 from photo_meta_organizer.domain.services import MetadataStateAnalyzer
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import TinyDBRepository
-from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import LocalDiskRetriever
-from photo_meta_organizer.infrastructure.retriever.filtered_retriever import ExtensionFilteredRetriever
-
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
+)
+from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
+    LocalDiskRetriever,
+)
+from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
+    ExtensionFilteredRetriever,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -43,6 +48,7 @@ class FakeExtractor:
     def extract(self, file_handle: RemoteFileHandle, stream: BinaryIO) -> ImageMetadata:
         content = stream.read()
         import hashlib
+
         h = hashlib.sha256(content).hexdigest()
         return ImageMetadata(
             file_hash=h,
@@ -75,13 +81,13 @@ def photo_dir(tmp_path) -> Path:
 
 @pytest.fixture
 def db_path(tmp_path) -> str:
-    """Temp path for TinyDB JSON file."""
-    return str(tmp_path / "metadata.db.json")
+    """Temp path for the SQLite database file."""
+    return str(tmp_path / "metadata.db")
 
 
 @pytest.fixture
-def repository(db_path) -> TinyDBRepository:
-    return TinyDBRepository(db_path=db_path)
+def repository(db_path) -> SqliteRepository:
+    return SqliteRepository(db_path=db_path)
 
 
 @pytest.fixture
@@ -115,7 +121,9 @@ class TestSyncIntegration:
 
     def test_initial_sync_indexes_all_new_files(self, use_case, repository):
         """First sync on an empty DB should index all photos."""
-        result = use_case.execute(index_new=True, reprocess_modified=True, cleanup_deleted=False)
+        result = use_case.execute(
+            index_new=True, reprocess_modified=True, cleanup_deleted=False
+        )
 
         assert result.new_files == 3
         assert result.modified_files == 0
@@ -180,7 +188,9 @@ class TestSyncIntegration:
         use_case.execute(index_new=True)
         (photo_dir / "photo2.jpg").write_bytes(b"different_content_here")
 
-        result = use_case.execute(reprocess_modified=False, index_new=False, cleanup_deleted=False)
+        result = use_case.execute(
+            reprocess_modified=False, index_new=False, cleanup_deleted=False
+        )
         assert result.modified_files == 0
 
     def test_dry_run_does_not_change_repository(self, use_case, repository):
@@ -201,15 +211,19 @@ class TestSyncIntegration:
 
         base = LocalDiskRetriever(base_path=str(photo_dir))
         ret = ExtensionFilteredRetriever(base, IMAGE_EXTENSIONS)
-        repo = TinyDBRepository(db_path=db_path)
+        repo = SqliteRepository(db_path=db_path)
 
-        uc = SynchronizeMetadataUseCase(retriever=ret, extractor=extractor, repository=repo)
+        uc = SynchronizeMetadataUseCase(
+            retriever=ret, extractor=extractor, repository=repo
+        )
         uc.execute(index_new=True)
         assert repo.count() == 10
 
         # Delete 1 photo
         (photo_dir / "img0003.jpg").unlink()
-        result = uc.execute(cleanup_deleted=True, index_new=False, reprocess_modified=False)
+        result = uc.execute(
+            cleanup_deleted=True, index_new=False, reprocess_modified=False
+        )
 
         assert result.deleted_entries == 1
         assert result.unchanged_files == 9
@@ -218,7 +232,10 @@ class TestSyncIntegration:
     def test_sync_result_total_changes(self, use_case, repository, photo_dir):
         """total_changes should equal sum of new + modified + deleted."""
         result = use_case.execute(index_new=True)
-        assert result.total_changes == result.new_files + result.modified_files + result.deleted_entries
+        assert (
+            result.total_changes
+            == result.new_files + result.modified_files + result.deleted_entries
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +272,8 @@ class TestSyncReplacesModifiedRecord:
         record = repository.get_by_path(str((photo_dir / name).resolve()))
         assert record is not None
         repository.update_metadata(
-            record.file_hash, {"rating": 5, "flagged": True, "labels": ["keeper", "trip"]}
+            record.file_hash,
+            {"rating": 5, "flagged": True, "labels": ["keeper", "trip"]},
         )
         return record.file_hash
 
@@ -271,9 +289,14 @@ class TestSyncReplacesModifiedRecord:
         assert result.modified_files == 1
         assert repository.count() == 3  # not 4: the old record is gone
         assert repository.get_by_filehash(old_hash) is None
-        assert sum(1 for r in repository.list_all() if r.file_info.name == "photo2.jpg") == 1
+        assert (
+            sum(1 for r in repository.list_all() if r.file_info.name == "photo2.jpg")
+            == 1
+        )
 
-    def test_rating_flag_and_labels_survive_the_edit(self, use_case, repository, photo_dir):
+    def test_rating_flag_and_labels_survive_the_edit(
+        self, use_case, repository, photo_dir
+    ):
         use_case.execute()
         self._curate(repository, photo_dir)
 
@@ -281,7 +304,11 @@ class TestSyncReplacesModifiedRecord:
         use_case.execute()
 
         edited = repository.get_by_filehash(_sha(b"completely_different_content_here"))
-        assert (edited.rating, edited.flagged, edited.labels) == (5, True, ["keeper", "trip"])
+        assert (edited.rating, edited.flagged, edited.labels) == (
+            5,
+            True,
+            ["keeper", "trip"],
+        )
 
     def test_edit_that_makes_it_identical_to_another_photo_keeps_both_curations(
         self, use_case, repository, photo_dir
@@ -320,9 +347,12 @@ class TestSyncReplacesModifiedRecord:
 class TestSyncMtimeFingerprint:
     def _use_case(self, retriever, repository, extractor=None):
         extractor = extractor or CountingExtractor()
-        return SynchronizeMetadataUseCase(
-            retriever=retriever, extractor=extractor, repository=repository
-        ), extractor
+        return (
+            SynchronizeMetadataUseCase(
+                retriever=retriever, extractor=extractor, repository=repository
+            ),
+            extractor,
+        )
 
     def test_same_size_edit_is_detected_once_the_mtime_moves(
         self, retriever, repository, photo_dir
@@ -370,13 +400,13 @@ class TestSyncMtimeFingerprint:
         assert extractor.extracted == []
         assert second.fingerprints_refreshed == 0  # caught up
 
-    def test_legacy_records_are_backfilled_not_rehashed(self, retriever, repository, photo_dir):
+    def test_legacy_records_are_backfilled_not_rehashed(
+        self, retriever, repository, photo_dir
+    ):
         uc, extractor = self._use_case(retriever, repository)
         uc.execute()
-        for doc in repository._table.all():  # simulate a pre-PMO-06 database
-            doc["file_info"]["modified_time"] = None
-            repository._table.update(doc, doc_ids=[doc.doc_id])
-        repository.rebuild_indexes()
+        with repository.lock, repository.connection:  # simulate a pre-PMO-06 database
+            repository.connection.execute("UPDATE photos SET mtime = NULL")
         extractor.extracted.clear()
 
         first = uc.execute()
@@ -393,10 +423,8 @@ class TestSyncMtimeFingerprint:
     ):
         uc, _ = self._use_case(retriever, repository)
         uc.execute()
-        for doc in repository._table.all():
-            doc["file_info"]["modified_time"] = None
-            repository._table.update(doc, doc_ids=[doc.doc_id])
-        repository.rebuild_indexes()
+        with repository.lock, repository.connection:
+            repository.connection.execute("UPDATE photos SET mtime = NULL")
 
         result = uc.execute(dry_run=True)
 

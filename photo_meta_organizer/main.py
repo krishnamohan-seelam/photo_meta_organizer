@@ -22,18 +22,17 @@ Example:
 """
 
 import argparse
-from datetime import datetime
 import logging
 import sys
+from datetime import datetime
 from logging.config import dictConfig
-from typing import Optional
 
-from photo_meta_organizer.domain.datetimes import to_naive
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
     ImageMetadataRepository,
     ImageRetriever,
 )
+from photo_meta_organizer.domain.datetimes import to_naive
 
 # Configure logging at module level
 _LOGGING_CONFIG = {
@@ -130,8 +129,9 @@ def build_extractor() -> ImageMetadataExtractor:
 def build_repository(args: argparse.Namespace) -> ImageMetadataRepository:
     """Create the metadata repository based on CLI arguments.
 
-    Phase 1: TinyDBRepository (default, JSON file-based)
-    Phase 4: MongoDBRepository, ElasticsearchRepository, etc.
+    SQLite behind the repository port (ADR-001, PMO-08). A ``--db`` pointing at an
+    existing legacy TinyDB JSON file is imported once into a sibling ``.db`` file;
+    see ``application.composition.build_repository``.
 
     Args:
         args: Parsed CLI arguments containing --db.
@@ -139,11 +139,11 @@ def build_repository(args: argparse.Namespace) -> ImageMetadataRepository:
     Returns:
         An ImageMetadataRepository implementation.
     """
-    from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-        TinyDBRepository,
+    from photo_meta_organizer.application.composition import (
+        build_repository as _build_repository,
     )
 
-    return TinyDBRepository(db_path=args.db)
+    return _build_repository(args.db)
 
 
 # ============================================================================
@@ -169,7 +169,10 @@ def handle_index_command(args: argparse.Namespace) -> int:
 
     workers = getattr(args, "workers", 4)
     if workers > 1:
-        from photo_meta_organizer.application.use_cases import ParallelIndexPhotosUseCase
+        from photo_meta_organizer.application.use_cases import (
+            ParallelIndexPhotosUseCase,
+        )
+
         use_case = ParallelIndexPhotosUseCase(
             retriever=retriever,
             extractor=extractor,
@@ -178,18 +181,19 @@ def handle_index_command(args: argparse.Namespace) -> int:
         )
     else:
         from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
+
         use_case = IndexPhotosUseCase(
             retriever=retriever,
             extractor=extractor,
             repository=repository,
         )
-        
+
     results = use_case.execute()
     print(f"Successfully indexed {len(results)} photos")
     return 0
 
 
-def _parse_date_arg(date_str: Optional[str]) -> Optional[datetime]:
+def _parse_date_arg(date_str: str | None) -> datetime | None:
     """Parse a date string into a naive local datetime (see domain/datetimes.py)."""
     if not date_str:
         return None
@@ -215,7 +219,11 @@ def handle_search_command(args: argparse.Namespace) -> int:
         Exit code (0 = success, non-zero = error).
     """
     from tabulate import tabulate
-    from photo_meta_organizer.application.use_cases import SearchPhotosUseCase, SearchPhotosQuery
+
+    from photo_meta_organizer.application.use_cases import (
+        SearchPhotosQuery,
+        SearchPhotosUseCase,
+    )
 
     repository = build_repository(args)
 
@@ -249,7 +257,11 @@ def handle_search_command(args: argparse.Namespace) -> int:
         parts = [p.strip() for p in loc_arg.split(",")]
         if len(parts) >= 3:
             try:
-                loc_lat, loc_lon, radius_km = float(parts[0]), float(parts[1]), float(parts[2])
+                loc_lat, loc_lon, radius_km = (
+                    float(parts[0]),
+                    float(parts[1]),
+                    float(parts[2]),
+                )
             except ValueError:
                 pass
 
@@ -275,7 +287,9 @@ def handle_search_command(args: argparse.Namespace) -> int:
     use_case = SearchPhotosUseCase(repository=repository)
     result = use_case.execute(query)
 
-    print(f"\nSearch Results (Page {result.page} of {result.total_pages} | Total: {result.total_count}):\n")
+    print(
+        f"\nSearch Results (Page {result.page} of {result.total_pages} | Total: {result.total_count}):\n"
+    )
 
     if not result.items:
         print("No photos found matching the search criteria.")
@@ -285,7 +299,11 @@ def handle_search_command(args: argparse.Namespace) -> int:
     for item in result:
         exif = item.exif
         cam = f"{exif.camera_make or ''} {exif.camera_model or ''}".strip() or "Unknown"
-        dt_str = exif.captured_at.strftime("%Y-%m-%d %H:%M") if exif and exif.captured_at else "N/A"
+        dt_str = (
+            exif.captured_at.strftime("%Y-%m-%d %H:%M")
+            if exif and exif.captured_at
+            else "N/A"
+        )
         size_mb = (item.file_info.size_bytes or 0) / (1024 * 1024)
         size_str = f"{size_mb:.2f} MB"
         loc_str = (
@@ -295,16 +313,25 @@ def handle_search_command(args: argparse.Namespace) -> int:
         )
         labels_str = ", ".join(item.labels) if item.labels else ""
 
-        table_data.append([
-            item.file_info.name,
-            dt_str,
-            cam,
-            size_str,
-            loc_str,
-            labels_str,
-        ])
+        table_data.append(
+            [
+                item.file_info.name,
+                dt_str,
+                cam,
+                size_str,
+                loc_str,
+                labels_str,
+            ]
+        )
 
-    headers = ["Filename", "Captured At", "Camera Make/Model", "Size", "GPS (Lat, Lon)", "Labels"]
+    headers = [
+        "Filename",
+        "Captured At",
+        "Camera Make/Model",
+        "Size",
+        "GPS (Lat, Lon)",
+        "Labels",
+    ]
     print(tabulate(table_data, headers=headers, tablefmt="grid"))
     print(f"\nDisplaying {len(result.items)} item(s) on Page {result.page}.\n")
     return 0
@@ -320,6 +347,7 @@ def handle_stats_command(args: argparse.Namespace) -> int:
         Exit code (0 = success, non-zero = error).
     """
     from collections import Counter
+
     from tabulate import tabulate
 
     try:
@@ -346,7 +374,9 @@ def handle_stats_command(args: argparse.Namespace) -> int:
 
         # Format size in human-readable units
         size_mb = total_bytes / (1024 * 1024)
-        size_str = f"{size_mb / 1024:.2f} GB" if size_mb >= 1024 else f"{size_mb:.2f} MB"
+        size_str = (
+            f"{size_mb / 1024:.2f} GB" if size_mb >= 1024 else f"{size_mb:.2f} MB"
+        )
 
         date_range_str = "N/A"
         if dates:
@@ -354,25 +384,33 @@ def handle_stats_command(args: argparse.Namespace) -> int:
             max_date = max(dates).strftime("%Y-%m-%d")
             date_range_str = f"{min_date} to {max_date}"
 
-        print(f"\n=======================================================")
-        print(f"       PHOTO META ORGANIZER - LIBRARY STATISTICS       ")
-        print(f"=======================================================")
+        print("\n=======================================================")
+        print("       PHOTO META ORGANIZER - LIBRARY STATISTICS       ")
+        print("=======================================================")
         print(f" Database File         : {args.db}")
         print(f" Total Photos Indexed  : {total_photos}")
         print(f" Total Storage Size    : {size_str} ({total_bytes:,} bytes)")
         print(f" Date Range            : {date_range_str}")
 
         if mime_counts:
-            print(f"\nFormat Distribution:")
+            print("\nFormat Distribution:")
             format_table = [[mime, count] for mime, count in mime_counts.most_common()]
-            print(tabulate(format_table, headers=["Format", "Count"], tablefmt="simple"))
+            print(
+                tabulate(format_table, headers=["Format", "Count"], tablefmt="simple")
+            )
 
         if camera_counts:
-            print(f"\nCamera Distribution:")
+            print("\nCamera Distribution:")
             camera_table = [[cam, count] for cam, count in camera_counts.most_common()]
-            print(tabulate(camera_table, headers=["Camera Make/Model", "Count"], tablefmt="simple"))
+            print(
+                tabulate(
+                    camera_table,
+                    headers=["Camera Make/Model", "Count"],
+                    tablefmt="simple",
+                )
+            )
 
-        print(f"=======================================================\n")
+        print("=======================================================\n")
     except Exception as e:
         logger.error("Failed to read statistics: %s", e)
         print(f"Error reading statistics: {e}")
@@ -424,7 +462,9 @@ def handle_sync_command(args: argparse.Namespace) -> int:
     )
     if result.fingerprints_refreshed:
         verb = "would record" if args.dry_run else "recorded"
-        print(f"  ({verb} size/mtime for {result.fingerprints_refreshed} unchanged file(s))")
+        print(
+            f"  ({verb} size/mtime for {result.fingerprints_refreshed} unchanged file(s))"
+        )
     if result.errors:
         print(f"Errors ({len(result.errors)}):")
         for err in result.errors:
@@ -449,7 +489,9 @@ def handle_dedupe_command(args: argparse.Namespace) -> int:
     label = "Merged" if args.apply else "Would merge (dry run; pass --apply to write)"
     print(f"{label}: {extra} extra record(s) across {len(result.groups)} path(s)")
     for group in result.groups[:50]:
-        print(f"  {group.path}  keep {group.keep.file_hash[:12]}, drop {len(group.drop)}")
+        print(
+            f"  {group.path}  keep {group.keep.file_hash[:12]}, drop {len(group.drop)}"
+        )
     if len(result.groups) > 50:
         print(f"  ... and {len(result.groups) - 50} more")
     if args.apply:
@@ -470,7 +512,9 @@ def handle_prune_command(args: argparse.Namespace) -> int:
     if not result.candidates:
         print("No non-image records found.")
         return 0
-    label = "Removed" if args.apply else "Would remove (dry run; pass --apply to delete)"
+    label = (
+        "Removed" if args.apply else "Would remove (dry run; pass --apply to delete)"
+    )
     print(f"{label}: {len(result.candidates)} record(s)")
     for record in result.candidates[:50]:
         print(f"  {record.file_info.path}")
@@ -530,8 +574,8 @@ def main() -> int:
     )
     index_parser.add_argument(
         "--db",
-        default="photo_metadata.json",
-        help="Path to metadata database file (default: photo_metadata.json)",
+        default="photos.db",
+        help="Path to metadata database file (default: photos.db)",
     )
     index_parser.add_argument(
         "--workers",
@@ -546,15 +590,21 @@ def main() -> int:
         "search",
         help="Search indexed photos (Phase 3)",
     )
-    search_parser.add_argument("--db", default="photo_metadata.json", help="Path to metadata database file")
+    search_parser.add_argument(
+        "--db", default="photos.db", help="Path to metadata database file"
+    )
     search_parser.add_argument("--date", help="Date filter (YYYY-MM or YYYY-MM-DD)")
     search_parser.add_argument("--date-from", help="Start date (YYYY-MM-DD)")
     search_parser.add_argument("--date-to", help="End date (YYYY-MM-DD)")
     search_parser.add_argument("--camera", help="Filter by camera make/model")
-    search_parser.add_argument("--location", help="Filter by location (lat,lon,radius_km)")
+    search_parser.add_argument(
+        "--location", help="Filter by location (lat,lon,radius_km)"
+    )
     search_parser.add_argument("--lat", type=float, help="Latitude for radius search")
     search_parser.add_argument("--lon", type=float, help="Longitude for radius search")
-    search_parser.add_argument("--radius", type=float, help="Radius in km for location search")
+    search_parser.add_argument(
+        "--radius", type=float, help="Radius in km for location search"
+    )
     search_parser.add_argument("--tags", help="Filter by tags (comma-separated)")
     search_parser.add_argument(
         "--sort",
@@ -568,8 +618,12 @@ def main() -> int:
         choices=["asc", "desc"],
         help="Sort order (default: asc)",
     )
-    search_parser.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
-    search_parser.add_argument("--page-size", type=int, default=50, help="Results per page (default: 50)")
+    search_parser.add_argument(
+        "--page", type=int, default=1, help="Page number (default: 1)"
+    )
+    search_parser.add_argument(
+        "--page-size", type=int, default=50, help="Results per page (default: 50)"
+    )
     search_parser.set_defaults(func=handle_search_command)
 
     # Sync command (Phase 1.5 — Metadata Sync)
@@ -589,8 +643,8 @@ def main() -> int:
     )
     sync_parser.add_argument(
         "--db",
-        default="photo_metadata.json",
-        help="Path to metadata database file (default: photo_metadata.json)",
+        default="photos.db",
+        help="Path to metadata database file (default: photos.db)",
     )
     sync_parser.add_argument(
         "--cleanup-deleted",
@@ -645,9 +699,14 @@ def main() -> int:
             "records whose file is not an image. Dry run unless --apply is given."
         ),
     )
-    prune_parser.add_argument("--db", default="photo_metadata.json", help="Path to metadata database file")
     prune_parser.add_argument(
-        "--apply", action="store_true", default=False, help="Actually delete (default: dry run)"
+        "--db", default="photos.db", help="Path to metadata database file"
+    )
+    prune_parser.add_argument(
+        "--apply",
+        action="store_true",
+        default=False,
+        help="Actually delete (default: dry run)",
     )
     prune_parser.set_defaults(func=handle_prune_command)
 
@@ -661,9 +720,14 @@ def main() -> int:
             "flag and labels of the others into it. Dry run unless --apply is given."
         ),
     )
-    dedupe_parser.add_argument("--db", default="photo_metadata.json", help="Path to metadata database file")
     dedupe_parser.add_argument(
-        "--apply", action="store_true", default=False, help="Actually merge (default: dry run)"
+        "--db", default="photos.db", help="Path to metadata database file"
+    )
+    dedupe_parser.add_argument(
+        "--apply",
+        action="store_true",
+        default=False,
+        help="Actually merge (default: dry run)",
     )
     dedupe_parser.set_defaults(func=handle_dedupe_command)
 
@@ -672,7 +736,7 @@ def main() -> int:
         "stats",
         help="Show library statistics (Phase 2)",
     )
-    stats_parser.add_argument("--db", default="photo_metadata.json")
+    stats_parser.add_argument("--db", default="photos.db")
     stats_parser.set_defaults(func=handle_stats_command)
 
     try:

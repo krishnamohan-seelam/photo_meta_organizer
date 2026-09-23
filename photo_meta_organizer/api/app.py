@@ -2,7 +2,7 @@
 
 Usage:
     # Production
-    app = create_app(db_path="metadata.json")
+    app = create_app(db_path="photos.db")
     uvicorn.run(app, host="127.0.0.1", port=8000)  # loopback only; see security notes below
 
     # Testing
@@ -20,28 +20,25 @@ Security model (local application):
 """
 
 import os
-
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
     get_collection_repository,
+    get_repository,
     index_router,
     photos_router,
     search_router,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
-    TinyDBCollectionRepository,
+from photo_meta_organizer.application.composition import (
+    build_collection_repository,
+    build_repository,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
-)
-
 
 # "testserver" is the host name Starlette's TestClient uses; it is not resolvable
 # from the public internet, so it does not weaken the rebinding defence.
@@ -57,14 +54,16 @@ def _env_list(name: str) -> "list[str] | None":
 
 
 def create_app(
-    db_path: str = "metadata.json",
+    db_path: str = "photos.db",
     allowed_hosts: "list[str] | None" = None,
     cors_origins: "list[str] | None" = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
-        db_path: Path to the TinyDB JSON database file.
+        db_path: Path to the SQLite database file (ADR-001). A path to an existing
+                 legacy TinyDB ``.json`` file is imported once into a sibling
+                 ``.db`` file; see ``application.composition.build_repository``.
                  Created automatically if it does not exist.
         allowed_hosts: Accepted Host header names (port ignored). Defaults to
                  ``PMO_ALLOWED_HOSTS`` or the local names.
@@ -89,7 +88,9 @@ def create_app(
     # Electron shell are same-origin). No wildcard, no credentials.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(cors_origins or _env_list("PMO_CORS_ORIGINS") or DEFAULT_CORS_ORIGINS),
+        allow_origins=list(
+            cors_origins or _env_list("PMO_CORS_ORIGINS") or DEFAULT_CORS_ORIGINS
+        ),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
@@ -97,21 +98,23 @@ def create_app(
     # Added last so it runs first: reject unexpected Host headers before anything else.
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=list(allowed_hosts or _env_list("PMO_ALLOWED_HOSTS") or DEFAULT_ALLOWED_HOSTS),
+        allowed_hosts=list(
+            allowed_hosts or _env_list("PMO_ALLOWED_HOSTS") or DEFAULT_ALLOWED_HOSTS
+        ),
     )
 
     # Build shared repositories
-    repository = TinyDBRepository(db_path=db_path)
-    collection_repository = TinyDBCollectionRepository(repository.db)
+    repository = build_repository(db_path)
+    collection_repository = build_collection_repository(repository)
 
     # Override dependencies to inject the shared instances
-    def get_repository() -> TinyDBRepository:
+    def _get_repository():
         return repository
 
-    def _get_collection_repository() -> TinyDBCollectionRepository:
+    def _get_collection_repository():
         return collection_repository
 
-    app.dependency_overrides[TinyDBRepository] = get_repository
+    app.dependency_overrides[get_repository] = _get_repository
     app.dependency_overrides[get_collection_repository] = _get_collection_repository
 
     # Mount routers
@@ -124,6 +127,7 @@ def create_app(
     assets_dir = frontend_dist / "assets"
     if assets_dir.exists():
         from fastapi.staticfiles import StaticFiles
+
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     # Serve root-level static files produced by Vite (favicon, icons, etc.)
@@ -137,6 +141,7 @@ def create_app(
                 @app.get(f"/{file_name}", tags=["frontend"], include_in_schema=False)
                 def _static_route(fp=file_path):
                     return FileResponse(fp)
+
                 return _static_route
 
             _make_static_route(_captured_path, _captured_name)
@@ -152,6 +157,9 @@ def create_app(
         index_html = frontend_dist / "index.html"
         if index_html.exists():
             return HTMLResponse(content=index_html.read_text(encoding="utf-8"))
-        return HTMLResponse(content="<h1>Frontend not built. Run 'npm run build' in frontend/</h1>", status_code=404)
+        return HTMLResponse(
+            content="<h1>Frontend not built. Run 'npm run build' in frontend/</h1>",
+            status_code=404,
+        )
 
     return app

@@ -12,14 +12,14 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
 )
 
 
 @pytest.fixture
 def db_path(tmp_path):
-    return str(tmp_path / "test_api.json")
+    return str(tmp_path / "test_api.db")
 
 
 @pytest.fixture
@@ -28,12 +28,15 @@ def sample_metadata():
         ImageMetadata(
             file_hash="aaaa1111",
             file_info=ImageFileInfo(
-                name="beach.jpg", path="/photos/beach.jpg",
-                size_bytes=1024, mime_type="image/jpeg",
+                name="beach.jpg",
+                path="/photos/beach.jpg",
+                size_bytes=1024,
+                mime_type="image/jpeg",
             ),
             dimensions=ImageDimensions(width=1920, height=1080),
             exif=ImageExifData(
-                camera_make="Sony", camera_model="A7IV",
+                camera_make="Sony",
+                camera_model="A7IV",
                 captured_at=datetime(2024, 1, 15, tzinfo=timezone.utc),
                 location=GpsCoordinates(latitude=37.7749, longitude=-122.4194),
             ),
@@ -42,12 +45,15 @@ def sample_metadata():
         ImageMetadata(
             file_hash="bbbb2222",
             file_info=ImageFileInfo(
-                name="mountain.jpg", path="/photos/mountain.jpg",
-                size_bytes=3072, mime_type="image/jpeg",
+                name="mountain.jpg",
+                path="/photos/mountain.jpg",
+                size_bytes=3072,
+                mime_type="image/jpeg",
             ),
             dimensions=ImageDimensions(width=4000, height=3000),
             exif=ImageExifData(
-                camera_make="Canon", camera_model="EOS R5",
+                camera_make="Canon",
+                camera_model="EOS R5",
                 captured_at=datetime(2024, 3, 20, tzinfo=timezone.utc),
             ),
             labels=["mountain", "landscape"],
@@ -57,12 +63,10 @@ def sample_metadata():
 
 @pytest.fixture
 def client(db_path, sample_metadata):
-    app = create_app(db_path=db_path)
-    repo = TinyDBRepository(db_path=db_path)
+    repo = SqliteRepository(db_path=db_path)
     for item in sample_metadata:
         repo.save(item)
     repo.close()
-    # Recreate app so indexes are loaded from pre-populated db
     app = create_app(db_path=db_path)
     return TestClient(app)
 
@@ -70,6 +74,7 @@ def client(db_path, sample_metadata):
 # ============================================================
 # Health check
 # ============================================================
+
 
 def test_health_check(client):
     resp = client.get("/health")
@@ -96,6 +101,7 @@ def test_root_without_built_frontend_reports_it(client):
 # GET /api/photos
 # ============================================================
 
+
 def test_list_photos_returns_all(client):
     resp = client.get("/api/photos")
     assert resp.status_code == 200
@@ -105,7 +111,9 @@ def test_list_photos_returns_all(client):
 
 
 def test_list_photos_pagination(client):
-    resp = client.get("/api/photos?page=1&page_size=1&sort_by=size_bytes&sort_order=asc")
+    resp = client.get(
+        "/api/photos?page=1&page_size=1&sort_by=size_bytes&sort_order=asc"
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_count"] == 2
@@ -125,6 +133,7 @@ def test_list_photos_sort_by_size_desc(client):
 # ============================================================
 # GET /api/photos/{file_hash}
 # ============================================================
+
 
 def test_get_photo_by_hash_found(client):
     resp = client.get("/api/photos/aaaa1111")
@@ -147,6 +156,7 @@ def test_get_photo_by_hash_not_found(client):
 # DELETE /api/photos/{file_hash}
 # ============================================================
 
+
 def test_delete_photo_success(client):
     resp = client.delete("/api/photos/aaaa1111")
     assert resp.status_code == 200
@@ -168,6 +178,7 @@ def test_delete_photo_not_found(client):
 # POST /api/search
 # ============================================================
 
+
 def test_search_by_camera_make(client):
     resp = client.post("/api/search", json={"camera_make": "Sony"})
     assert resp.status_code == 200
@@ -177,10 +188,13 @@ def test_search_by_camera_make(client):
 
 
 def test_search_by_date_range(client):
-    resp = client.post("/api/search", json={
-        "date_start": "2024-03-01T00:00:00Z",
-        "date_end": "2024-03-31T23:59:59Z",
-    })
+    resp = client.post(
+        "/api/search",
+        json={
+            "date_start": "2024-03-01T00:00:00Z",
+            "date_end": "2024-03-31T23:59:59Z",
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_count"] == 1
@@ -197,11 +211,14 @@ def test_search_by_tags(client):
 
 def test_search_by_location_radius(client):
     # Center is SF — beach.jpg should match, mountain.jpg should not
-    resp = client.post("/api/search", json={
-        "location_lat": 37.7749,
-        "location_lon": -122.4194,
-        "radius_km": 5.0,
-    })
+    resp = client.post(
+        "/api/search",
+        json={
+            "location_lat": 37.7749,
+            "location_lon": -122.4194,
+            "radius_km": 5.0,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_count"] == 1
@@ -215,10 +232,15 @@ def test_search_no_filters_returns_all(client):
 
 
 def test_search_with_pagination(client):
-    resp = client.post("/api/search", json={
-        "page": 1, "page_size": 1,
-        "sort_by": "size_bytes", "sort_order": "asc",
-    })
+    resp = client.post(
+        "/api/search",
+        json={
+            "page": 1,
+            "page_size": 1,
+            "sort_by": "size_bytes",
+            "sort_order": "asc",
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_pages"] == 2

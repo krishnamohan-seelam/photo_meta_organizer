@@ -10,7 +10,7 @@ from photo_meta_organizer.api.app import create_app
 
 @pytest.fixture
 def db_path(tmp_path):
-    return str(tmp_path / "test_index_api.json")
+    return str(tmp_path / "test_index_api.db")
 
 
 @pytest.fixture
@@ -33,7 +33,9 @@ def client(db_path):
 
 def test_index_directory_success(client, photos_dir):
     """Test successful indexing of a valid directory via POST /api/index."""
-    response = client.post("/api/index", json={"folder_path": photos_dir, "num_workers": 2})
+    response = client.post(
+        "/api/index", json={"folder_path": photos_dir, "num_workers": 2}
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["indexed_count"] == 2

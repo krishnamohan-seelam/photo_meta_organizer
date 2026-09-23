@@ -18,12 +18,11 @@ from photo_meta_organizer.api.app import create_app
 import uvicorn
 
 
-
 def main():
     parser = argparse.ArgumentParser(description="Photo Meta Organizer Desktop Backend")
     parser.add_argument("--host", default="127.0.0.1", help="Binding host")
     parser.add_argument("--port", type=int, default=8000, help="Port to listen on")
-    parser.add_argument("--db", default="metadata.json", help="Path to database file")
+    parser.add_argument("--db", default="photos.db", help="Path to database file")
     args = parser.parse_args()
 
     app = create_app(db_path=args.db)

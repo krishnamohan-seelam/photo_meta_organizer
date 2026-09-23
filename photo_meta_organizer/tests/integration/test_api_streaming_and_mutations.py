@@ -14,7 +14,9 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import TinyDBRepository
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
+)
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 
@@ -29,7 +31,7 @@ def test_image_file(tmp_path):
 
 @pytest.fixture
 def db_path(tmp_path):
-    return str(tmp_path / "test_api_streaming.json")
+    return str(tmp_path / "test_api_streaming.db")
 
 
 @pytest.fixture
@@ -77,7 +79,7 @@ def sample_metadata(test_image_file):
 
 @pytest.fixture
 def client(db_path, sample_metadata):
-    repo = TinyDBRepository(db_path=db_path)
+    repo = SqliteRepository(db_path=db_path)
     for m in sample_metadata:
         repo.save(m)
     repo.close()

@@ -17,6 +17,10 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
+from photo_meta_organizer.infrastructure.repositories.sqlite_collection_repository import (
+    SqliteCollectionRepository,
+)
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
     TinyDBCollectionRepository,
 )
@@ -29,7 +33,13 @@ def _make_tinydb(tmp_path):
     return repo, collections
 
 
-BACKENDS = [("tinydb", _make_tinydb)]
+def _make_sqlite(tmp_path):
+    repo = SqliteRepository(db_path=str(tmp_path / "contract.db"))
+    collections = SqliteCollectionRepository(repo.connection, repo.lock)
+    return repo, collections
+
+
+BACKENDS = [("tinydb", _make_tinydb), ("sqlite", _make_sqlite)]
 
 
 @pytest.fixture(params=BACKENDS, ids=[name for name, _ in BACKENDS])
@@ -66,7 +76,7 @@ def _photo(
         file_hash=hash_,
         file_info=ImageFileInfo(
             name=name,
-            path=path or f"/photos/{name}",
+            path=path or f"/photos/{hash_}_{name}",
             size_bytes=size_bytes,
             mime_type="image/jpeg",
         ),
@@ -237,31 +247,40 @@ class TestCurationCommands:
 
 
 class TestCollectionRepository:
-    def test_save_and_get(self, collection_repository):
+    """SQLite enforces the FK from collection_photos to photos (ADR-001), so every
+    hash a collection references must already exist as a photo record.
+    """
+
+    def test_save_and_get(self, repository, collection_repository):
+        repository.save_many([_photo("h1"), _photo("h2")])
         collection_repository.save("Favorites", ["h1", "h2"], description="Best shots")
         record = collection_repository.get("Favorites")
         assert record.photo_hashes == ["h1", "h2"]
         assert record.description == "Best shots"
 
-    def test_save_upserts(self, collection_repository):
+    def test_save_upserts(self, repository, collection_repository):
+        repository.save_many([_photo("h1"), _photo("h2")])
         collection_repository.save("Favorites", ["h1"])
         collection_repository.save("Favorites", ["h1", "h2"])
         record = collection_repository.get("Favorites")
         assert record.photo_hashes == ["h1", "h2"]
 
-    def test_list_all(self, collection_repository):
+    def test_list_all(self, repository, collection_repository):
+        repository.save_many([_photo("h1"), _photo("h2")])
         collection_repository.save("A", ["h1"])
         collection_repository.save("B", ["h2"])
         names = {c.name for c in collection_repository.list_all()}
         assert names == {"A", "B"}
 
-    def test_delete(self, collection_repository):
+    def test_delete(self, repository, collection_repository):
+        repository.save(_photo("h1"))
         collection_repository.save("A", ["h1"])
         assert collection_repository.delete("A") is True
         assert collection_repository.get("A") is None
         assert collection_repository.delete("A") is False
 
-    def test_remove_photo_from_all(self, collection_repository):
+    def test_remove_photo_from_all(self, repository, collection_repository):
+        repository.save_many([_photo("h1"), _photo("h2"), _photo("h3")])
         collection_repository.save("A", ["h1", "h2"])
         collection_repository.save("B", ["h2", "h3"])
         touched = collection_repository.remove_photo_from_all("h2")

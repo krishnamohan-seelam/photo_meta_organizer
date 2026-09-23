@@ -14,12 +14,10 @@ Endpoints:
 """
 
 import os
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
-from photo_meta_organizer.application.composition import build_local_retriever
 from photo_meta_organizer.api.schemas import (
     BatchPhotoRequest,
     BatchPhotoResponse,
@@ -37,11 +35,17 @@ from photo_meta_organizer.api.schemas import (
     PhotoMetadataResponse,
     SearchRequest,
 )
+from photo_meta_organizer.application.composition import build_local_retriever
+from photo_meta_organizer.application.interfaces.collection_repository import (
+    CollectionRepository,
+)
+from photo_meta_organizer.application.interfaces.image_repository import (
+    ImageMetadataRepository,
+)
 from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
     ParallelIndexPhotosUseCase,
 )
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
-    PaginatedResult,
     SearchPhotosQuery,
     SearchPhotosUseCase,
 )
@@ -49,12 +53,6 @@ from photo_meta_organizer.domain.curation import is_valid_rating
 from photo_meta_organizer.domain.models import ImageMetadata
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
-    TinyDBCollectionRepository,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
 )
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
@@ -66,14 +64,18 @@ index_router = APIRouter(prefix="/api/index", tags=["indexing"])
 _thumbnail_service = ThumbnailService()
 
 
-def get_collection_repository() -> TinyDBCollectionRepository:
+def get_repository() -> ImageMetadataRepository:
     """Placeholder dependency; ``create_app`` overrides this with the shared instance.
 
-    Unlike ``TinyDBRepository`` (whose ``__init__(db_path: str)`` FastAPI can treat as
-    a harmless, always-overridden query param), ``TinyDBCollectionRepository.__init__``
-    takes a ``TinyDB`` instance, which FastAPI cannot turn into a request field. A
-    plain function dependency sidesteps that.
+    A plain function dependency (rather than the concrete repository class as its
+    own dependency) keeps this router from having to know which storage engine is
+    behind the ``ImageMetadataRepository`` protocol.
     """
+    raise RuntimeError("Repository dependency not configured")
+
+
+def get_collection_repository() -> CollectionRepository:
+    """Placeholder dependency; ``create_app`` overrides this with the shared instance."""
     raise RuntimeError("Collection repository dependency not configured")
 
 
@@ -127,13 +129,18 @@ def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
     )
 
 
-@photos_router.get("", response_model=PaginatedPhotosResponse, summary="List all photos")
+@photos_router.get(
+    "", response_model=PaginatedPhotosResponse, summary="List all photos"
+)
 def list_photos(
     page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(default=50, ge=1, le=500, description="Results per page"),
-    sort_by: str = Query(default="captured_at", description="Sort field: captured_at, size_bytes, camera_model, file_name"),
+    sort_by: str = Query(
+        default="captured_at",
+        description="Sort field: captured_at, size_bytes, camera_model, file_name",
+    ),
     sort_order: str = Query(default="asc", description="Sort order: asc or desc"),
-    repository: TinyDBRepository = Depends(),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ) -> PaginatedPhotosResponse:
     """List all indexed photos with optional sorting and pagination."""
     query = SearchPhotosQuery(
@@ -153,10 +160,12 @@ def list_photos(
     )
 
 
-@photos_router.post("/batch", response_model=BatchPhotoResponse, summary="Batch update photos")
+@photos_router.post(
+    "/batch", response_model=BatchPhotoResponse, summary="Batch update photos"
+)
 def batch_update_photos(
     request: BatchPhotoRequest,
-    repository: TinyDBRepository = Depends(),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ) -> BatchPhotoResponse:
     """Apply one validated curation action to many photos."""
     try:
@@ -182,7 +191,7 @@ def batch_update_photos(
 )
 def get_photo(
     file_hash: str,
-    repository: TinyDBRepository = Depends(),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ) -> PhotoMetadataResponse:
     """Retrieve a single photo's metadata by its SHA-256 file hash."""
     metadata = repository.get_by_filehash(file_hash)
@@ -200,14 +209,20 @@ def get_photo(
 )
 def get_photo_thumbnail(
     file_hash: str,
-    w: int = Query(default=320, ge=64, le=1200, description="Thumbnail width in pixels"),
-    h: int = Query(default=320, ge=64, le=1200, description="Thumbnail height in pixels"),
-    repository: TinyDBRepository = Depends(),
+    w: int = Query(
+        default=320, ge=64, le=1200, description="Thumbnail width in pixels"
+    ),
+    h: int = Query(
+        default=320, ge=64, le=1200, description="Thumbnail height in pixels"
+    ),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ):
     """Stream an optimized WebP thumbnail for the specified photo."""
     metadata = repository.get_by_filehash(file_hash)
     if metadata is None:
-        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Photo with hash '{file_hash}' not found."
+        )
 
     thumb_bytes = _thumbnail_service.generate_thumbnail(
         source_path=metadata.file_info.path,
@@ -216,7 +231,10 @@ def get_photo_thumbnail(
         height=h,
     )
     if not thumb_bytes:
-        raise HTTPException(status_code=404, detail="Thumbnail could not be generated (source file missing).")
+        raise HTTPException(
+            status_code=404,
+            detail="Thumbnail could not be generated (source file missing).",
+        )
 
     return Response(
         content=thumb_bytes,
@@ -231,16 +249,20 @@ def get_photo_thumbnail(
 )
 def get_photo_raw(
     file_hash: str,
-    repository: TinyDBRepository = Depends(),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ):
     """Stream the full-resolution original image from storage."""
     metadata = repository.get_by_filehash(file_hash)
     if metadata is None:
-        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Photo with hash '{file_hash}' not found."
+        )
 
     file_path = metadata.file_info.path
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"Source file '{file_path}' does not exist on disk.")
+        raise HTTPException(
+            status_code=404, detail=f"Source file '{file_path}' does not exist on disk."
+        )
 
     return FileResponse(
         path=file_path,
@@ -257,7 +279,7 @@ def get_photo_raw(
 def patch_photo(
     file_hash: str,
     request: PatchPhotoRequest,
-    repository: TinyDBRepository = Depends(),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ) -> PhotoMetadataResponse:
     """Update user ratings, flags, or tags for a single photo."""
     # An explicit null means "clear" only for the rating; for the other fields it means "no change".
@@ -271,7 +293,9 @@ def patch_photo(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if updated is None:
-        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Photo with hash '{file_hash}' not found."
+        )
     return _to_response(updated)
 
 
@@ -282,8 +306,8 @@ def patch_photo(
 )
 def delete_photo(
     file_hash: str,
-    repository: TinyDBRepository = Depends(),
-    collection_repository: TinyDBCollectionRepository = Depends(get_collection_repository),
+    repository: ImageMetadataRepository = Depends(get_repository),
+    collection_repository: CollectionRepository = Depends(get_collection_repository),
 ) -> DeleteResponse:
     """Remove a photo from the metadata index by its SHA-256 file hash."""
     deleted = repository.delete(file_hash)
@@ -300,10 +324,12 @@ def delete_photo(
     )
 
 
-@collections_router.get("", response_model=List[CollectionResponse], summary="List all collections")
+@collections_router.get(
+    "", response_model=list[CollectionResponse], summary="List all collections"
+)
 def list_collections(
-    collection_repository: TinyDBCollectionRepository = Depends(get_collection_repository),
-) -> List[CollectionResponse]:
+    collection_repository: CollectionRepository = Depends(get_collection_repository),
+) -> list[CollectionResponse]:
     """Retrieve all curated photo collections."""
     return [
         CollectionResponse(
@@ -316,10 +342,12 @@ def list_collections(
     ]
 
 
-@collections_router.post("", response_model=CollectionResponse, summary="Create or update collection")
+@collections_router.post(
+    "", response_model=CollectionResponse, summary="Create or update collection"
+)
 def create_collection(
     request: CollectionCreateRequest,
-    collection_repository: TinyDBCollectionRepository = Depends(get_collection_repository),
+    collection_repository: CollectionRepository = Depends(get_collection_repository),
 ) -> CollectionResponse:
     """Create or update a named photo collection."""
     saved = collection_repository.save(
@@ -342,7 +370,7 @@ def create_collection(
 )
 def search_photos(
     request: SearchRequest,
-    repository: TinyDBRepository = Depends(),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ) -> PaginatedPhotosResponse:
     """Advanced multi-criteria photo search with filtering, sorting, and pagination."""
     query = SearchPhotosQuery(
@@ -370,10 +398,12 @@ def search_photos(
     )
 
 
-@index_router.post("", response_model=IndexFolderResponse, summary="Index local photo directory")
+@index_router.post(
+    "", response_model=IndexFolderResponse, summary="Index local photo directory"
+)
 def index_directory(
     request: IndexFolderRequest,
-    repository: TinyDBRepository = Depends(),
+    repository: ImageMetadataRepository = Depends(get_repository),
 ) -> IndexFolderResponse:
     """Index image files from a local directory into the metadata repository."""
     folder_path = os.path.abspath(request.folder_path)
@@ -397,4 +427,3 @@ def index_directory(
         folder_path=folder_path,
         message=f"Successfully indexed {len(results)} photo(s) from '{folder_path}'.",
     )
-

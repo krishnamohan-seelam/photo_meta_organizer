@@ -11,8 +11,8 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
 )
 from photo_meta_organizer.main import (
     handle_search_command,
@@ -23,8 +23,8 @@ from photo_meta_organizer.main import (
 
 @pytest.fixture
 def temp_db_path(tmp_path):
-    db_file = str(tmp_path / "cli_test_db.json")
-    repo = TinyDBRepository(db_path=db_file)
+    db_file = str(tmp_path / "cli_test_db.db")
+    repo = SqliteRepository(db_path=db_file)
 
     m1 = ImageMetadata(
         file_hash="sha1111",

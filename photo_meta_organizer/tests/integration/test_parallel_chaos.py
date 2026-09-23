@@ -20,8 +20,8 @@ from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
 )
 
 
@@ -47,7 +47,9 @@ class TestParallelChaosIndexing:
 
         # 3. Create corrupted JPEG (garbage bytes)
         corrupt_jpg_path = photos_dir / "corrupt_image.jpg"
-        corrupt_jpg_path.write_bytes(b"\xFF\xD8\xFF\xE0" + b"GARBAGE_EXIF_DATA_CORRUPT" * 20)
+        corrupt_jpg_path.write_bytes(
+            b"\xff\xd8\xff\xe0" + b"GARBAGE_EXIF_DATA_CORRUPT" * 20
+        )
 
         # 4. Create zero-byte JPEG file
         empty_jpg_path = photos_dir / "empty_image.jpg"
@@ -65,14 +67,14 @@ class TestParallelChaosIndexing:
         tmp_path: Path,
     ) -> None:
         """Pipeline must complete cleanly without crashing, saving valid files and recording errors."""
-        db_file = tmp_path / "chaos_metadata.json"
+        db_file = tmp_path / "chaos_metadata.db"
 
         base_retriever = LocalDiskRetriever(base_path=str(chaos_directory))
         retriever = ExtensionFilteredRetriever(
             base_retriever, extensions={".jpg", ".png"}
         )
         extractor = DiskMetaDataExtractor()
-        repository = TinyDBRepository(db_path=str(db_file))
+        repository = SqliteRepository(db_path=str(db_file))
 
         use_case = ParallelIndexPhotosUseCase(
             retriever=retriever,

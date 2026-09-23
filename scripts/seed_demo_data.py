@@ -1,4 +1,4 @@
-"""Seed sample photos and metadata into metadata.json for interactive demo testing."""
+"""Seed sample photos and metadata into photos.db for interactive demo testing."""
 
 import os
 from datetime import datetime, timezone
@@ -12,8 +12,8 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
 )
 
 SAMPLE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sample_photos")
@@ -121,10 +121,10 @@ photos_spec = [
         "labels": ["travel", "uk", "architecture", "city"],
         "rating": 4,
         "flagged": True,
-    }
+    },
 ]
 
-repo = TinyDBRepository(db_path="metadata.json")
+repo = SqliteRepository(db_path="photos.db")
 
 for spec in photos_spec:
     img_path = os.path.join(SAMPLE_DIR, spec["filename"])
@@ -152,8 +152,14 @@ for spec in photos_spec:
             iso=spec["iso"],
             focal_length=spec["focal"],
             captured_at=spec["date"],
-            camera_profile=CameraProfile.MOBILE if spec["make"] == "Apple" else CameraProfile.MIRRORLESS,
-            location=GpsCoordinates(latitude=spec["lat"], longitude=spec["lon"], datum="WGS84"),
+            camera_profile=(
+                CameraProfile.MOBILE
+                if spec["make"] == "Apple"
+                else CameraProfile.MIRRORLESS
+            ),
+            location=GpsCoordinates(
+                latitude=spec["lat"], longitude=spec["lon"], datum="WGS84"
+            ),
             flash_fired=False,
             orientation=1,
             raw_tags={"Artist": "Krishna Mohan"},
@@ -165,4 +171,4 @@ for spec in photos_spec:
     repo.save(metadata)
 
 repo.close()
-print("Successfully seeded metadata.json with sample photos!")
+print("Successfully seeded photos.db with sample photos!")
