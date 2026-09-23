@@ -19,14 +19,15 @@ import json
 import logging
 import math
 import os
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
-from tinydb import TinyDB, Query
+from tinydb import Query, TinyDB
 
 from photo_meta_organizer.application.interfaces.search_types import (
-    Facets,
     FacetCount,
+    Facets,
     GpsBounds,
     Page,
     SearchQuery,
@@ -43,6 +44,7 @@ from photo_meta_organizer.domain.curation import (
     validate_tag,
 )
 from photo_meta_organizer.domain.datetimes import to_naive
+from photo_meta_organizer.domain.geo import haversine_distance_km
 from photo_meta_organizer.domain.models import (
     CameraProfile,
     GpsCoordinates,
@@ -53,18 +55,6 @@ from photo_meta_organizer.domain.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance between two points, in kilometers."""
-    r = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    )
-    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 class TinyDBRepository:
@@ -88,7 +78,7 @@ class TinyDBRepository:
         if not os.path.exists(db_path):
             return
         try:
-            with open(db_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(db_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
             decoder = json.JSONDecoder()
             obj, _ = decoder.raw_decode(content)
@@ -116,10 +106,10 @@ class TinyDBRepository:
             self._table = self._db.table("metadata")
 
         # Index data structures
-        self._hash_index: Dict[str, Dict[str, Any]] = {}
-        self._path_index: Dict[str, Dict[str, Any]] = {}
-        self._captured_at_index: List[tuple[datetime, Dict[str, Any]]] = []
-        self._size_index: List[tuple[int, Dict[str, Any]]] = []
+        self._hash_index: dict[str, dict[str, Any]] = {}
+        self._path_index: dict[str, dict[str, Any]] = {}
+        self._captured_at_index: list[tuple[datetime, dict[str, Any]]] = []
+        self._size_index: list[tuple[int, dict[str, Any]]] = []
 
         self.rebuild_indexes()
         logger.info("TinyDB repository initialized at: %s with indexes built", db_path)
@@ -213,7 +203,7 @@ class TinyDBRepository:
         self._upsert(metadata)
         self.rebuild_indexes()
 
-    def refresh_fingerprints(self, updates: Sequence[Tuple[str, int, datetime]]) -> int:
+    def refresh_fingerprints(self, updates: Sequence[tuple[str, int, datetime]]) -> int:
         """Record ``(file_hash, size_bytes, modified_time)`` on existing records.
 
         Bookkeeping for sync (backfilling legacy records, catching up after a
@@ -228,7 +218,7 @@ class TinyDBRepository:
             return 0
         touched = 0
 
-        def apply(doc: Dict[str, Any]) -> None:
+        def apply(doc: dict[str, Any]) -> None:
             nonlocal touched
             size, mtime = wanted[doc["file_hash"]]
             doc["file_info"]["size_bytes"] = size
@@ -240,7 +230,7 @@ class TinyDBRepository:
         self.rebuild_indexes()
         return touched
 
-    def get_by_filehash(self, file_hash: str) -> Optional[ImageMetadata]:
+    def get_by_filehash(self, file_hash: str) -> ImageMetadata | None:
         """Retrieve metadata by SHA-256 file hash using fast O(1) index.
 
         Args:
@@ -259,7 +249,7 @@ class TinyDBRepository:
             return None
         return self._deserialize(results[0])
 
-    def get_by_path(self, file_path: str) -> Optional[ImageMetadata]:
+    def get_by_path(self, file_path: str) -> ImageMetadata | None:
         """Retrieve metadata by original file path using fast O(1) index.
 
         Args:
@@ -278,7 +268,7 @@ class TinyDBRepository:
             return None
         return self._deserialize(results[0])
 
-    def list_all(self) -> List[ImageMetadata]:
+    def list_all(self) -> list[ImageMetadata]:
         """Retrieve all stored metadata records.
 
         Returns:
@@ -330,7 +320,7 @@ class TinyDBRepository:
         logger.debug("No record found for path: %s", file_path)
         return False
 
-    def find_by_paths(self, paths: List[str]) -> List[ImageMetadata]:
+    def find_by_paths(self, paths: list[str]) -> list[ImageMetadata]:
         """Find multiple metadata records by file paths using path index.
 
         Args:
@@ -352,9 +342,9 @@ class TinyDBRepository:
 
     def find_by_date_range(
         self,
-        date_start: Optional[datetime] = None,
-        date_end: Optional[datetime] = None,
-    ) -> List[ImageMetadata]:
+        date_start: datetime | None = None,
+        date_end: datetime | None = None,
+    ) -> list[ImageMetadata]:
         """Find metadata records captured within a date range using captured_at index.
 
         Args:
@@ -376,9 +366,9 @@ class TinyDBRepository:
 
     def find_by_size_range(
         self,
-        min_bytes: Optional[int] = None,
-        max_bytes: Optional[int] = None,
-    ) -> List[ImageMetadata]:
+        min_bytes: int | None = None,
+        max_bytes: int | None = None,
+    ) -> list[ImageMetadata]:
         """Find metadata records with file size in bytes within a specified range using size index.
 
         Args:
@@ -457,7 +447,7 @@ class TinyDBRepository:
             gps = exif.location if exif else None
             if not gps or gps.latitude is None or gps.longitude is None:
                 return False
-            dist = _haversine_distance_km(
+            dist = haversine_distance_km(
                 query.location_lat, query.location_lon, gps.latitude, gps.longitude
             )
             if dist > query.radius_km:
@@ -494,8 +484,8 @@ class TinyDBRepository:
 
     @staticmethod
     def _sort_records(
-        records: List[ImageMetadata], sort_by: str, sort_order: str
-    ) -> List[ImageMetadata]:
+        records: list[ImageMetadata], sort_by: str, sort_order: str
+    ) -> list[ImageMetadata]:
         reverse = sort_order.lower() == "desc"
 
         def get_sort_key(record: ImageMetadata):
@@ -513,11 +503,11 @@ class TinyDBRepository:
 
     def facets(self) -> Facets:
         """Aggregate counts for filter UIs, computed over every record."""
-        cameras: Dict[str, int] = {}
-        tags: Dict[str, int] = {}
-        years: Dict[str, int] = {}
-        lats: List[float] = []
-        lons: List[float] = []
+        cameras: dict[str, int] = {}
+        tags: dict[str, int] = {}
+        years: dict[str, int] = {}
+        lats: list[float] = []
+        lons: list[float] = []
 
         for record in self.list_all():
             if record.exif and record.exif.camera_make:
@@ -549,7 +539,7 @@ class TinyDBRepository:
     # Typed curation commands (PMO-07)
     # =========================================================================
 
-    def apply(self, file_hash: str, command: CurationCommand) -> Optional[ImageMetadata]:
+    def apply(self, file_hash: str, command: CurationCommand) -> ImageMetadata | None:
         """Apply one typed curation command to a single record."""
         doc = self._hash_index.get(file_hash)
         if not doc:
@@ -575,7 +565,7 @@ class TinyDBRepository:
         return count
 
     @staticmethod
-    def _apply_command_to_doc(doc: Dict[str, Any], command: CurationCommand) -> None:
+    def _apply_command_to_doc(doc: dict[str, Any], command: CurationCommand) -> None:
         """Mutate ``doc`` in place per ``command``. Commands validate at construction,
         so nothing here can raise on a bad value.
         """
@@ -605,7 +595,7 @@ class TinyDBRepository:
     # =========================================================================
 
     @staticmethod
-    def _serialize(metadata: ImageMetadata) -> Dict[str, Any]:
+    def _serialize(metadata: ImageMetadata) -> dict[str, Any]:
         """Convert ImageMetadata to a TinyDB-compatible dictionary.
 
         Handles:
@@ -615,7 +605,7 @@ class TinyDBRepository:
         - datetime → ISO 8601 string
         - raw_tags preserved as-is (already dict)
         """
-        doc: Dict[str, Any] = {
+        doc: dict[str, Any] = {
             "file_hash": metadata.file_hash,
             "file_info": {
                 "name": metadata.file_info.name,
@@ -641,9 +631,9 @@ class TinyDBRepository:
         return doc
 
     @staticmethod
-    def _serialize_exif(exif: ImageExifData) -> Dict[str, Any]:
+    def _serialize_exif(exif: ImageExifData) -> dict[str, Any]:
         """Serialize ImageExifData (three-tier model) to dict."""
-        exif_doc: Dict[str, Any] = {
+        exif_doc: dict[str, Any] = {
             # Tier 1
             "camera_make": exif.camera_make,
             "camera_model": exif.camera_model,
@@ -679,7 +669,7 @@ class TinyDBRepository:
     # Mutation & Collection Operations
     # =========================================================================
 
-    def update_metadata(self, file_hash: str, updates: dict) -> Optional[ImageMetadata]:
+    def update_metadata(self, file_hash: str, updates: dict) -> ImageMetadata | None:
         """Update user-controlled fields (rating, flag, labels) of one record.
 
         Raises:
@@ -718,7 +708,7 @@ class TinyDBRepository:
 
     _BATCH_ACTIONS = frozenset({"add_tag", "remove_tag", "set_rating", "set_flag", "delete"})
 
-    def batch_update(self, file_hashes: List[str], updates: dict) -> int:
+    def batch_update(self, file_hashes: list[str], updates: dict) -> int:
         """Apply one curation action to many records.
 
         Returns:
@@ -772,7 +762,7 @@ class TinyDBRepository:
     # =========================================================================
 
     @staticmethod
-    def _deserialize(doc: Dict[str, Any]) -> ImageMetadata:
+    def _deserialize(doc: dict[str, Any]) -> ImageMetadata:
         """Convert a TinyDB document back to an ImageMetadata entity."""
         file_info = ImageFileInfo(
             name=doc["file_info"]["name"],
@@ -803,7 +793,7 @@ class TinyDBRepository:
         )
 
     @staticmethod
-    def _parse_mtime(value: Optional[str]) -> Optional[datetime]:
+    def _parse_mtime(value: str | None) -> datetime | None:
         """Parse a stored mtime; legacy documents have none, and a bad value reads as none."""
         if not value:
             return None
@@ -813,7 +803,7 @@ class TinyDBRepository:
             return None
 
     @staticmethod
-    def _deserialize_exif(exif_doc: Dict[str, Any]) -> ImageExifData:
+    def _deserialize_exif(exif_doc: dict[str, Any]) -> ImageExifData:
         """Deserialize exif dict back to ImageExifData."""
         location = None
         loc_doc = exif_doc.get("location")

@@ -35,6 +35,7 @@ from photo_meta_organizer.domain.curation import (
     merge_labels,
 )
 from photo_meta_organizer.domain.datetimes import to_naive
+from photo_meta_organizer.domain.geo import haversine_distance_km
 from photo_meta_organizer.domain.models import (
     CameraProfile,
     GpsCoordinates,
@@ -136,19 +137,6 @@ _PHOTO_COLUMNS = [
 ]
 
 
-def _haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    r = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(lat1))
-        * math.cos(math.radians(lat2))
-        * math.sin(dlon / 2) ** 2
-    )
-    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-
 class SqliteRepository:
     """SQLite-backed repository for ImageMetadata persistence (ADR-001)."""
 
@@ -207,9 +195,7 @@ class SqliteRepository:
     def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
         with self.lock, self.connection:
             if old_hash != metadata.file_hash:
-                self.connection.execute(
-                    "DELETE FROM photos WHERE file_hash = ?", (old_hash,)
-                )
+                self.connection.execute("DELETE FROM photos WHERE file_hash = ?", (old_hash,))
             self._upsert(metadata)
 
     def refresh_fingerprints(self, updates: Sequence[tuple[str, int, datetime]]) -> int:
@@ -243,9 +229,7 @@ class SqliteRepository:
             ).fetchone()
             if row is None:
                 return None
-            return _from_row(
-                row, self._labels_for([row["file_hash"]]).get(row["file_hash"], [])
-            )
+            return _from_row(row, self._labels_for([row["file_hash"]]).get(row["file_hash"], []))
 
     def list_all(self) -> list[ImageMetadata]:
         with self.lock:
@@ -255,16 +239,12 @@ class SqliteRepository:
 
     def delete(self, file_hash: str) -> bool:
         with self.lock, self.connection:
-            cur = self.connection.execute(
-                "DELETE FROM photos WHERE file_hash = ?", (file_hash,)
-            )
+            cur = self.connection.execute("DELETE FROM photos WHERE file_hash = ?", (file_hash,))
             return cur.rowcount > 0
 
     def delete_by_path(self, file_path: str) -> bool:
         with self.lock, self.connection:
-            cur = self.connection.execute(
-                "DELETE FROM photos WHERE path = ?", (file_path,)
-            )
+            cur = self.connection.execute("DELETE FROM photos WHERE path = ?", (file_path,))
             return cur.rowcount > 0
 
     def batch_delete(self, file_hashes: Sequence[str]) -> int:
@@ -365,14 +345,12 @@ class SqliteRepository:
                     f"SELECT * FROM photos {where_sql} ORDER BY {order_sql}", params
                 ).fetchall()
                 labels_by_hash = self._labels_for([r["file_hash"] for r in rows])
-                candidates = [
-                    _from_row(r, labels_by_hash.get(r["file_hash"], [])) for r in rows
-                ]
+                candidates = [_from_row(r, labels_by_hash.get(r["file_hash"], [])) for r in rows]
                 matched = [
                     m
                     for m in candidates
                     if m.exif.location is not None
-                    and _haversine_distance_km(
+                    and haversine_distance_km(
                         query.location_lat,
                         query.location_lon,
                         m.exif.location.latitude,
@@ -388,9 +366,7 @@ class SqliteRepository:
             page_size = max(1, query.page_size)
             import math as _math
 
-            total_pages = (
-                max(1, _math.ceil(total_count / page_size)) if total_count > 0 else 1
-            )
+            total_pages = max(1, _math.ceil(total_count / page_size)) if total_count > 0 else 1
             page = max(1, min(query.page, total_pages))
             offset = (page - 1) * page_size
 
@@ -507,9 +483,7 @@ class SqliteRepository:
                 (file_hash, command.value),
             )
         elif isinstance(command, SetLabels):
-            self.connection.execute(
-                "DELETE FROM photo_labels WHERE file_hash = ?", (file_hash,)
-            )
+            self.connection.execute("DELETE FROM photo_labels WHERE file_hash = ?", (file_hash,))
             for label in merge_labels([], list(command.value)):
                 self.connection.execute(
                     "INSERT OR IGNORE INTO photo_labels (file_hash, label) VALUES (?, ?)",
@@ -556,9 +530,7 @@ class SqliteRepository:
                     self._apply_command(file_hash, RemoveTag(validate_tag(tag)))
         return self.get_by_filehash(file_hash)
 
-    _BATCH_ACTIONS = frozenset(
-        {"add_tag", "remove_tag", "set_rating", "set_flag", "delete"}
-    )
+    _BATCH_ACTIONS = frozenset({"add_tag", "remove_tag", "set_rating", "set_flag", "delete"})
 
     def batch_update(self, file_hashes: list[str], updates: dict) -> int:
         from photo_meta_organizer.domain.curation import validate_rating, validate_tag
@@ -595,9 +567,7 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _paginate(
-    items: list[ImageMetadata], page: int, page_size: int
-) -> Page[ImageMetadata]:
+def _paginate(items: list[ImageMetadata], page: int, page_size: int) -> Page[ImageMetadata]:
     total_count = len(items)
     page_size = max(1, page_size)
     total_pages = max(1, math.ceil(total_count / page_size)) if total_count > 0 else 1
@@ -679,9 +649,7 @@ def _from_row(row: sqlite3.Row, labels: list[str]) -> ImageMetadata:
         exposure_time=row["exposure_time"],
         iso=row["iso"],
         focal_length=row["focal_length"],
-        captured_at=(
-            datetime.fromisoformat(row["captured_at"]) if row["captured_at"] else None
-        ),
+        captured_at=(datetime.fromisoformat(row["captured_at"]) if row["captured_at"] else None),
         camera_profile=camera_profile,
         location=location,
         flash_fired=None if row["flash_fired"] is None else bool(row["flash_fired"]),
@@ -698,9 +666,7 @@ def _from_row(row: sqlite3.Row, labels: list[str]) -> ImageMetadata:
         path=row["path"],
         size_bytes=row["size_bytes"],
         mime_type=row["mime_type"],
-        modified_time=(
-            to_naive(datetime.fromisoformat(row["mtime"])) if row["mtime"] else None
-        ),
+        modified_time=(to_naive(datetime.fromisoformat(row["mtime"])) if row["mtime"] else None),
     )
 
     return ImageMetadata(

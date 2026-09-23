@@ -1,7 +1,7 @@
 """Pydantic schemas for API request/response models."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -18,7 +18,7 @@ class GpsCoordinatesSchema(BaseModel):
 
     latitude: float
     longitude: float
-    altitude: Optional[float] = None
+    altitude: float | None = None
     datum: str = "WGS84"
 
 
@@ -41,22 +41,22 @@ class DimensionsSchema(BaseModel):
 class ExifDataSchema(BaseModel):
     """EXIF metadata schema for API responses."""
 
-    camera_make: Optional[str] = None
-    camera_model: Optional[str] = None
-    f_stop: Optional[float] = None
-    exposure_time: Optional[str] = None
-    iso: Optional[int] = None
-    focal_length: Optional[str] = None
-    captured_at: Optional[datetime] = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    f_stop: float | None = None
+    exposure_time: str | None = None
+    iso: int | None = None
+    focal_length: str | None = None
+    captured_at: datetime | None = None
     camera_profile: str = "unknown"
-    location: Optional[GpsCoordinatesSchema] = None
-    flash_fired: Optional[bool] = None
-    focal_length_35mm: Optional[str] = None
-    white_balance_mode: Optional[str] = None
-    exposure_program: Optional[str] = None
-    metering_mode: Optional[str] = None
-    orientation: Optional[int] = None
-    raw_tags: Dict[str, Any] = Field(default_factory=dict)
+    location: GpsCoordinatesSchema | None = None
+    flash_fired: bool | None = None
+    focal_length_35mm: str | None = None
+    white_balance_mode: str | None = None
+    exposure_program: str | None = None
+    metering_mode: str | None = None
+    orientation: int | None = None
+    raw_tags: dict[str, Any] = Field(default_factory=dict)
 
 
 class PhotoMetadataResponse(BaseModel):
@@ -66,8 +66,8 @@ class PhotoMetadataResponse(BaseModel):
     file_info: FileInfoSchema
     dimensions: DimensionsSchema
     exif: ExifDataSchema
-    labels: List[str] = Field(default_factory=list)
-    rating: Optional[int] = None
+    labels: list[str] = Field(default_factory=list)
+    rating: int | None = None
     flagged: bool = False
     added_at: datetime
 
@@ -75,7 +75,7 @@ class PhotoMetadataResponse(BaseModel):
 class PaginatedPhotosResponse(BaseModel):
     """Paginated list of photo metadata."""
 
-    items: List[PhotoMetadataResponse]
+    items: list[PhotoMetadataResponse]
     total_count: int
     page: int
     page_size: int
@@ -85,18 +85,17 @@ class PaginatedPhotosResponse(BaseModel):
 class SearchRequest(BaseModel):
     """Advanced search request body schema."""
 
-    search_term: Optional[str] = None
-    date_start: Optional[datetime] = None
-    date_end: Optional[datetime] = None
-    camera_make: Optional[str] = None
-    camera_model: Optional[str] = None
-    location_lat: Optional[float] = None
-    location_lon: Optional[float] = None
-    radius_km: Optional[float] = None
-    tags: Optional[List[str]] = None
-    city: Optional[str] = None
-    rating: Optional[int] = None
-    flagged: Optional[bool] = None
+    search_term: str | None = None
+    date_start: datetime | None = None
+    date_end: datetime | None = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    location_lat: float | None = None
+    location_lon: float | None = None
+    radius_km: float | None = None
+    tags: list[str] | None = None
+    rating: int | None = None
+    flagged: bool | None = None
     sort_by: str = "captured_at"
     sort_order: str = "asc"
     page: int = Field(default=1, ge=1)
@@ -106,11 +105,11 @@ class SearchRequest(BaseModel):
 class PatchPhotoRequest(BaseModel):
     """Request schema for updating metadata of a single photo."""
 
-    rating: Optional[int] = Field(default=None, ge=MIN_RATING, le=MAX_RATING)
-    flagged: Optional[bool] = None
-    labels: Optional[List[str]] = None
-    add_tags: Optional[List[str]] = None
-    remove_tags: Optional[List[str]] = None
+    rating: int | None = Field(default=None, ge=MIN_RATING, le=MAX_RATING)
+    flagged: bool | None = None
+    labels: list[str] | None = None
+    add_tags: list[str] | None = None
+    remove_tags: list[str] | None = None
 
 
 class BatchPhotoRequest(BaseModel):
@@ -121,11 +120,11 @@ class BatchPhotoRequest(BaseModel):
     and ``delete`` takes no value.
     """
 
-    photo_hashes: List[str] = Field(min_length=1)
+    photo_hashes: list[str] = Field(min_length=1)
     action: Literal["add_tag", "remove_tag", "set_rating", "set_flag", "delete"] = Field(
         description="Action to perform: add_tag, remove_tag, set_rating, set_flag, delete"
     )
-    value: Optional[Any] = None
+    value: Any | None = None
 
     @model_validator(mode="after")
     def _check_value_for_action(self) -> "BatchPhotoRequest":
@@ -153,7 +152,7 @@ class CollectionCreateRequest(BaseModel):
 
     name: str
     description: str = ""
-    photo_hashes: List[str] = Field(default_factory=list)
+    photo_hashes: list[str] = Field(default_factory=list)
 
 
 class CollectionResponse(BaseModel):
@@ -161,7 +160,7 @@ class CollectionResponse(BaseModel):
 
     name: str
     description: str
-    photo_hashes: List[str]
+    photo_hashes: list[str]
     updated_at: str
 
 
@@ -186,4 +185,3 @@ class IndexFolderResponse(BaseModel):
     indexed_count: int
     folder_path: str
     message: str
-

@@ -1,7 +1,8 @@
 """Integration tests for FastAPI photo metadata REST API endpoints."""
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 from photo_meta_organizer.api.app import create_app
@@ -37,10 +38,12 @@ def sample_metadata():
             exif=ImageExifData(
                 camera_make="Sony",
                 camera_model="A7IV",
-                captured_at=datetime(2024, 1, 15, tzinfo=timezone.utc),
+                captured_at=datetime(2024, 1, 15, tzinfo=UTC),
                 location=GpsCoordinates(latitude=37.7749, longitude=-122.4194),
             ),
             labels=["beach", "vacation"],
+            rating=5,
+            flagged=True,
         ),
         ImageMetadata(
             file_hash="bbbb2222",
@@ -54,7 +57,7 @@ def sample_metadata():
             exif=ImageExifData(
                 camera_make="Canon",
                 camera_model="EOS R5",
-                captured_at=datetime(2024, 3, 20, tzinfo=timezone.utc),
+                captured_at=datetime(2024, 3, 20, tzinfo=UTC),
             ),
             labels=["mountain", "landscape"],
         ),
@@ -111,9 +114,7 @@ def test_list_photos_returns_all(client):
 
 
 def test_list_photos_pagination(client):
-    resp = client.get(
-        "/api/photos?page=1&page_size=1&sort_by=size_bytes&sort_order=asc"
-    )
+    resp = client.get("/api/photos?page=1&page_size=1&sort_by=size_bytes&sort_order=asc")
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_count"] == 2
@@ -223,6 +224,38 @@ def test_search_by_location_radius(client):
     data = resp.json()
     assert data["total_count"] == 1
     assert data["items"][0]["file_hash"] == "aaaa1111"
+
+
+def test_search_by_term_matches_name(client):
+    resp = client.post("/api/search", json={"search_term": "beach"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["file_hash"] == "aaaa1111"
+
+
+def test_search_by_rating(client):
+    resp = client.post("/api/search", json={"rating": 5})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["file_hash"] == "aaaa1111"
+
+
+def test_search_by_flagged(client):
+    resp = client.post("/api/search", json={"flagged": True})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["file_hash"] == "aaaa1111"
+
+
+def test_search_ignores_unknown_city_field(client):
+    """PMO-09: ``city`` was dropped from the schema (it had no data source);
+    Pydantic ignores unknown fields by default, so this is a no-op filter."""
+    resp = client.post("/api/search", json={"city": "Paris"})
+    assert resp.status_code == 200
+    assert resp.json()["total_count"] == 2
 
 
 def test_search_no_filters_returns_all(client):

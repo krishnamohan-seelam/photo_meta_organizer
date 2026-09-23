@@ -43,9 +43,7 @@ _LOGGING_CONFIG = {
             "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         },
         "detailed": {
-            "format": (
-                "%(asctime)s [%(levelname)s] %(name)s.%(funcName)s:%(lineno)d: %(message)s"
-            ),
+            "format": ("%(asctime)s [%(levelname)s] %(name)s.%(funcName)s:%(lineno)d: %(message)s"),
         },
     },
     "handlers": {
@@ -269,11 +267,15 @@ def handle_search_command(args: argparse.Namespace) -> int:
     tags_arg = getattr(args, "tags", None)
     tags_list = [t.strip() for t in tags_arg.split(",")] if tags_arg else None
 
+    # --camera used to set both camera_make and camera_model and rely on a
+    # since-removed sentinel (PMO-09) that treated an equal make/model as "search
+    # either field"; search_term now covers that (it also matches file name/path,
+    # which --camera never claimed to search, but this CLI flag has no separate
+    # "search anything" option, so the broader match is the closer fit).
     query = SearchPhotosQuery(
         date_start=date_start,
         date_end=date_end,
-        camera_make=getattr(args, "camera", None),
-        camera_model=getattr(args, "camera", None),
+        search_term=getattr(args, "camera", None),
         location_lat=loc_lat,
         location_lon=loc_lon,
         radius_km=radius_km,
@@ -299,11 +301,7 @@ def handle_search_command(args: argparse.Namespace) -> int:
     for item in result:
         exif = item.exif
         cam = f"{exif.camera_make or ''} {exif.camera_model or ''}".strip() or "Unknown"
-        dt_str = (
-            exif.captured_at.strftime("%Y-%m-%d %H:%M")
-            if exif and exif.captured_at
-            else "N/A"
-        )
+        dt_str = exif.captured_at.strftime("%Y-%m-%d %H:%M") if exif and exif.captured_at else "N/A"
         size_mb = (item.file_info.size_bytes or 0) / (1024 * 1024)
         size_str = f"{size_mb:.2f} MB"
         loc_str = (
@@ -374,9 +372,7 @@ def handle_stats_command(args: argparse.Namespace) -> int:
 
         # Format size in human-readable units
         size_mb = total_bytes / (1024 * 1024)
-        size_str = (
-            f"{size_mb / 1024:.2f} GB" if size_mb >= 1024 else f"{size_mb:.2f} MB"
-        )
+        size_str = f"{size_mb / 1024:.2f} GB" if size_mb >= 1024 else f"{size_mb:.2f} MB"
 
         date_range_str = "N/A"
         if dates:
@@ -395,9 +391,7 @@ def handle_stats_command(args: argparse.Namespace) -> int:
         if mime_counts:
             print("\nFormat Distribution:")
             format_table = [[mime, count] for mime, count in mime_counts.most_common()]
-            print(
-                tabulate(format_table, headers=["Format", "Count"], tablefmt="simple")
-            )
+            print(tabulate(format_table, headers=["Format", "Count"], tablefmt="simple"))
 
         if camera_counts:
             print("\nCamera Distribution:")
@@ -462,9 +456,7 @@ def handle_sync_command(args: argparse.Namespace) -> int:
     )
     if result.fingerprints_refreshed:
         verb = "would record" if args.dry_run else "recorded"
-        print(
-            f"  ({verb} size/mtime for {result.fingerprints_refreshed} unchanged file(s))"
-        )
+        print(f"  ({verb} size/mtime for {result.fingerprints_refreshed} unchanged file(s))")
     if result.errors:
         print(f"Errors ({len(result.errors)}):")
         for err in result.errors:
@@ -489,9 +481,7 @@ def handle_dedupe_command(args: argparse.Namespace) -> int:
     label = "Merged" if args.apply else "Would merge (dry run; pass --apply to write)"
     print(f"{label}: {extra} extra record(s) across {len(result.groups)} path(s)")
     for group in result.groups[:50]:
-        print(
-            f"  {group.path}  keep {group.keep.file_hash[:12]}, drop {len(group.drop)}"
-        )
+        print(f"  {group.path}  keep {group.keep.file_hash[:12]}, drop {len(group.drop)}")
     if len(result.groups) > 50:
         print(f"  ... and {len(result.groups) - 50} more")
     if args.apply:
@@ -512,9 +502,7 @@ def handle_prune_command(args: argparse.Namespace) -> int:
     if not result.candidates:
         print("No non-image records found.")
         return 0
-    label = (
-        "Removed" if args.apply else "Would remove (dry run; pass --apply to delete)"
-    )
+    label = "Removed" if args.apply else "Would remove (dry run; pass --apply to delete)"
     print(f"{label}: {len(result.candidates)} record(s)")
     for record in result.candidates[:50]:
         print(f"  {record.file_info.path}")
@@ -590,21 +578,15 @@ def main() -> int:
         "search",
         help="Search indexed photos (Phase 3)",
     )
-    search_parser.add_argument(
-        "--db", default="photos.db", help="Path to metadata database file"
-    )
+    search_parser.add_argument("--db", default="photos.db", help="Path to metadata database file")
     search_parser.add_argument("--date", help="Date filter (YYYY-MM or YYYY-MM-DD)")
     search_parser.add_argument("--date-from", help="Start date (YYYY-MM-DD)")
     search_parser.add_argument("--date-to", help="End date (YYYY-MM-DD)")
     search_parser.add_argument("--camera", help="Filter by camera make/model")
-    search_parser.add_argument(
-        "--location", help="Filter by location (lat,lon,radius_km)"
-    )
+    search_parser.add_argument("--location", help="Filter by location (lat,lon,radius_km)")
     search_parser.add_argument("--lat", type=float, help="Latitude for radius search")
     search_parser.add_argument("--lon", type=float, help="Longitude for radius search")
-    search_parser.add_argument(
-        "--radius", type=float, help="Radius in km for location search"
-    )
+    search_parser.add_argument("--radius", type=float, help="Radius in km for location search")
     search_parser.add_argument("--tags", help="Filter by tags (comma-separated)")
     search_parser.add_argument(
         "--sort",
@@ -618,9 +600,7 @@ def main() -> int:
         choices=["asc", "desc"],
         help="Sort order (default: asc)",
     )
-    search_parser.add_argument(
-        "--page", type=int, default=1, help="Page number (default: 1)"
-    )
+    search_parser.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
     search_parser.add_argument(
         "--page-size", type=int, default=50, help="Results per page (default: 50)"
     )
@@ -699,9 +679,7 @@ def main() -> int:
             "records whose file is not an image. Dry run unless --apply is given."
         ),
     )
-    prune_parser.add_argument(
-        "--db", default="photos.db", help="Path to metadata database file"
-    )
+    prune_parser.add_argument("--db", default="photos.db", help="Path to metadata database file")
     prune_parser.add_argument(
         "--apply",
         action="store_true",
@@ -720,9 +698,7 @@ def main() -> int:
             "flag and labels of the others into it. Dry run unless --apply is given."
         ),
     )
-    dedupe_parser.add_argument(
-        "--db", default="photos.db", help="Path to metadata database file"
-    )
+    dedupe_parser.add_argument("--db", default="photos.db", help="Path to metadata database file")
     dedupe_parser.add_argument(
         "--apply",
         action="store_true",

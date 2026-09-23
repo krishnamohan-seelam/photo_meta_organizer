@@ -49,7 +49,15 @@ from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,
 )
-from photo_meta_organizer.domain.curation import is_valid_rating
+from photo_meta_organizer.domain.curation import (
+    AddTag,
+    CurationCommand,
+    RemoveTag,
+    SetFlag,
+    SetLabels,
+    SetRating,
+    is_valid_rating,
+)
 from photo_meta_organizer.domain.models import ImageMetadata
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
@@ -129,9 +137,7 @@ def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
     )
 
 
-@photos_router.get(
-    "", response_model=PaginatedPhotosResponse, summary="List all photos"
-)
+@photos_router.get("", response_model=PaginatedPhotosResponse, summary="List all photos")
 def list_photos(
     page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(default=50, ge=1, le=500, description="Results per page"),
@@ -160,19 +166,26 @@ def list_photos(
     )
 
 
-@photos_router.post(
-    "/batch", response_model=BatchPhotoResponse, summary="Batch update photos"
-)
+_BATCH_ACTION_COMMANDS = {
+    "add_tag": AddTag,
+    "remove_tag": RemoveTag,
+    "set_rating": SetRating,
+    "set_flag": SetFlag,
+}
+
+
+@photos_router.post("/batch", response_model=BatchPhotoResponse, summary="Batch update photos")
 def batch_update_photos(
     request: BatchPhotoRequest,
     repository: ImageMetadataRepository = Depends(get_repository),
 ) -> BatchPhotoResponse:
     """Apply one validated curation action to many photos."""
     try:
-        count = repository.batch_update(
-            request.photo_hashes,
-            {"action": request.action, "value": request.value},
-        )
+        if request.action == "delete":
+            count = repository.batch_delete(request.photo_hashes)
+        else:
+            command = _BATCH_ACTION_COMMANDS[request.action](request.value)
+            count = repository.apply_batch(request.photo_hashes, command)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     deleting = request.action == "delete"
@@ -209,20 +222,14 @@ def get_photo(
 )
 def get_photo_thumbnail(
     file_hash: str,
-    w: int = Query(
-        default=320, ge=64, le=1200, description="Thumbnail width in pixels"
-    ),
-    h: int = Query(
-        default=320, ge=64, le=1200, description="Thumbnail height in pixels"
-    ),
+    w: int = Query(default=320, ge=64, le=1200, description="Thumbnail width in pixels"),
+    h: int = Query(default=320, ge=64, le=1200, description="Thumbnail height in pixels"),
     repository: ImageMetadataRepository = Depends(get_repository),
 ):
     """Stream an optimized WebP thumbnail for the specified photo."""
     metadata = repository.get_by_filehash(file_hash)
     if metadata is None:
-        raise HTTPException(
-            status_code=404, detail=f"Photo with hash '{file_hash}' not found."
-        )
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
 
     thumb_bytes = _thumbnail_service.generate_thumbnail(
         source_path=metadata.file_info.path,
@@ -254,9 +261,7 @@ def get_photo_raw(
     """Stream the full-resolution original image from storage."""
     metadata = repository.get_by_filehash(file_hash)
     if metadata is None:
-        raise HTTPException(
-            status_code=404, detail=f"Photo with hash '{file_hash}' not found."
-        )
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
 
     file_path = metadata.file_info.path
     if not os.path.exists(file_path):
@@ -282,20 +287,34 @@ def patch_photo(
     repository: ImageMetadataRepository = Depends(get_repository),
 ) -> PhotoMetadataResponse:
     """Update user ratings, flags, or tags for a single photo."""
+    existing = repository.get_by_filehash(file_hash)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+
     # An explicit null means "clear" only for the rating; for the other fields it means "no change".
     updates = {
         key: value
         for key, value in request.model_dump(exclude_unset=True).items()
         if value is not None or key == "rating"
     }
+    commands: list[CurationCommand] = []
+    if "rating" in updates:
+        commands.append(SetRating(updates["rating"]))
+    if "flagged" in updates:
+        commands.append(SetFlag(updates["flagged"]))
+    if "labels" in updates:
+        commands.append(SetLabels(updates["labels"]))
+    for tag in updates.get("add_tags", []):
+        commands.append(AddTag(tag))
+    for tag in updates.get("remove_tags", []):
+        commands.append(RemoveTag(tag))
+
+    updated = existing
     try:
-        updated = repository.update_metadata(file_hash, updates)
+        for command in commands:
+            updated = repository.apply(file_hash, command)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if updated is None:
-        raise HTTPException(
-            status_code=404, detail=f"Photo with hash '{file_hash}' not found."
-        )
     return _to_response(updated)
 
 
@@ -324,9 +343,7 @@ def delete_photo(
     )
 
 
-@collections_router.get(
-    "", response_model=list[CollectionResponse], summary="List all collections"
-)
+@collections_router.get("", response_model=list[CollectionResponse], summary="List all collections")
 def list_collections(
     collection_repository: CollectionRepository = Depends(get_collection_repository),
 ) -> list[CollectionResponse]:
@@ -374,6 +391,7 @@ def search_photos(
 ) -> PaginatedPhotosResponse:
     """Advanced multi-criteria photo search with filtering, sorting, and pagination."""
     query = SearchPhotosQuery(
+        search_term=request.search_term,
         date_start=request.date_start,
         date_end=request.date_end,
         camera_make=request.camera_make,
@@ -382,6 +400,8 @@ def search_photos(
         location_lon=request.location_lon,
         radius_km=request.radius_km,
         tags=request.tags,
+        rating=request.rating,
+        flagged=request.flagged,
         sort_by=request.sort_by,
         sort_order=request.sort_order,
         page=request.page,
@@ -398,9 +418,7 @@ def search_photos(
     )
 
 
-@index_router.post(
-    "", response_model=IndexFolderResponse, summary="Index local photo directory"
-)
+@index_router.post("", response_model=IndexFolderResponse, summary="Index local photo directory")
 def index_directory(
     request: IndexFolderRequest,
     repository: ImageMetadataRepository = Depends(get_repository),
