@@ -1,16 +1,18 @@
 import React from 'react'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
-import { getThumbnailUrl, patchPhotoApi } from '../../api/client'
+import { getThumbnailUrl } from '../../api/client'
+import { useCuration } from '../../hooks/usePhotoMutations'
+import { swapToPlaceholder } from '../../utils/placeholder'
 import { Inbox, Star, CheckCircle } from 'lucide-react'
 
 interface KanbanBoardViewProps {
   photos: PhotoMetadata[]
-  onRefresh?: () => void
 }
 
-export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos, onRefresh }) => {
-  const { setInspectedPhoto, showToast } = useUiStore()
+export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos }) => {
+  const setInspectedHash = useUiStore((s) => s.setInspectedHash)
+  const { patchPhoto } = useCuration()
 
   // Columns:
   // 1. Inbox (unrated or rating <= 2)
@@ -20,25 +22,12 @@ export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos, onRefr
   const picks = photos.filter((p) => p.flagged || (p.rating || 0) === 4)
   const exportQueue = photos.filter((p) => (p.rating || 0) === 5 || p.labels.includes('export'))
 
-  const handlePromoteToPick = async (photo: PhotoMetadata) => {
-    try {
-      await patchPhotoApi(photo.file_hash, { flagged: true, rating: 4 })
-      showToast(`Moved ${photo.file_info.name} to Picks`)
-      if (onRefresh) onRefresh()
-    } catch {
-      showToast(`Moved ${photo.file_info.name} to Picks (local)`)
-    }
-  }
+  // The card moves only once the server has confirmed the save; a failure shows an error toast instead.
+  const handlePromoteToPick = (photo: PhotoMetadata) =>
+    patchPhoto(photo.file_hash, { flagged: true, rating: 4 }, `Moved ${photo.file_info.name} to Picks`)
 
-  const handlePromoteToExport = async (photo: PhotoMetadata) => {
-    try {
-      await patchPhotoApi(photo.file_hash, { rating: 5, add_tags: ['export'] })
-      showToast(`Moved ${photo.file_info.name} to Export Ready`)
-      if (onRefresh) onRefresh()
-    } catch {
-      showToast(`Moved ${photo.file_info.name} to Export Ready (local)`)
-    }
-  }
+  const handlePromoteToExport = (photo: PhotoMetadata) =>
+    patchPhoto(photo.file_hash, { rating: 5, add_tags: ['export'] }, `Moved ${photo.file_info.name} to Export Ready`)
 
   const columns = [
     {
@@ -134,7 +123,7 @@ export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos, onRefr
             {col.items.map((item) => (
               <div
                 key={item.file_hash}
-                onClick={() => setInspectedPhoto(item)}
+                onClick={() => setInspectedHash(item.file_hash)}
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-color)',
@@ -156,10 +145,7 @@ export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos, onRefr
                     objectFit: 'cover',
                     flexShrink: 0,
                   }}
-                  onError={(e) => {
-                    e.currentTarget.src =
-                      'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=200&auto=format&fit=crop&q=80'
-                  }}
+                  onError={swapToPlaceholder}
                 />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
@@ -173,7 +159,7 @@ export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos, onRefr
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
                     <span style={{ fontSize: '0.72rem', color: 'var(--accent-warning)' }}>
-                      {'★'.repeat(item.rating || 3)}
+                      {item.rating ? '★'.repeat(item.rating) : ''}
                     </span>
                     {col.onAction && (
                       <button

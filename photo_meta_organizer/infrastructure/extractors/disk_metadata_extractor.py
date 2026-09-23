@@ -43,6 +43,17 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
+def get_file_mtime(file_path: str) -> Optional[datetime]:
+    """Return the file's mtime as naive local time, or ``None`` if it cannot be read.
+
+    Same conversion as the sync disk scan, so the two values compare equal.
+    """
+    try:
+        return datetime.fromtimestamp(Path(file_path).stat().st_mtime)
+    except (OSError, ValueError, OverflowError):
+        return None
+
+
 def get_file_size(file_path: str) -> int:
     """Return the size of the file in bytes.
 
@@ -448,6 +459,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
             path=file_handle.original_path,
             size_bytes=file_size,
             mime_type=mime_type,
+            modified_time=get_file_mtime(file_handle.original_path),
         )
 
         return ImageMetadata(

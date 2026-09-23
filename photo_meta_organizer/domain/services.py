@@ -105,6 +105,12 @@ class MetadataStateAnalyzer:
        - In DB, but (size OR mtime) differ → compute SHA-256 → compare:
            • Same hash → **UNCHANGED** (content unchanged despite stat diff).
            • Different hash → **MODIFIED**.
+       - Legacy record with no stored mtime and an equal size → **UNCHANGED**
+         without hashing, flagged ``refresh_fingerprint`` so the caller can backfill
+         it (a whole library is not re-hashed just because it predates mtimes).
+       - ``force_rehash=True`` hashes every file already in the DB, ignoring the
+         fingerprint; this is the only way to catch an edit that kept both size
+         and mtime.
     4. DB entries whose path is not on disk → **DELETED**.
 
     This is a pure domain service: no I/O, fully testable.
@@ -117,6 +123,7 @@ class MetadataStateAnalyzer:
         disk_files: Dict[str, FileInfo],
         db_entries: List[ImageMetadata],
         compute_hash: Optional[callable] = None,
+        force_rehash: bool = False,
     ) -> List[FileState]:
         """Classify every file as NEW / MODIFIED / UNCHANGED / DELETED.
 
@@ -126,6 +133,8 @@ class MetadataStateAnalyzer:
             compute_hash: Callable that accepts a file path (str) and returns
                 its SHA-256 hex digest.  Defaults to the built-in SHA-256
                 implementation when None.
+            force_rehash: Hash every file that is already in the DB instead of
+                trusting the (size, mtime) fingerprint.
 
         Returns:
             List of FileState objects covering every disk file and every
@@ -174,9 +183,14 @@ class MetadataStateAnalyzer:
             # File is in DB — try fast fingerprint check first
             stored_size = db_entry.file_info.size_bytes
             stored_hash = db_entry.file_hash
+            stored_mtime = db_entry.file_info.modified_time
 
-            if fi.size_bytes == stored_size:
-                # Size matches → assume UNCHANGED (skip hashing)
+            size_same = fi.size_bytes == stored_size
+            mtime_known = stored_mtime is not None
+            mtime_same = mtime_known and fi.modified_time == stored_mtime
+
+            if not force_rehash and size_same and (mtime_same or not mtime_known):
+                # Fingerprint matches (or is a legacy record we trust on size alone).
                 states.append(
                     FileState(
                         file_path=norm_path,
@@ -184,11 +198,12 @@ class MetadataStateAnalyzer:
                         file_hash=stored_hash,
                         size_bytes=fi.size_bytes,
                         last_modified=fi.modified_time,
+                        refresh_fingerprint=not mtime_known,
                     )
                 )
                 continue
 
-            # Size differs → compute hash to confirm modification
+            # Size or mtime differs (or a rehash was forced) → hash to confirm
             try:
                 current_hash = compute_hash(norm_path)
             except OSError as exc:
@@ -196,7 +211,8 @@ class MetadataStateAnalyzer:
                 continue
 
             if current_hash == stored_hash:
-                # Sizes differ but content is identical (e.g. metadata-only edit)
+                # Stat changed but content is identical (touch, copy, metadata-only
+                # edit): keep the record, but let the caller record the new stat.
                 states.append(
                     FileState(
                         file_path=norm_path,
@@ -204,6 +220,7 @@ class MetadataStateAnalyzer:
                         file_hash=current_hash,
                         size_bytes=fi.size_bytes,
                         last_modified=fi.modified_time,
+                        refresh_fingerprint=not (mtime_same and size_same),
                     )
                 )
             else:

@@ -19,10 +19,16 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from tinydb import TinyDB, Query
 
+from photo_meta_organizer.domain.curation import (
+    merge_labels,
+    validate_rating,
+    validate_tag,
+)
+from photo_meta_organizer.domain.datetimes import to_naive
 from photo_meta_organizer.domain.models import (
     CameraProfile,
     GpsCoordinates,
@@ -117,7 +123,7 @@ class TinyDBRepository:
             captured_at_str = exif_doc.get("captured_at")
             if captured_at_str:
                 try:
-                    captured_at_dt = datetime.fromisoformat(captured_at_str)
+                    captured_at_dt = to_naive(datetime.fromisoformat(captured_at_str))
                     self._captured_at_index.append((captured_at_dt, doc))
                 except (ValueError, TypeError):
                     pass
@@ -142,18 +148,60 @@ class TinyDBRepository:
         Args:
             metadata: The ImageMetadata entity to persist.
         """
+        self._upsert(metadata)
+        self.rebuild_indexes()
+
+    def _upsert(self, metadata: ImageMetadata) -> None:
+        """Insert or update by file hash without touching the indexes."""
         doc = self._serialize(metadata)
         q = Query()
-        existing = self._table.search(q.file_hash == metadata.file_hash)
-
-        if existing:
+        if self._table.search(q.file_hash == metadata.file_hash):
             self._table.update(doc, q.file_hash == metadata.file_hash)
             logger.debug("Updated metadata for hash: %s", metadata.file_hash[:12])
         else:
             self._table.insert(doc)
             logger.debug("Inserted metadata for hash: %s", metadata.file_hash[:12])
 
+    def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
+        """Swap the record stored under ``old_hash`` for ``metadata``.
+
+        Content is the identity, so an edited file gets a new hash; a plain ``save``
+        would leave the old record behind as a duplicate of the same path. If
+        ``metadata.file_hash`` already exists (the edit made it identical to another
+        photo) the two collapse into one record. One index rebuild.
+        """
+        q = Query()
+        if old_hash != metadata.file_hash:
+            self._table.remove(q.file_hash == old_hash)
+        self._upsert(metadata)
         self.rebuild_indexes()
+
+    def refresh_fingerprints(self, updates: Sequence[Tuple[str, int, datetime]]) -> int:
+        """Record ``(file_hash, size_bytes, modified_time)`` on existing records.
+
+        Bookkeeping for sync (backfilling legacy records, catching up after a
+        ``touch``): nothing else on the record changes. Applied as a single write,
+        not one per record, because a JSON-backed store rewrites the whole file.
+
+        Returns:
+            Number of records updated; unknown hashes are skipped.
+        """
+        wanted = {h: (size, mtime) for h, size, mtime in updates}
+        if not wanted:
+            return 0
+        touched = 0
+
+        def apply(doc: Dict[str, Any]) -> None:
+            nonlocal touched
+            size, mtime = wanted[doc["file_hash"]]
+            doc["file_info"]["size_bytes"] = size
+            doc["file_info"]["modified_time"] = mtime.isoformat()
+            touched += 1
+
+        q = Query()
+        self._table.update(apply, q.file_hash.test(lambda h: h in wanted))
+        self.rebuild_indexes()
+        return touched
 
     def get_by_filehash(self, file_hash: str) -> Optional[ImageMetadata]:
         """Retrieve metadata by SHA-256 file hash using fast O(1) index.
@@ -279,6 +327,7 @@ class TinyDBRepository:
         Returns:
             List of ImageMetadata records within the date range.
         """
+        date_start, date_end = to_naive(date_start), to_naive(date_end)
         results = []
         for captured_at_dt, doc in self._captured_at_index:
             if date_start and captured_at_dt < date_start:
@@ -333,6 +382,11 @@ class TinyDBRepository:
                 "path": metadata.file_info.path,
                 "size_bytes": metadata.file_info.size_bytes,
                 "mime_type": metadata.file_info.mime_type,
+                "modified_time": (
+                    metadata.file_info.modified_time.isoformat()
+                    if metadata.file_info.modified_time
+                    else None
+                ),
             },
             "dimensions": {
                 "width": metadata.dimensions.width,
@@ -386,58 +440,86 @@ class TinyDBRepository:
     # =========================================================================
 
     def update_metadata(self, file_hash: str, updates: dict) -> Optional[ImageMetadata]:
-        """Update specific fields of an ImageMetadata entity."""
+        """Update user-controlled fields (rating, flag, labels) of one record.
+
+        Raises:
+            ValueError: If a value violates the curation rules; nothing is written.
+        """
         doc = self._hash_index.get(file_hash)
         if not doc:
             return None
+
+        # Validate everything first so a bad value can never be half-applied.
+        if "rating" in updates:
+            validate_rating(updates["rating"])
+        for key in ("labels", "add_tags", "remove_tags"):
+            if key in updates and (
+                not isinstance(updates[key], (list, tuple, set))
+                or not all(isinstance(t, str) for t in updates[key])
+            ):
+                raise ValueError(f"{key} must be a list of strings")
 
         if "rating" in updates:
             doc["rating"] = updates["rating"]
         if "flagged" in updates:
             doc["flagged"] = bool(updates["flagged"])
         if "labels" in updates:
-            doc["labels"] = list(updates["labels"])
+            doc["labels"] = merge_labels([], list(updates["labels"]))
         if "add_tags" in updates:
-            current_tags = set(doc.get("labels", []))
-            current_tags.update(updates["add_tags"])
-            doc["labels"] = list(current_tags)
+            doc["labels"] = merge_labels(doc.get("labels", []), list(updates["add_tags"]))
         if "remove_tags" in updates:
-            current_tags = set(doc.get("labels", []))
-            current_tags.difference_update(updates["remove_tags"])
-            doc["labels"] = list(current_tags)
+            removed = set(updates["remove_tags"])
+            doc["labels"] = [t for t in doc.get("labels", []) if t not in removed]
 
         q = Query()
         self._table.update(doc, q.file_hash == file_hash)
         self.rebuild_indexes()
         return self._deserialize(doc)
 
+    _BATCH_ACTIONS = frozenset({"add_tag", "remove_tag", "set_rating", "set_flag", "delete"})
+
     def batch_update(self, file_hashes: List[str], updates: dict) -> int:
-        """Apply batch updates across multiple image records atomically."""
-        count = 0
-        q = Query()
+        """Apply one curation action to many records.
+
+        Returns:
+            Number of existing records the action was applied to (for ``delete``:
+            the number removed). Unknown hashes are skipped.
+
+        Raises:
+            ValueError: For an unknown action or a value that violates the curation
+                rules. Validation happens before any record is touched.
+        """
         action = updates.get("action")
         value = updates.get("value")
+        if action not in self._BATCH_ACTIONS:
+            raise ValueError(
+                f"unknown batch action {action!r}; expected one of {sorted(self._BATCH_ACTIONS)}"
+            )
+        if action in ("add_tag", "remove_tag"):
+            value = validate_tag(value)
+        elif action == "set_rating":
+            validate_rating(value)
+        elif action == "set_flag" and not isinstance(value, bool):
+            raise ValueError(f"set_flag requires a boolean value; got {value!r}")
 
+        count = 0
+        q = Query()
         for f_hash in file_hashes:
             doc = self._hash_index.get(f_hash)
             if not doc:
                 continue
-            if action == "add_tag" and isinstance(value, str):
-                current_tags = set(doc.get("labels", []))
-                current_tags.add(value)
-                doc["labels"] = list(current_tags)
-            elif action == "remove_tag" and isinstance(value, str):
-                current_tags = set(doc.get("labels", []))
-                current_tags.discard(value)
-                doc["labels"] = list(current_tags)
-            elif action == "set_rating":
-                doc["rating"] = value
-            elif action == "set_flag":
-                doc["flagged"] = bool(value)
-            elif action == "delete":
+            if action == "delete":
                 self.delete(f_hash)
                 count += 1
                 continue
+            if action == "add_tag":
+                doc["labels"] = merge_labels(doc.get("labels", []), [value])
+            elif action == "remove_tag":
+                doc["labels"] = [t for t in doc.get("labels", []) if t != value]
+            elif action == "set_rating":
+                doc["rating"] = value
+            elif action == "set_flag":
+                doc["flagged"] = value
 
             self._table.update(doc, q.file_hash == f_hash)
             count += 1
@@ -475,6 +557,7 @@ class TinyDBRepository:
             path=doc["file_info"]["path"],
             size_bytes=doc["file_info"]["size_bytes"],
             mime_type=doc["file_info"]["mime_type"],
+            modified_time=TinyDBRepository._parse_mtime(doc["file_info"].get("modified_time")),
         )
 
         dimensions = ImageDimensions(
@@ -496,6 +579,16 @@ class TinyDBRepository:
             flagged=doc.get("flagged", False),
             added_at=added_at,
         )
+
+    @staticmethod
+    def _parse_mtime(value: Optional[str]) -> Optional[datetime]:
+        """Parse a stored mtime; legacy documents have none, and a bad value reads as none."""
+        if not value:
+            return None
+        try:
+            return to_naive(datetime.fromisoformat(value))
+        except (ValueError, TypeError):
+            return None
 
     @staticmethod
     def _deserialize_exif(exif_doc: Dict[str, Any]) -> ImageExifData:

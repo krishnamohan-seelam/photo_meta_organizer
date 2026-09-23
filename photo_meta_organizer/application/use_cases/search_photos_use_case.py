@@ -6,6 +6,7 @@ import math
 from typing import Generic, Iterator, List, Optional, TypeVar
 
 from photo_meta_organizer.application.interfaces.image_repository import ImageMetadataRepository
+from photo_meta_organizer.domain.datetimes import to_naive
 from photo_meta_organizer.domain.models import ImageMetadata
 
 T = TypeVar("T")
@@ -43,6 +44,11 @@ class SearchPhotosQuery:
     sort_order: str = "asc"        # Choices: asc, desc
     page: int = 1
     page_size: int = 50
+
+    def __post_init__(self) -> None:
+        # Naive-local convention (ADR D3): bounds may arrive with tzinfo from the API.
+        self.date_start = to_naive(self.date_start)
+        self.date_end = to_naive(self.date_end)
 
 
 @dataclass
@@ -107,7 +113,7 @@ class SearchPhotosUseCase:
 
         # Date range filtering
         if query.date_start or query.date_end:
-            captured_at = exif.captured_at if exif else None
+            captured_at = to_naive(exif.captured_at) if exif else None
             if not captured_at:
                 return False
             if query.date_start and captured_at < query.date_start:
@@ -171,7 +177,7 @@ class SearchPhotosUseCase:
             elif sort_by == "file_name":
                 return record.file_info.name or ""
             else:  # captured_at
-                dt = record.exif.captured_at if record.exif else None
+                dt = to_naive(record.exif.captured_at) if record.exif else None
                 return dt if dt is not None else datetime.min
 
         return sorted(records, key=get_sort_key, reverse=reverse)

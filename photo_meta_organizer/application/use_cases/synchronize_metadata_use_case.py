@@ -90,6 +90,7 @@ class SynchronizeMetadataUseCase:
         reprocess_modified: bool = True,
         index_new: bool = True,
         dry_run: bool = False,
+        rehash: bool = False,
     ) -> SyncResult:
         """Run the incremental metadata synchronization pipeline.
 
@@ -109,6 +110,9 @@ class SynchronizeMetadataUseCase:
                        Default True.
             dry_run: If True, analyze and log but do NOT write any changes.
                      Useful for previewing what would happen. Default False.
+            rehash: If True, hash every file already in the DB instead of trusting
+                    its (size, mtime) fingerprint. Slow (reads the whole library),
+                    but the only way to catch an edit that kept both size and mtime.
 
         Returns:
             SyncResult summarising what was added, updated, deleted, and skipped.
@@ -118,8 +122,8 @@ class SynchronizeMetadataUseCase:
 
         logger.info(
             "Starting metadata sync [cleanup_deleted=%s, reprocess_modified=%s, "
-            "index_new=%s, dry_run=%s]",
-            cleanup_deleted, reprocess_modified, index_new, dry_run,
+            "index_new=%s, dry_run=%s, rehash=%s]",
+            cleanup_deleted, reprocess_modified, index_new, dry_run, rehash,
         )
 
         # ------------------------------------------------------------------
@@ -154,6 +158,7 @@ class SynchronizeMetadataUseCase:
         file_states = self._analyzer.analyze_changes(
             disk_files=disk_files,
             db_entries=db_entries,
+            force_rehash=rehash,
         )
 
         counts = {"NEW": 0, "MODIFIED": 0, "UNCHANGED": 0, "DELETED": 0}
@@ -165,12 +170,14 @@ class SynchronizeMetadataUseCase:
             counts["NEW"], counts["MODIFIED"], counts["UNCHANGED"], counts["DELETED"],
         )
         result.unchanged_files = counts["UNCHANGED"]
+        stale = sum(1 for fs in file_states if fs.refresh_fingerprint)
 
         if dry_run:
             logger.info("Dry-run mode: no changes will be written")
             result.new_files = counts["NEW"] if index_new else 0
             result.modified_files = counts["MODIFIED"] if reprocess_modified else 0
             result.deleted_entries = counts["DELETED"] if cleanup_deleted else 0
+            result.fingerprints_refreshed = stale
             result.duration_seconds = time.monotonic() - start_time
             return result
 
@@ -188,6 +195,7 @@ class SynchronizeMetadataUseCase:
         result.new_files = sync_result.new_files
         result.modified_files = sync_result.modified_files
         result.deleted_entries = sync_result.deleted_entries
+        result.fingerprints_refreshed = sync_result.fingerprints_refreshed
         result.errors.extend(sync_result.errors)
 
         result.duration_seconds = time.monotonic() - start_time

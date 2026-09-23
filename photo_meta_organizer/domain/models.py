@@ -12,6 +12,10 @@ The EXIF model uses a three-tier architecture:
 - Tier 1 (Universal): Fields present in >95% of images
 - Tier 2 (Common): Fields with stable semantics across camera types
 - Tier 3 (Camera-Specific): Everything else via raw_tags dict
+
+Datetimes: ``ImageExifData.captured_at`` is a *naive local* wall-clock time, exactly as
+the camera recorded it (EXIF has no timezone). Values with tzinfo are reduced to this
+convention with ``domain.datetimes.to_naive`` at the boundaries. See ADR D3.
 """
 
 from dataclasses import dataclass, field
@@ -58,12 +62,16 @@ class ImageFileInfo:
         path: Full file path or storage key.
         size_bytes: File size in bytes.
         mime_type: MIME type (e.g., "image/jpeg").
+        modified_time: File mtime (naive local time) when the content was hashed.
+            ``None`` for records written before PMO-06; sync treats those as
+            "size is the only fingerprint" and backfills the value.
     """
 
     name: str
     path: str
     size_bytes: int
     mime_type: str
+    modified_time: Optional[datetime] = None
 
 
 @dataclass(frozen=True)
@@ -263,6 +271,9 @@ class FileState:
         size_bytes: Current size in bytes (None for DELETED files).
         last_modified: Current mtime (None for DELETED files).
         previous_hash: Former DB hash, set only for MODIFIED files.
+        refresh_fingerprint: UNCHANGED files only: the stored size/mtime is missing or stale
+            (legacy record, a ``touch``), so sync should record ``size_bytes`` and
+            ``last_modified`` without re-extracting.
     """
 
     file_path: str
@@ -271,6 +282,7 @@ class FileState:
     size_bytes: Optional[int] = None
     last_modified: Optional[datetime] = None
     previous_hash: Optional[str] = None  # Only set for MODIFIED
+    refresh_fingerprint: bool = False  # Only meaningful for UNCHANGED
 
 
 @dataclass
@@ -282,6 +294,8 @@ class SyncResult:
         modified_files: Number of modified files updated in DB.
         deleted_entries: Number of orphaned DB entries removed.
         unchanged_files: Number of files skipped (identical fingerprint).
+        fingerprints_refreshed: UNCHANGED files whose stored size/mtime was
+            missing (legacy record) or stale (``touch``) and was brought up to date.
         errors: List of error messages for files that failed processing.
         duration_seconds: Wall-clock time for the full sync run.
     """
@@ -290,6 +304,7 @@ class SyncResult:
     modified_files: int = 0
     deleted_entries: int = 0
     unchanged_files: int = 0
+    fingerprints_refreshed: int = 0
     errors: List[str] = field(default_factory=list)
     duration_seconds: float = 0.0
 

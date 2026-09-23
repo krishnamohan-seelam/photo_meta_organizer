@@ -1,7 +1,8 @@
 import React from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
 import type { ViewMode } from '../../stores/useUiStore'
-import { indexFolderApi } from '../../api/client'
+import { useScanFolder } from '../../hooks/useScanFolder'
 import {
   Camera,
   Search,
@@ -20,44 +21,8 @@ import {
 } from 'lucide-react'
 
 export const AppHeader: React.FC = () => {
-  const [isIndexing, setIsIndexing] = React.useState(false)
-  const {
-    theme,
-    toggleTheme,
-    activeView,
-    setActiveView,
-    lightsOut,
-    toggleLightsOut,
-    sidebarOpen,
-    toggleSidebar,
-    inspectorOpen,
-    toggleInspector,
-    setCommandPaletteOpen,
-    showToast,
-  } = useUiStore()
-
-  const handleScanFolder = async () => {
-    let folderPath: string | null = null
-    if (window.electronAPI?.openDirectory) {
-      folderPath = await window.electronAPI.openDirectory()
-    } else {
-      folderPath = window.prompt('Enter absolute folder path to index:')
-    }
-
-    if (!folderPath) return
-
-    try {
-      setIsIndexing(true)
-      showToast(`Indexing folder: ${folderPath}...`)
-      const res = await indexFolderApi(folderPath)
-      showToast(res.message)
-      window.dispatchEvent(new CustomEvent('photos-updated'))
-    } catch (err: any) {
-      showToast(`Error indexing folder: ${err.message}`)
-    } finally {
-      setIsIndexing(false)
-    }
-  }
+  const { scan: handleScanFolder, isScanning: isIndexing } = useScanFolder()
+  const { theme, toggleTheme, activeView, setActiveView, lightsOut, toggleLightsOut, sidebarOpen, toggleSidebar, inspectorOpen, toggleInspector, setCommandPaletteOpen, showToast } = useUiStore(useShallow((s) => ({ theme: s.theme, toggleTheme: s.toggleTheme, activeView: s.activeView, setActiveView: s.setActiveView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, sidebarOpen: s.sidebarOpen, toggleSidebar: s.toggleSidebar, inspectorOpen: s.inspectorOpen, toggleInspector: s.toggleInspector, setCommandPaletteOpen: s.setCommandPaletteOpen, showToast: s.showToast })))
 
   const views: { key: ViewMode; label: string; icon: React.ReactNode }[] = [
     { key: 'studio', label: 'Studio Grid', icon: <LayoutGrid size={15} /> },
@@ -68,7 +33,8 @@ export const AppHeader: React.FC = () => {
   ]
 
   const handleExportJson = () => {
-    showToast('Exporting metadata JSON package...')
+    // Not built yet (PMO-30): say so rather than announce an export that never happens.
+    showToast('Metadata export is not available yet', 'error')
   }
 
   return (

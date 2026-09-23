@@ -1,18 +1,19 @@
 import React, { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useUiStore } from '../../stores/useUiStore'
 import type { PhotoMetadata } from '../../types/metadata'
-import { batchUpdatePhotosApi } from '../../api/client'
+import { useCuration } from '../../hooks/usePhotoMutations'
 import { Tag, Flag, Download, X } from 'lucide-react'
 
 interface SelectionDockProps {
   photos: PhotoMetadata[]
-  onRefresh?: () => void
 }
 
-export const SelectionDock: React.FC<SelectionDockProps> = ({ photos, onRefresh }) => {
-  const { selectedHashes, clearSelection } = useSelectionStore()
-  const { showToast } = useUiStore()
+export const SelectionDock: React.FC<SelectionDockProps> = ({ photos }) => {
+  const { selectedHashes, clearSelection } = useSelectionStore(useShallow((s) => ({ selectedHashes: s.selectedHashes, clearSelection: s.clearSelection })))
+  const { showToast } = useUiStore(useShallow((s) => ({ showToast: s.showToast })))
+  const { batchPhotos } = useCuration()
   const [tagModalOpen, setTagModalOpen] = useState(false)
   const [newTag, setNewTag] = useState('')
 
@@ -25,43 +26,27 @@ export const SelectionDock: React.FC<SelectionDockProps> = ({ photos, onRefresh 
     .reduce((acc, p) => acc + p.file_info.size_bytes, 0)
 
   const handleBatchTag = async () => {
-    if (!newTag.trim()) return
-    try {
-      await batchUpdatePhotosApi({
-        photo_hashes: Array.from(selectedHashes),
-        action: 'add_tag',
-        value: newTag.trim(),
-      })
-      showToast(`Added tag #${newTag} to ${selectedCount} photos`)
+    const tag = newTag.trim()
+    if (!tag) return
+    const saved = await batchPhotos(
+      { photo_hashes: Array.from(selectedHashes), action: 'add_tag', value: tag },
+      `Added tag #${tag} to ${selectedCount} photos`
+    )
+    // Keep the dialog (and what was typed) open on failure so the user can retry.
+    if (saved) {
       setTagModalOpen(false)
       setNewTag('')
-      if (onRefresh) onRefresh()
-    } catch {
-      showToast(`Added tag #${newTag} to ${selectedCount} photos (local)`)
-      setTagModalOpen(false)
     }
   }
 
-  const handleBatchFlag = async () => {
-    try {
-      await batchUpdatePhotosApi({
-        photo_hashes: Array.from(selectedHashes),
-        action: 'set_flag',
-        value: true,
-      })
-      showToast(`Flagged ${selectedCount} photos as Picks`)
-      if (onRefresh) onRefresh()
-    } catch {
-      showToast(`Flagged ${selectedCount} photos as Picks (local)`)
-    }
-  }
+  const handleBatchFlag = () =>
+    batchPhotos(
+      { photo_hashes: Array.from(selectedHashes), action: 'set_flag', value: true },
+      `Flagged ${selectedCount} photos as Picks`
+    )
 
-  const handleExportZip = () => {
-    showToast(`Packing ${selectedCount} photos into ZIP bundle...`)
-    setTimeout(() => {
-      showToast(`Export complete: ${selectedCount} items downloaded`)
-    }, 1500)
-  }
+  // ZIP export is not built yet (tracked as PMO-30). Say so instead of pretending a download happened.
+  const handleExportZip = () => showToast('ZIP export is not available yet', 'error')
 
   return (
     <>

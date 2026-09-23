@@ -10,7 +10,71 @@ import type {
 
 const BASE_URL = '/api'
 
-export async function fetchPhotos(
+/** An API call that failed: either the server said no (`status` set) or it could not be reached (`status` null). */
+export class ApiError extends Error {
+  readonly status: number | null
+
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+/** FastAPI sends `{detail: "text"}`, or for a 422 `{detail: [{loc, msg, type}, ...]}`. */
+function detailToMessage(detail: unknown): string | null {
+  if (typeof detail === 'string') return detail || null
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((d) => {
+        if (typeof d === 'string') return d
+        if (d && typeof d === 'object' && 'msg' in d) {
+          const loc = Array.isArray((d as { loc?: unknown[] }).loc)
+            ? (d as { loc: unknown[] }).loc.filter((p) => p !== 'body').join('.')
+            : ''
+          return loc ? `${loc}: ${(d as { msg: string }).msg}` : String((d as { msg: string }).msg)
+        }
+        return null
+      })
+      .filter((m): m is string => Boolean(m))
+    return parts.length ? parts.join('; ') : null
+  }
+  return null
+}
+
+async function errorFromResponse(res: Response, action: string): Promise<ApiError> {
+  let detail: string | null = null
+  try {
+    detail = detailToMessage((await res.json())?.detail)
+  } catch {
+    // Not JSON (a proxy error page, an empty body): fall back to the status line.
+  }
+  return new ApiError(detail ?? `${action} failed (${res.status} ${res.statusText})`.trim(), res.status)
+}
+
+/** `fetch` plus one error convention for every endpoint: throws `ApiError`, with the server's `detail` if it sent one. */
+async function request<T>(path: string, action: string, init?: RequestInit): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, init)
+  } catch {
+    throw new ApiError('Cannot reach the backend. Is it running?', null)
+  }
+  if (!res.ok) throw await errorFromResponse(res, action)
+  return res.json() as Promise<T>
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+}
+
+/** Text safe to show a user for anything a call might have thrown. */
+export function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message
+  return 'Something went wrong'
+}
+
+export function fetchPhotos(
   page: number = 1,
   pageSize: number = 50,
   sortBy: string = 'captured_at',
@@ -22,65 +86,39 @@ export async function fetchPhotos(
     sort_by: sortBy,
     sort_order: sortOrder,
   })
-  const res = await fetch(`${BASE_URL}/photos?${params}`)
-  if (!res.ok) throw new Error(`Failed to list photos: ${res.statusText}`)
-  return res.json()
+  return request(`/photos?${params}`, 'Loading photos')
 }
 
-export async function searchPhotosApi(request: SearchRequest): Promise<PaginatedPhotosResponse> {
-  const res = await fetch(`${BASE_URL}/search`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  })
-  if (!res.ok) throw new Error(`Search failed: ${res.statusText}`)
-  return res.json()
+export function searchPhotosApi(body: SearchRequest): Promise<PaginatedPhotosResponse> {
+  return request('/search', 'Search', jsonInit('POST', body))
 }
 
-export async function getPhotoByHash(fileHash: string): Promise<PhotoMetadata> {
-  const res = await fetch(`${BASE_URL}/photos/${fileHash}`)
-  if (!res.ok) throw new Error(`Photo ${fileHash} not found`)
-  return res.json()
+export function getPhotoByHash(fileHash: string): Promise<PhotoMetadata> {
+  return request(`/photos/${fileHash}`, 'Loading the photo')
 }
 
-export async function patchPhotoApi(fileHash: string, patch: PatchPhotoRequest): Promise<PhotoMetadata> {
-  const res = await fetch(`${BASE_URL}/photos/${fileHash}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
-  })
-  if (!res.ok) throw new Error(`Failed to update photo: ${res.statusText}`)
-  return res.json()
+export function patchPhotoApi(fileHash: string, patch: PatchPhotoRequest): Promise<PhotoMetadata> {
+  return request(`/photos/${fileHash}`, 'Saving the photo', jsonInit('PATCH', patch))
 }
 
-export async function batchUpdatePhotosApi(request: BatchPhotoRequest): Promise<BatchPhotoResponse> {
-  const res = await fetch(`${BASE_URL}/photos/batch`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  })
-  if (!res.ok) throw new Error(`Batch update failed: ${res.statusText}`)
-  return res.json()
+export function batchUpdatePhotosApi(body: BatchPhotoRequest): Promise<BatchPhotoResponse> {
+  return request('/photos/batch', 'Batch update', jsonInit('POST', body))
 }
 
-export async function fetchCollectionsApi(): Promise<Collection[]> {
-  const res = await fetch(`${BASE_URL}/collections`)
-  if (!res.ok) throw new Error(`Failed to fetch collections: ${res.statusText}`)
-  return res.json()
+export function fetchCollectionsApi(): Promise<Collection[]> {
+  return request('/collections', 'Loading collections')
 }
 
-export async function saveCollectionApi(
+export function saveCollectionApi(
   name: string,
   photoHashes: string[],
   description: string = ''
 ): Promise<Collection> {
-  const res = await fetch(`${BASE_URL}/collections`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, photo_hashes: photoHashes, description }),
-  })
-  if (!res.ok) throw new Error(`Failed to save collection: ${res.statusText}`)
-  return res.json()
+  return request(
+    '/collections',
+    'Saving the collection',
+    jsonInit('POST', { name, photo_hashes: photoHashes, description })
+  )
 }
 
 export function getThumbnailUrl(fileHash: string, width: number = 320, height: number = 320): string {
@@ -97,19 +135,10 @@ export interface IndexFolderResponse {
   message: string
 }
 
-export async function indexFolderApi(
-  folderPath: string,
-  numWorkers: number = 4
-): Promise<IndexFolderResponse> {
-  const res = await fetch(`${BASE_URL}/index`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder_path: folderPath, num_workers: numWorkers }),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || `Failed to index folder: ${res.statusText}`)
-  }
-  return res.json()
+export function indexFolderApi(folderPath: string, numWorkers: number = 4): Promise<IndexFolderResponse> {
+  return request(
+    '/index',
+    'Indexing the folder',
+    jsonInit('POST', { folder_path: folderPath, num_workers: numWorkers })
+  )
 }
-

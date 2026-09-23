@@ -11,7 +11,8 @@ The repository pattern provides:
 - Query capabilities for metadata
 """
 
-from typing import List, Optional, Protocol, runtime_checkable
+from datetime import datetime
+from typing import List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 from photo_meta_organizer.domain.models import ImageMetadata
 
@@ -47,6 +48,23 @@ class ImageMetadataRepository(Protocol):
 
         Note:
             Implementations should handle upsert semantics (update if exists).
+        """
+        ...
+
+    def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
+        """Swap the record stored under ``old_hash`` for ``metadata`` (one atomic step).
+
+        Used when a file's content changed, so its identity (the hash) changed too.
+        If ``metadata.file_hash`` already exists the two records collapse into one.
+        An unknown ``old_hash`` behaves like ``save``.
+        """
+        ...
+
+    def refresh_fingerprints(self, updates: Sequence[Tuple[str, int, datetime]]) -> int:
+        """Record ``(file_hash, size_bytes, modified_time)`` on existing records.
+
+        Sync bookkeeping only; nothing else on the record changes. Returns the number
+        of records updated (unknown hashes are skipped).
         """
         ...
 

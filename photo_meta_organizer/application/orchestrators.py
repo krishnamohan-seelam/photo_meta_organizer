@@ -17,6 +17,8 @@ Example:
 """
 
 import logging
+from dataclasses import replace
+from datetime import datetime
 from io import BytesIO
 from typing import List
 
@@ -30,6 +32,7 @@ from photo_meta_organizer.application.interfaces.image_retriever import (
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
+from photo_meta_organizer.domain.curation import carry_over_curation
 from photo_meta_organizer.domain.models import FileState, ImageMetadata, SyncResult
 
 
@@ -127,10 +130,14 @@ class SyncOrchestrator:
     Receives a pre-computed list of FileState objects (from MetadataStateAnalyzer)
     and dispatches each one to the correct action:
 
-    - NEW      → extract metadata + repository.save()
-    - MODIFIED → extract metadata + repository.save() (upsert)
+    - NEW      → extract metadata + repository.save(), keeping the curation of any
+                 record that already has the same content
+    - MODIFIED → extract metadata + repository.replace(previous_hash, ...): the old
+                 record is swapped out (not left behind as a duplicate of the same
+                 path) and the user's rating/flag/labels carry over
     - DELETED  → repository.delete_by_path() / repository.delete()
-    - UNCHANGED → skip
+    - UNCHANGED → skip, except that a missing or stale (size, mtime) fingerprint is
+                 recorded via repository.refresh_fingerprints() in one batch
 
     Mirrors the structure of ExtractorOrchestrator but is change-aware,
     so only files that actually changed are processed.
@@ -180,10 +187,15 @@ class SyncOrchestrator:
             SyncResult with counters for each action taken.
         """
         result = SyncResult()
+        stale_fingerprints: list[tuple[str, int, datetime]] = []
 
         for fs in file_states:
             if fs.state == "UNCHANGED":
                 result.unchanged_files += 1
+                if fs.refresh_fingerprint and fs.file_hash and fs.last_modified:
+                    stale_fingerprints.append(
+                        (fs.file_hash, fs.size_bytes or 0, fs.last_modified)
+                    )
                 continue
 
             if fs.state == "DELETED":
@@ -197,6 +209,7 @@ class SyncOrchestrator:
             elif fs.state == "MODIFIED" and reprocess_modified:
                 self._extract_and_save(fs, result)
 
+        self._refresh_fingerprints(stale_fingerprints, result)
         return result
 
     # ------------------------------------------------------------------
@@ -227,6 +240,43 @@ class SyncOrchestrator:
             logger.error(msg)
             result.errors.append(msg)
 
+    def _refresh_fingerprints(
+        self, updates: list[tuple[str, int, datetime]], result: SyncResult
+    ) -> None:
+        """Record the current (size, mtime) of files whose content is known to be unchanged."""
+        if not updates:
+            return
+        try:
+            result.fingerprints_refreshed = self._repository.refresh_fingerprints(updates)
+        except Exception as exc:  # noqa: BLE001
+            msg = f"fingerprint refresh error: {exc}"
+            logger.error(msg)
+            result.errors.append(msg)
+
+    def _persist(self, fs: FileState, metadata: ImageMetadata) -> None:
+        """Save freshly extracted metadata without losing the user's curation.
+
+        A NEW file may duplicate content that is already curated; a MODIFIED file
+        replaces its own previous record (and may collapse into another one).
+        """
+        if fs.last_modified is not None:
+            # Stamp the mtime the analyzer saw, so the next scan compares like with like.
+            metadata = replace(
+                metadata, file_info=replace(metadata.file_info, modified_time=fs.last_modified)
+            )
+
+        previous = (
+            self._repository.get_by_filehash(fs.previous_hash) if fs.previous_hash else None
+        )
+        same_content = self._repository.get_by_filehash(metadata.file_hash)
+        sources = [r for r in (previous, same_content) if r is not None]
+        metadata = carry_over_curation(metadata, *sources)
+
+        if fs.previous_hash:
+            self._repository.replace(fs.previous_hash, metadata)
+        else:
+            self._repository.save(metadata)
+
     def _extract_and_save(self, fs: FileState, result: SyncResult) -> None:
         """Extract metadata for a NEW or MODIFIED file and persist it.
 
@@ -247,7 +297,7 @@ class SyncOrchestrator:
             )
             with self._retriever.get_file_stream(file_handle) as stream:
                 metadata = self._extractor.extract(file_handle, stream)
-            self._repository.save(metadata)
+            self._persist(fs, metadata)
             if fs.state == "NEW":
                 result.new_files += 1
                 logger.debug("Indexed new file: %s", fs.file_path)

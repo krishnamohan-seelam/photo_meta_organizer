@@ -1,7 +1,10 @@
 import React, { useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
-import { getThumbnailUrl, patchPhotoApi } from '../../api/client'
+import { getThumbnailUrl } from '../../api/client'
+import { useCuration } from '../../hooks/usePhotoMutations'
+import { swapToPlaceholder } from '../../utils/placeholder'
 import { X, ChevronLeft, ChevronRight, Flag } from 'lucide-react'
 
 interface LightboxModalProps {
@@ -9,7 +12,8 @@ interface LightboxModalProps {
 }
 
 export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
-  const { lightboxIndex, setLightboxIndex, showToast } = useUiStore()
+  const { lightboxIndex, setLightboxIndex } = useUiStore(useShallow((s) => ({ lightboxIndex: s.lightboxIndex, setLightboxIndex: s.setLightboxIndex })))
+  const { patchPhoto } = useCuration()
 
   const currentPhoto = lightboxIndex !== null && photos[lightboxIndex] ? photos[lightboxIndex] : null
 
@@ -24,22 +28,18 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
       } else if (e.key === 'ArrowLeft') {
         setLightboxIndex((lightboxIndex - 1 + photos.length) % photos.length)
       } else if (e.key.toLowerCase() === 'p') {
-        // Toggle Flag Pick
+        // Toggle Flag Pick: the cache updates at once and rolls back with an error toast if the save fails
         const nextFlag = !currentPhoto.flagged
-        patchPhotoApi(currentPhoto.file_hash, { flagged: nextFlag })
-        currentPhoto.flagged = nextFlag
-        showToast(nextFlag ? '🚩 Flagged as Pick' : 'Unflagged photo')
+        void patchPhoto(currentPhoto.file_hash, { flagged: nextFlag }, nextFlag ? '🚩 Flagged as Pick' : 'Unflagged photo')
       } else if (['1', '2', '3', '4', '5'].includes(e.key)) {
         const rating = parseInt(e.key)
-        patchPhotoApi(currentPhoto.file_hash, { rating })
-        currentPhoto.rating = rating
-        showToast(`Rated ${rating} ★`)
+        void patchPhoto(currentPhoto.file_hash, { rating }, `Rated ${rating} ★`)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [lightboxIndex, currentPhoto, photos, setLightboxIndex, showToast])
+  }, [lightboxIndex, currentPhoto, photos, setLightboxIndex, patchPhoto])
 
   if (lightboxIndex === null || !currentPhoto) return null
 
@@ -85,9 +85,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
             className="btn btn-secondary"
             onClick={() => {
               const next = !currentPhoto.flagged
-              currentPhoto.flagged = next
-              patchPhotoApi(currentPhoto.file_hash, { flagged: next })
-              showToast(next ? '🚩 Flagged as Pick' : 'Unflagged')
+              void patchPhoto(currentPhoto.file_hash, { flagged: next }, next ? '🚩 Flagged as Pick' : 'Unflagged photo')
             }}
             style={{ color: currentPhoto.flagged ? 'var(--accent-warning)' : '#fff' }}
           >
@@ -149,10 +147,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
             borderRadius: 'var(--radius-md)',
             boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
           }}
-          onError={(e) => {
-            e.currentTarget.src =
-              'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=1200&auto=format&fit=crop&q=80'
-          }}
+          onError={swapToPlaceholder}
         />
 
         {/* Right Chevron */}
@@ -235,10 +230,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
               border: idx === lightboxIndex ? '2px solid var(--accent-primary)' : '1px solid transparent',
               transition: 'all 0.15s ease',
             }}
-            onError={(e) => {
-              e.currentTarget.src =
-                'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=100&auto=format&fit=crop&q=80'
-            }}
+            onError={swapToPlaceholder}
           />
         ))}
       </div>

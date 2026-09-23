@@ -219,3 +219,205 @@ class TestSyncIntegration:
         """total_changes should equal sum of new + modified + deleted."""
         result = use_case.execute(index_new=True)
         assert result.total_changes == result.new_files + result.modified_files + result.deleted_entries
+
+
+# ---------------------------------------------------------------------------
+# PMO-05: MODIFIED replaces the old record and keeps the user's curation (B-01)
+# ---------------------------------------------------------------------------
+
+
+def _bump_mtime(path: Path, seconds: float = 60.0) -> None:
+    """Move a file's mtime without touching its bytes."""
+    import os
+
+    st = path.stat()
+    os.utime(path, (st.st_atime + seconds, st.st_mtime + seconds))
+
+
+def _sha(data: bytes) -> str:
+    import hashlib
+
+    return hashlib.sha256(data).hexdigest()
+
+
+class CountingExtractor(FakeExtractor):
+    def __init__(self) -> None:
+        self.extracted: list[str] = []
+
+    def extract(self, file_handle, stream):
+        self.extracted.append(file_handle.filename)
+        return super().extract(file_handle, stream)
+
+
+@pytest.mark.integration
+class TestSyncReplacesModifiedRecord:
+    def _curate(self, repository, photo_dir, name="photo2.jpg"):
+        record = repository.get_by_path(str((photo_dir / name).resolve()))
+        assert record is not None
+        repository.update_metadata(
+            record.file_hash, {"rating": 5, "flagged": True, "labels": ["keeper", "trip"]}
+        )
+        return record.file_hash
+
+    def test_edit_that_changes_content_and_size_leaves_one_record(
+        self, use_case, repository, photo_dir
+    ):
+        use_case.execute()
+        old_hash = self._curate(repository, photo_dir)
+
+        (photo_dir / "photo2.jpg").write_bytes(b"completely_different_content_here")
+        result = use_case.execute()
+
+        assert result.modified_files == 1
+        assert repository.count() == 3  # not 4: the old record is gone
+        assert repository.get_by_filehash(old_hash) is None
+        assert sum(1 for r in repository.list_all() if r.file_info.name == "photo2.jpg") == 1
+
+    def test_rating_flag_and_labels_survive_the_edit(self, use_case, repository, photo_dir):
+        use_case.execute()
+        self._curate(repository, photo_dir)
+
+        (photo_dir / "photo2.jpg").write_bytes(b"completely_different_content_here")
+        use_case.execute()
+
+        edited = repository.get_by_filehash(_sha(b"completely_different_content_here"))
+        assert (edited.rating, edited.flagged, edited.labels) == (5, True, ["keeper", "trip"])
+
+    def test_edit_that_makes_it_identical_to_another_photo_keeps_both_curations(
+        self, use_case, repository, photo_dir
+    ):
+        use_case.execute()
+        self._curate(repository, photo_dir, "photo2.jpg")
+        other = repository.get_by_filehash(_sha(b"photo3_content"))
+        repository.update_metadata(other.file_hash, {"add_tags": ["from-photo3"]})
+
+        (photo_dir / "photo2.jpg").write_bytes(b"photo3_content")
+        use_case.execute()
+
+        assert repository.count() == 2
+        merged = repository.get_by_filehash(_sha(b"photo3_content"))
+        assert merged.rating == 5
+        assert set(merged.labels) == {"keeper", "trip", "from-photo3"}
+
+    def test_new_copy_of_a_curated_photo_does_not_reset_its_curation(
+        self, use_case, repository, photo_dir
+    ):
+        use_case.execute()
+        self._curate(repository, photo_dir, "photo1.jpg")
+
+        (photo_dir / "photo1_copy.jpg").write_bytes(b"photo1_content")
+        use_case.execute()
+
+        assert repository.get_by_filehash(_sha(b"photo1_content")).rating == 5
+
+
+# ---------------------------------------------------------------------------
+# PMO-06: (size, mtime) fingerprint, backfill and --rehash (B-02)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestSyncMtimeFingerprint:
+    def _use_case(self, retriever, repository, extractor=None):
+        extractor = extractor or CountingExtractor()
+        return SynchronizeMetadataUseCase(
+            retriever=retriever, extractor=extractor, repository=repository
+        ), extractor
+
+    def test_same_size_edit_is_detected_once_the_mtime_moves(
+        self, retriever, repository, photo_dir
+    ):
+        uc, extractor = self._use_case(retriever, repository)
+        uc.execute()
+        target = photo_dir / "photo1.jpg"
+        edited = b"X" * len(target.read_bytes())  # same size, different bytes
+        target.write_bytes(edited)
+        _bump_mtime(target)
+
+        result = uc.execute()
+
+        assert result.modified_files == 1
+        assert repository.get_by_filehash(_sha(edited)) is not None
+        assert repository.count() == 3
+
+    def test_unchanged_files_are_not_rehashed_or_reextracted(
+        self, retriever, repository, photo_dir
+    ):
+        uc, extractor = self._use_case(retriever, repository)
+        uc.execute()
+        extractor.extracted.clear()
+
+        result = uc.execute()
+
+        assert result.unchanged_files == 3
+        assert result.fingerprints_refreshed == 0
+        assert extractor.extracted == []
+
+    def test_touch_records_the_new_mtime_without_reextracting(
+        self, retriever, repository, photo_dir
+    ):
+        uc, extractor = self._use_case(retriever, repository)
+        uc.execute()
+        extractor.extracted.clear()
+        target = photo_dir / "photo1.jpg"
+        _bump_mtime(target)
+
+        first = uc.execute()
+        second = uc.execute()
+
+        assert first.unchanged_files == 3 and first.modified_files == 0
+        assert first.fingerprints_refreshed == 1
+        assert extractor.extracted == []
+        assert second.fingerprints_refreshed == 0  # caught up
+
+    def test_legacy_records_are_backfilled_not_rehashed(self, retriever, repository, photo_dir):
+        uc, extractor = self._use_case(retriever, repository)
+        uc.execute()
+        for doc in repository._table.all():  # simulate a pre-PMO-06 database
+            doc["file_info"]["modified_time"] = None
+            repository._table.update(doc, doc_ids=[doc.doc_id])
+        repository.rebuild_indexes()
+        extractor.extracted.clear()
+
+        first = uc.execute()
+        second = uc.execute()
+
+        assert first.unchanged_files == 3 and first.modified_files == 0
+        assert first.fingerprints_refreshed == 3
+        assert extractor.extracted == []
+        assert second.fingerprints_refreshed == 0
+        assert all(r.file_info.modified_time is not None for r in repository.list_all())
+
+    def test_dry_run_reports_the_backfill_but_writes_nothing(
+        self, retriever, repository, photo_dir
+    ):
+        uc, _ = self._use_case(retriever, repository)
+        uc.execute()
+        for doc in repository._table.all():
+            doc["file_info"]["modified_time"] = None
+            repository._table.update(doc, doc_ids=[doc.doc_id])
+        repository.rebuild_indexes()
+
+        result = uc.execute(dry_run=True)
+
+        assert result.fingerprints_refreshed == 3
+        assert all(r.file_info.modified_time is None for r in repository.list_all())
+
+    def test_rehash_catches_an_edit_that_kept_size_and_mtime(
+        self, retriever, repository, photo_dir
+    ):
+        import os
+
+        uc, _ = self._use_case(retriever, repository)
+        uc.execute()
+        target = photo_dir / "photo1.jpg"
+        stat = target.stat()
+        edited = b"Y" * len(target.read_bytes())
+        target.write_bytes(edited)
+        os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns))  # forge the old mtime
+
+        assert uc.execute().modified_files == 0  # the cheap check cannot see it
+        result = uc.execute(rehash=True)
+
+        assert result.modified_files == 1
+        assert repository.get_by_filehash(_sha(edited)) is not None

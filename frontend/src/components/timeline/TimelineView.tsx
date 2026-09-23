@@ -1,7 +1,9 @@
 import React from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { getThumbnailUrl } from '../../api/client'
+import { swapToPlaceholder } from '../../utils/placeholder'
 import { Calendar } from 'lucide-react'
 
 interface TimelineViewProps {
@@ -9,7 +11,7 @@ interface TimelineViewProps {
 }
 
 export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
-  const { filterTimeframe, setTimeframeFilter, setLightboxIndex } = useUiStore()
+  const { filterTimeframe, setTimeframeFilter, setLightboxIndex } = useUiStore(useShallow((s) => ({ filterTimeframe: s.filterTimeframe, setTimeframeFilter: s.setTimeframeFilter, setLightboxIndex: s.setLightboxIndex })))
 
   // Group photos by Month / Year
   const groups: Record<string, PhotoMetadata[]> = {}
@@ -92,10 +94,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
                     alt={item.file_info.name}
                     loading="lazy"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      e.currentTarget.src =
-                        'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80'
-                    }}
+                    onError={swapToPlaceholder}
                   />
                   <div
                     style={{
@@ -117,7 +116,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
                       {item.file_info.name}
                     </div>
                     <div style={{ fontSize: '0.7rem', color: '#e2e8f0' }}>
-                      {item.exif.camera_make} • {'★'.repeat(item.rating || 4)}
+                      {item.exif.camera_make}{item.rating ? ` • ${'★'.repeat(item.rating)}` : ''}
                     </div>
                   </div>
                 </div>

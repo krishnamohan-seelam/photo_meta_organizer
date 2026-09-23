@@ -1,9 +1,16 @@
 """Pydantic schemas for API request/response models."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from photo_meta_organizer.domain.curation import (
+    MAX_RATING,
+    MIN_RATING,
+    validate_rating,
+    validate_tag,
+)
 
 
 class GpsCoordinatesSchema(BaseModel):
@@ -99,7 +106,7 @@ class SearchRequest(BaseModel):
 class PatchPhotoRequest(BaseModel):
     """Request schema for updating metadata of a single photo."""
 
-    rating: Optional[int] = Field(default=None, ge=1, le=5)
+    rating: Optional[int] = Field(default=None, ge=MIN_RATING, le=MAX_RATING)
     flagged: Optional[bool] = None
     labels: Optional[List[str]] = None
     add_tags: Optional[List[str]] = None
@@ -107,17 +114,36 @@ class PatchPhotoRequest(BaseModel):
 
 
 class BatchPhotoRequest(BaseModel):
-    """Request schema for atomic batch operations across photos."""
+    """Request schema for atomic batch operations across photos.
 
-    photo_hashes: List[str]
-    action: str = Field(description="Action to perform: add_tag, remove_tag, set_rating, set_flag, delete")
+    ``value`` is validated against ``action``: tags need a non-empty string,
+    ``set_rating`` an int 1-5 (or null to clear), ``set_flag`` a real boolean,
+    and ``delete`` takes no value.
+    """
+
+    photo_hashes: List[str] = Field(min_length=1)
+    action: Literal["add_tag", "remove_tag", "set_rating", "set_flag", "delete"] = Field(
+        description="Action to perform: add_tag, remove_tag, set_rating, set_flag, delete"
+    )
     value: Optional[Any] = None
+
+    @model_validator(mode="after")
+    def _check_value_for_action(self) -> "BatchPhotoRequest":
+        if self.action in ("add_tag", "remove_tag"):
+            self.value = validate_tag(self.value)
+        elif self.action == "set_rating":
+            validate_rating(self.value)
+        elif self.action == "set_flag":
+            if not isinstance(self.value, bool):
+                raise ValueError(f"set_flag requires a boolean value; got {self.value!r}")
+        return self
 
 
 class BatchPhotoResponse(BaseModel):
     """Response schema for batch operations."""
 
     updated_count: int
+    deleted_count: int = 0
     action: str
     message: str
 

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { MapPin, Sliders } from 'lucide-react'
@@ -8,7 +9,7 @@ interface MapExplorerViewProps {
 }
 
 export const MapExplorerView: React.FC<MapExplorerViewProps> = ({ photos }) => {
-  const { radiusKm, setRadiusKm, setInspectedPhoto, setLightboxIndex, showToast } = useUiStore()
+  const { radiusKm, setRadiusKm, setInspectedHash, setLightboxIndex, showToast } = useUiStore(useShallow((s) => ({ radiusKm: s.radiusKm, setRadiusKm: s.setRadiusKm, setInspectedHash: s.setInspectedHash, setLightboxIndex: s.setLightboxIndex, showToast: s.showToast })))
 
   // Find photos with GPS coordinates
   const geoPhotos = photos.filter((p) => p.exif.location && p.exif.location.latitude)
@@ -99,7 +100,7 @@ export const MapExplorerView: React.FC<MapExplorerViewProps> = ({ photos }) => {
               showToast(`Focused on ${c.city} (${c.count} photos within ${radiusKm}km)`)
               const matched = geoPhotos[0]
               if (matched) {
-                setInspectedPhoto(matched)
+                setInspectedHash(matched.file_hash)
                 setLightboxIndex(0)
               }
             }}

@@ -19,6 +19,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
+from photo_meta_organizer.application.composition import build_local_retriever
 from photo_meta_organizer.api.schemas import (
     BatchPhotoRequest,
     BatchPhotoResponse,
@@ -44,15 +45,13 @@ from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,
 )
+from photo_meta_organizer.domain.curation import is_valid_rating
 from photo_meta_organizer.domain.models import ImageMetadata
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
 )
 from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
     TinyDBRepository,
-)
-from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
-    LocalDiskRetriever,
 )
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
@@ -107,7 +106,8 @@ def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
             raw_tags=dict(exif.raw_tags) if exif.raw_tags else {},
         ),
         labels=list(metadata.labels),
-        rating=metadata.rating,
+        # A rating damaged on disk by an older version must not fail the whole listing.
+        rating=metadata.rating if is_valid_rating(metadata.rating) else None,
         flagged=metadata.flagged,
         added_at=metadata.added_at,
     )
@@ -144,13 +144,18 @@ def batch_update_photos(
     request: BatchPhotoRequest,
     repository: TinyDBRepository = Depends(),
 ) -> BatchPhotoResponse:
-    """Apply batch actions across multiple photos atomically."""
-    count = repository.batch_update(
-        request.photo_hashes,
-        {"action": request.action, "value": request.value},
-    )
+    """Apply one validated curation action to many photos."""
+    try:
+        count = repository.batch_update(
+            request.photo_hashes,
+            {"action": request.action, "value": request.value},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    deleting = request.action == "delete"
     return BatchPhotoResponse(
-        updated_count=count,
+        updated_count=0 if deleting else count,
+        deleted_count=count if deleting else 0,
         action=request.action,
         message=f"Successfully applied '{request.action}' to {count} photo(s).",
     )
@@ -241,8 +246,16 @@ def patch_photo(
     repository: TinyDBRepository = Depends(),
 ) -> PhotoMetadataResponse:
     """Update user ratings, flags, or tags for a single photo."""
-    updates = request.model_dump(exclude_unset=True)
-    updated = repository.update_metadata(file_hash, updates)
+    # An explicit null means "clear" only for the rating; for the other fields it means "no change".
+    updates = {
+        key: value
+        for key, value in request.model_dump(exclude_unset=True).items()
+        if value is not None or key == "rating"
+    }
+    try:
+        updated = repository.update_metadata(file_hash, updates)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
     return _to_response(updated)
@@ -355,7 +368,7 @@ def index_directory(
             detail=f"Directory '{request.folder_path}' does not exist or is not a directory.",
         )
 
-    retriever = LocalDiskRetriever(base_path=folder_path)
+    retriever = build_local_retriever(folder_path)
     extractor = DiskMetaDataExtractor()
     use_case = ParallelIndexPhotosUseCase(
         retriever=retriever,

@@ -1,19 +1,11 @@
 import React from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
 import { DropdownFilterCard } from './DropdownFilterCard'
 import { Camera, Tag, Folder, Keyboard, RotateCcw } from 'lucide-react'
 
 export const FilterSidebar: React.FC = () => {
-  const {
-    sidebarOpen,
-    filterCameras,
-    toggleCameraFilter,
-    filterTags,
-    toggleTagFilter,
-    filterCollection,
-    setCollectionFilter,
-    resetFilters,
-  } = useUiStore()
+  const { sidebarOpen, filterCameras, toggleCameraFilter, filterTags, toggleTagFilter, filterCollection, setCollectionFilter, resetFilters } = useUiStore(useShallow((s) => ({ sidebarOpen: s.sidebarOpen, filterCameras: s.filterCameras, toggleCameraFilter: s.toggleCameraFilter, filterTags: s.filterTags, toggleTagFilter: s.toggleTagFilter, filterCollection: s.filterCollection, setCollectionFilter: s.setCollectionFilter, resetFilters: s.resetFilters })))
 
   if (!sidebarOpen) return null
 

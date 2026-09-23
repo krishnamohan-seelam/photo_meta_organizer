@@ -22,12 +22,13 @@ Example:
 """
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime
 import logging
 import sys
 from logging.config import dictConfig
 from typing import Optional
 
+from photo_meta_organizer.domain.datetimes import to_naive
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
     ImageMetadataRepository,
@@ -94,8 +95,8 @@ logger = logging.getLogger(__name__)
 def build_retriever(args: argparse.Namespace) -> ImageRetriever:
     """Create the file retriever based on CLI arguments.
 
-    Uses ExtensionFilteredRetriever wrapping LocalDiskRetriever to
-    discover only image files (JPEG, PNG, TIFF, etc.).
+    Delegates to the shared factory so the CLI and the REST API index exactly the
+    same set of files (images only).
 
     Phase 4: Will support S3Retriever, GoogleCloudStorageRetriever, etc.
 
@@ -105,21 +106,9 @@ def build_retriever(args: argparse.Namespace) -> ImageRetriever:
     Returns:
         An ImageRetriever implementation.
     """
-    from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
-        LocalDiskRetriever,
-    )
-    from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
-        ExtensionFilteredRetriever,
-    )
+    from photo_meta_organizer.application.composition import build_local_retriever
 
-    IMAGE_EXTENSIONS = {
-        ".jpg", ".jpeg", ".png", ".tiff", ".tif",
-        ".bmp", ".gif", ".webp", ".heic", ".heif",
-        ".raw", ".cr2", ".nef", ".arw", ".dng",
-    }
-
-    base_retriever = LocalDiskRetriever(base_path=args.path)
-    return ExtensionFilteredRetriever(base_retriever, IMAGE_EXTENSIONS)
+    return build_local_retriever(args.path)
 
 
 def build_extractor() -> ImageMetadataExtractor:
@@ -201,16 +190,16 @@ def handle_index_command(args: argparse.Namespace) -> int:
 
 
 def _parse_date_arg(date_str: Optional[str]) -> Optional[datetime]:
-    """Parse date string into a UTC datetime object."""
+    """Parse a date string into a naive local datetime (see domain/datetimes.py)."""
     if not date_str:
         return None
     date_str = date_str.strip()
     try:
         if len(date_str) == 7:  # YYYY-MM
-            return datetime.strptime(date_str, "%Y-%m").replace(tzinfo=timezone.utc)
+            return datetime.strptime(date_str, "%Y-%m")
         elif len(date_str) == 10:  # YYYY-MM-DD
-            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        return datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        return to_naive(datetime.fromisoformat(date_str))
     except ValueError:
         logger.warning("Failed to parse date string: %s", date_str)
         return None
@@ -243,12 +232,12 @@ def handle_search_command(args: argparse.Namespace) -> int:
                 month = dt.month
                 year = dt.year + (1 if month == 12 else 0)
                 next_month = 1 if month == 12 else month + 1
-                date_end = datetime(year, next_month, 1, tzinfo=timezone.utc)
+                date_end = datetime(year, next_month, 1)
         else:
             dt = _parse_date_arg(single_date)
             if dt:
                 date_start = dt
-                date_end = datetime(dt.year, dt.month, dt.day, 23, 59, 59, tzinfo=timezone.utc)
+                date_end = datetime(dt.year, dt.month, dt.day, 23, 59, 59)
 
     # Location radius parsing
     loc_lat = getattr(args, "lat", None)
@@ -422,6 +411,7 @@ def handle_sync_command(args: argparse.Namespace) -> int:
         reprocess_modified=args.reprocess_modified,
         index_new=args.index_new,
         dry_run=args.dry_run,
+        rehash=args.rehash,
     )
 
     prefix = "[DRY RUN] " if args.dry_run else ""
@@ -432,11 +422,63 @@ def handle_sync_command(args: argparse.Namespace) -> int:
         f"-{result.deleted_entries} deleted, "
         f"{result.unchanged_files} unchanged"
     )
+    if result.fingerprints_refreshed:
+        verb = "would record" if args.dry_run else "recorded"
+        print(f"  ({verb} size/mtime for {result.fingerprints_refreshed} unchanged file(s))")
     if result.errors:
         print(f"Errors ({len(result.errors)}):")
         for err in result.errors:
             print(f"  ✗ {err}")
     return 0 if not result.errors else 2
+
+
+def handle_dedupe_command(args: argparse.Namespace) -> int:
+    """Handle 'dedupe' command — merge records that share a file path.
+
+    Dry-run by default; pass --apply to write.
+    """
+    from photo_meta_organizer.application.use_cases import DedupePathsUseCase
+
+    repository = build_repository(args)
+    result = DedupePathsUseCase(repository).execute(apply=args.apply)
+
+    if not result.groups:
+        print("No duplicate paths found.")
+        return 0
+    extra = sum(len(g.drop) for g in result.groups)
+    label = "Merged" if args.apply else "Would merge (dry run; pass --apply to write)"
+    print(f"{label}: {extra} extra record(s) across {len(result.groups)} path(s)")
+    for group in result.groups[:50]:
+        print(f"  {group.path}  keep {group.keep.file_hash[:12]}, drop {len(group.drop)}")
+    if len(result.groups) > 50:
+        print(f"  ... and {len(result.groups) - 50} more")
+    if args.apply:
+        print(f"Removed {result.removed} record(s).")
+    return 0
+
+
+def handle_prune_command(args: argparse.Namespace) -> int:
+    """Handle 'prune' command — remove records for non-image files.
+
+    Dry-run by default; pass --apply to delete.
+    """
+    from photo_meta_organizer.application.use_cases import PruneNonImagesUseCase
+
+    repository = build_repository(args)
+    result = PruneNonImagesUseCase(repository).execute(apply=args.apply)
+
+    if not result.candidates:
+        print("No non-image records found.")
+        return 0
+    label = "Removed" if args.apply else "Would remove (dry run; pass --apply to delete)"
+    print(f"{label}: {len(result.candidates)} record(s)")
+    for record in result.candidates[:50]:
+        print(f"  {record.file_info.path}")
+    if len(result.candidates) > 50:
+        print(f"  ... and {len(result.candidates) - 50} more")
+    if args.apply:
+        print(f"Deleted {result.removed} record(s).")
+    return 0
 
 
 # ============================================================================
@@ -576,13 +618,54 @@ def main() -> int:
         default=False,
         help="Analyse changes but do NOT write anything (preview mode)",
     )
+    sync_parser.add_argument(
+        "--rehash",
+        action="store_true",
+        default=False,
+        help=(
+            "Hash every file already in the DB instead of trusting size+mtime. Slow, but "
+            "catches an edit that kept both size and mtime"
+        ),
+    )
     sync_parser.set_defaults(
         func=handle_sync_command,
         cleanup_deleted=False,
         reprocess_modified=True,
         index_new=True,
         dry_run=False,
+        rehash=False,
     )
+
+    # Prune command (PMO-04)
+    prune_parser = subparsers.add_parser(
+        "prune",
+        help="Remove records for non-image files from the database",
+        description=(
+            "Older versions of the REST API indexed every file in a folder. This removes "
+            "records whose file is not an image. Dry run unless --apply is given."
+        ),
+    )
+    prune_parser.add_argument("--db", default="photo_metadata.json", help="Path to metadata database file")
+    prune_parser.add_argument(
+        "--apply", action="store_true", default=False, help="Actually delete (default: dry run)"
+    )
+    prune_parser.set_defaults(func=handle_prune_command)
+
+    # Dedupe command (PMO-05)
+    dedupe_parser = subparsers.add_parser(
+        "dedupe",
+        help="Merge records that share a file path (left by older versions of sync)",
+        description=(
+            "Before PMO-05 an edited file was saved under its new hash and the old record "
+            "stayed behind. This keeps the newest record per path and merges the rating, "
+            "flag and labels of the others into it. Dry run unless --apply is given."
+        ),
+    )
+    dedupe_parser.add_argument("--db", default="photo_metadata.json", help="Path to metadata database file")
+    dedupe_parser.add_argument(
+        "--apply", action="store_true", default=False, help="Actually merge (default: dry run)"
+    )
+    dedupe_parser.set_defaults(func=handle_dedupe_command)
 
     # Stats command (Phase 2)
     stats_parser = subparsers.add_parser(

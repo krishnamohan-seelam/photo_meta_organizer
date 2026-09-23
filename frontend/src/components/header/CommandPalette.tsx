@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
 import { Search, Camera, Tag, MapPin, Sun, EyeOff, Download, CheckSquare } from 'lucide-react'
 
 export const CommandPalette: React.FC = () => {
-  const {
-    commandPaletteOpen,
-    setCommandPaletteOpen,
-    toggleTheme,
-    toggleLightsOut,
-    setActiveView,
-    toggleCameraFilter,
-    toggleTagFilter,
-    setCityFilter,
-    showToast,
-  } = useUiStore()
+  const { commandPaletteOpen, setCommandPaletteOpen, toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setCityFilter, showToast } = useUiStore(useShallow((s) => ({ commandPaletteOpen: s.commandPaletteOpen, setCommandPaletteOpen: s.setCommandPaletteOpen, toggleTheme: s.toggleTheme, toggleLightsOut: s.toggleLightsOut, setActiveView: s.setActiveView, toggleCameraFilter: s.toggleCameraFilter, toggleTagFilter: s.toggleTagFilter, setCityFilter: s.setCityFilter, showToast: s.showToast })))
 
   const [search, setSearch] = useState('')
 
@@ -106,7 +97,7 @@ export const CommandPalette: React.FC = () => {
       title: 'Bundle & Export All Metadata JSON',
       icon: <Download size={15} />,
       hotkey: 'Export',
-      action: () => showToast('Exported metadata JSON'),
+      action: () => showToast('Metadata export is not available yet', 'error'),
     },
   ]
 

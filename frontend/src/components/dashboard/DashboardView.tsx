@@ -1,4 +1,5 @@
 import React from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { HardDrive, MapPin, Camera, Zap } from 'lucide-react'
@@ -8,7 +9,7 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ photos }) => {
-  const { toggleCameraFilter, setActiveView, showToast } = useUiStore()
+  const { toggleCameraFilter, setActiveView, showToast } = useUiStore(useShallow((s) => ({ toggleCameraFilter: s.toggleCameraFilter, setActiveView: s.setActiveView, showToast: s.showToast })))
 
   // Compute analytics
   const totalPhotos = photos.length

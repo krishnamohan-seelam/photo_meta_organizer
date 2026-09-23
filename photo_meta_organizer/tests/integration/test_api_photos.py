@@ -79,11 +79,17 @@ def test_health_check(client):
     assert data["photo_count"] == 2
 
 
-def test_get_prototype_endpoint(client):
-    resp = client.get("/prototype")
-    assert resp.status_code == 200
-    assert "Photo Meta Organizer" in resp.text
-    assert "prototypeSwitcher" in resp.text
+def test_prototype_route_is_gone(client):
+    """The standalone HTML prototype was removed; its route must not linger."""
+    assert client.get("/prototype").status_code == 404
+
+
+def test_root_without_built_frontend_reports_it(client):
+    """Without frontend/dist the root page says so instead of serving a prototype."""
+    resp = client.get("/")
+    assert resp.status_code in (200, 404)
+    if resp.status_code == 404:
+        assert "Frontend not built" in resp.text
 
 
 # ============================================================

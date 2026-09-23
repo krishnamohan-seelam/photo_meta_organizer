@@ -94,6 +94,8 @@ export interface BatchPhotoRequest {
 
 export interface BatchPhotoResponse {
   updated_count: number
+  /** Present for the `delete` action, which is reported here instead of in `updated_count`. */
+  deleted_count?: number
   action: string
   message: string
 }

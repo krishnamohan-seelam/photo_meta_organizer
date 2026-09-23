@@ -3,24 +3,28 @@ import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { getThumbnailUrl } from '../../api/client'
+import { swapToPlaceholder } from '../../utils/placeholder'
 import { Flag, Check } from 'lucide-react'
 
 interface PhotoCardProps {
   photo: PhotoMetadata
-  onOpenLightbox?: () => void
+  /** Position of this photo in the list the lightbox pages through. */
+  index: number
 }
 
-export const PhotoCard: React.FC<PhotoCardProps> = ({ photo, onOpenLightbox }) => {
-  const { inspectedPhoto, setInspectedPhoto } = useUiStore()
-  const { isSelected, toggleSelect } = useSelectionStore()
-
-  const selected = isSelected(photo.file_hash)
-  const inspected = inspectedPhoto?.file_hash === photo.file_hash
+// memo + narrow selectors: the grid can hold thousands of cards, and a card must re-render
+// only when its own photo, selection state or inspected state changes, never on every store update.
+export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCardProps) {
+  const setInspectedHash = useUiStore((s) => s.setInspectedHash)
+  const setLightboxIndex = useUiStore((s) => s.setLightboxIndex)
+  const inspected = useUiStore((s) => s.inspectedHash === photo.file_hash)
+  const selected = useSelectionStore((s) => s.selectedHashes.has(photo.file_hash))
+  const toggleSelect = useSelectionStore((s) => s.toggleSelect)
 
   return (
     <div
-      onClick={() => setInspectedPhoto(photo)}
-      onDoubleClick={onOpenLightbox}
+      onClick={() => setInspectedHash(photo.file_hash)}
+      onDoubleClick={() => setLightboxIndex(index)}
       style={{
         background: 'var(--bg-card)',
         borderRadius: 'var(--radius-md)',
@@ -121,11 +125,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({ photo, onOpenLightbox }) =
             objectFit: 'cover',
             display: 'block',
           }}
-          onError={(e) => {
-            // Fallback placeholder
-            e.currentTarget.src =
-              'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80'
-          }}
+          onError={swapToPlaceholder}
         />
       </div>
 
@@ -164,10 +164,10 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({ photo, onOpenLightbox }) =
             ))}
           </div>
           <span style={{ fontSize: '0.72rem', color: 'var(--accent-warning)' }}>
-            {'★'.repeat(photo.rating || 4)}
+            {photo.rating ? '★'.repeat(photo.rating) : ''}
           </span>
         </div>
       </div>
     </div>
   )
-}
+})

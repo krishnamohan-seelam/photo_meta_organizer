@@ -1,10 +1,14 @@
 import React, { useEffect, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
-import { patchPhotoApi } from '../../api/client'
+import { useInspectedPhoto } from '../../hooks/usePhotos'
+import { useCuration } from '../../hooks/usePhotoMutations'
 import { Star, Flag, Copy } from 'lucide-react'
 
 export const ExifInspector: React.FC = () => {
-  const { inspectedPhoto, setInspectedPhoto, inspectorOpen, showToast } = useUiStore()
+  const inspectedPhoto = useInspectedPhoto()
+  const { inspectorOpen, showToast } = useUiStore(useShallow((s) => ({ inspectorOpen: s.inspectorOpen, showToast: s.showToast })))
+  const { patchPhoto } = useCuration()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   // Draw simulated multi-channel RGB histogram on the canvas
@@ -50,7 +54,7 @@ export const ExifInspector: React.FC = () => {
     }
     ctx.lineTo(w, h)
     ctx.fill()
-  }, [inspectedPhoto])
+  }, [inspectedPhoto?.file_hash])
 
   if (!inspectorOpen) return null
 
@@ -75,32 +79,24 @@ export const ExifInspector: React.FC = () => {
     )
   }
 
-  const handleRatingChange = async (newRating: number) => {
-    try {
-      const updated = await patchPhotoApi(inspectedPhoto.file_hash, { rating: newRating })
-      setInspectedPhoto(updated)
-      showToast(`Set rating to ${newRating} ★`)
-    } catch {
-      showToast(`Updated rating to ${newRating} ★ (local)`)
-      setInspectedPhoto({ ...inspectedPhoto, rating: newRating })
-    }
-  }
+  // The inspector shows the cached record, which is updated at once and rolled back if the save fails.
+  const handleRatingChange = (newRating: number) =>
+    patchPhoto(inspectedPhoto.file_hash, { rating: newRating }, `Set rating to ${newRating} ★`)
 
-  const handleFlagToggle = async () => {
+  const handleFlagToggle = () => {
     const nextFlag = !inspectedPhoto.flagged
-    try {
-      const updated = await patchPhotoApi(inspectedPhoto.file_hash, { flagged: nextFlag })
-      setInspectedPhoto(updated)
-      showToast(nextFlag ? '🚩 Flagged as Pick' : 'Unflagged photo')
-    } catch {
-      showToast(nextFlag ? '🚩 Flagged as Pick (local)' : 'Unflagged photo (local)')
-      setInspectedPhoto({ ...inspectedPhoto, flagged: nextFlag })
-    }
+    return patchPhoto(
+      inspectedPhoto.file_hash,
+      { flagged: nextFlag },
+      nextFlag ? '🚩 Flagged as Pick' : 'Unflagged photo'
+    )
   }
 
   const copyRawJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(inspectedPhoto, null, 2))
-    showToast('Copied raw JSON metadata to clipboard')
+    navigator.clipboard.writeText(JSON.stringify(inspectedPhoto, null, 2)).then(
+      () => showToast('Copied raw JSON metadata to clipboard'),
+      () => showToast('Could not copy to the clipboard', 'error')
+    )
   }
 
   const exif = inspectedPhoto.exif

@@ -324,3 +324,143 @@ class TestMetadataStateAnalyzerEdgeCases:
         )
         # File that can't be hashed is excluded (no crash)
         assert len(states) == 0
+
+
+# ---------------------------------------------------------------------------
+# PMO-06: (size, mtime) fingerprint
+# ---------------------------------------------------------------------------
+
+LATER_MTIME = datetime(2024, 6, 1, 8, 30, 0)
+
+
+def _stored(path: str, file_hash: str, size_bytes: int = 1000, mtime=BASE_MTIME) -> ImageMetadata:
+    """A DB record that carries the mtime seen at index time."""
+    record = _make_metadata(path, file_hash, size_bytes=size_bytes)
+    file_info = ImageFileInfo(
+        name=record.file_info.name,
+        path=path,
+        size_bytes=size_bytes,
+        mime_type="image/jpeg",
+        modified_time=mtime,
+    )
+    return ImageMetadata(
+        file_hash=file_hash,
+        file_info=file_info,
+        dimensions=record.dimensions,
+        exif=record.exif,
+    )
+
+
+def _disk(path: str, size_bytes: int = 1000, mtime=BASE_MTIME) -> dict:
+    return {path: FileInfo(path=path, size_bytes=size_bytes, modified_time=mtime)}
+
+
+class _CountingHash:
+    def __init__(self, digest: str) -> None:
+        self.digest = digest
+        self.calls: list[str] = []
+
+    def __call__(self, path: str) -> str:
+        self.calls.append(path)
+        return self.digest
+
+
+class TestMtimeFingerprint:
+    """Flaw B-02: a same-size edit must be caught once the mtime moves."""
+
+    def test_same_size_and_mtime_is_unchanged_without_hashing(self, analyzer, tmp_path):
+        p = str(tmp_path / "p.jpg")
+        (tmp_path / "p.jpg").write_bytes(b"x")
+        hasher = _CountingHash(HASH_A)
+
+        (state,) = analyzer.analyze_changes(
+            _disk(p), [_stored(p, HASH_A)], compute_hash=hasher
+        )
+
+        assert state.state == "UNCHANGED"
+        assert state.refresh_fingerprint is False
+        assert hasher.calls == []
+
+    def test_same_size_but_newer_mtime_with_new_content_is_modified(self, analyzer, tmp_path):
+        p = str(tmp_path / "p.jpg")
+        (tmp_path / "p.jpg").write_bytes(b"x")
+        hasher = _CountingHash(HASH_B)
+
+        (state,) = analyzer.analyze_changes(
+            _disk(p, mtime=LATER_MTIME), [_stored(p, HASH_A)], compute_hash=hasher
+        )
+
+        assert state.state == "MODIFIED"
+        assert state.previous_hash == HASH_A
+        assert state.file_hash == HASH_B
+        assert len(hasher.calls) == 1
+
+    def test_mtime_moved_but_content_identical_is_unchanged_and_refreshes_mtime(
+        self, analyzer, tmp_path
+    ):
+        """A `touch` must not re-extract, but the stored mtime should catch up."""
+        p = str(tmp_path / "p.jpg")
+        (tmp_path / "p.jpg").write_bytes(b"x")
+
+        (state,) = analyzer.analyze_changes(
+            _disk(p, mtime=LATER_MTIME), [_stored(p, HASH_A)], compute_hash=_CountingHash(HASH_A)
+        )
+
+        assert state.state == "UNCHANGED"
+        assert state.refresh_fingerprint is True
+        assert state.last_modified == LATER_MTIME
+
+    def test_legacy_record_without_mtime_is_trusted_on_size_and_flagged_for_backfill(
+        self, analyzer, tmp_path
+    ):
+        p = str(tmp_path / "p.jpg")
+        (tmp_path / "p.jpg").write_bytes(b"x")
+        hasher = _CountingHash(HASH_B)
+
+        (state,) = analyzer.analyze_changes(
+            _disk(p), [_stored(p, HASH_A, mtime=None)], compute_hash=hasher
+        )
+
+        assert state.state == "UNCHANGED"
+        assert state.refresh_fingerprint is True
+        assert hasher.calls == []  # no re-hash of the whole legacy library
+
+    def test_size_difference_still_hashes_for_legacy_records(self, analyzer, tmp_path):
+        p = str(tmp_path / "p.jpg")
+        (tmp_path / "p.jpg").write_bytes(b"x")
+
+        (state,) = analyzer.analyze_changes(
+            _disk(p, size_bytes=2000),
+            [_stored(p, HASH_A, mtime=None)],
+            compute_hash=_CountingHash(HASH_B),
+        )
+
+        assert state.state == "MODIFIED"
+
+    def test_force_rehash_catches_an_edit_that_kept_size_and_mtime(self, analyzer, tmp_path):
+        p = str(tmp_path / "p.jpg")
+        (tmp_path / "p.jpg").write_bytes(b"x")
+
+        (state,) = analyzer.analyze_changes(
+            _disk(p),
+            [_stored(p, HASH_A)],
+            compute_hash=_CountingHash(HASH_B),
+            force_rehash=True,
+        )
+
+        assert state.state == "MODIFIED"
+        assert state.previous_hash == HASH_A
+
+    def test_force_rehash_on_legacy_record_backfills_mtime(self, analyzer, tmp_path):
+        p = str(tmp_path / "p.jpg")
+        (tmp_path / "p.jpg").write_bytes(b"x")
+
+        (state,) = analyzer.analyze_changes(
+            _disk(p),
+            [_stored(p, HASH_A, mtime=None)],
+            compute_hash=_CountingHash(HASH_A),
+            force_rehash=True,
+        )
+
+        assert state.state == "UNCHANGED"
+        assert state.refresh_fingerprint is True

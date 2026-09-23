@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react'
-import type { PhotoMetadata } from './types/metadata'
-import { fetchPhotos } from './api/client'
+import React, { useEffect, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { errorMessage } from './api/client'
+import { usePhotos } from './hooks/usePhotos'
+import { useScanFolder } from './hooks/useScanFolder'
 import { useUiStore } from './stores/useUiStore'
 import { AppHeader } from './components/header/AppHeader'
 import { CommandPalette } from './components/header/CommandPalette'
@@ -13,200 +15,28 @@ import { MapExplorerView } from './components/maps/MapExplorerView'
 import { KanbanBoardView } from './components/kanban/KanbanBoardView'
 import { DashboardView } from './components/dashboard/DashboardView'
 import { LightboxModal } from './components/lightbox/LightboxModal'
-import { CheckCircle2, EyeOff } from 'lucide-react'
+import { EmptyLibraryState, ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
+import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
+import type { PhotoMetadata } from './types/metadata'
 
-// Demo Fallback Data for seamless out-of-the-box experience
-const SAMPLE_PHOTOS: PhotoMetadata[] = [
-  {
-    file_hash: '3f8b9a1c4d2e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4',
-    file_info: {
-      name: 'DSC04928_Tokyo_Tower_Sunset.ARW',
-      path: '/media/raw/DSC04928_Tokyo_Tower_Sunset.ARW',
-      size_bytes: 25345678,
-      mime_type: 'image/x-sony-arw',
-    },
-    dimensions: { width: 7008, height: 4672 },
-    exif: {
-      camera_make: 'Sony',
-      camera_model: 'ILCE-7M4 (A7 IV)',
-      f_stop: 2.8,
-      exposure_time: '1/250s',
-      iso: 400,
-      focal_length: '35.0 mm',
-      captured_at: '2026-05-14T18:42:10Z',
-      camera_profile: 'raw',
-      location: { latitude: 35.6586, longitude: 139.7454, datum: 'WGS84' },
-      flash_fired: false,
-      orientation: 1,
-      raw_tags: { LensModel: 'FE 35mm F1.4 GM', WhiteBalance: 'Auto' },
-    },
-    labels: ['travel', 'japan', 'architecture', 'sunset'],
-    rating: 5,
-    flagged: true,
-    added_at: '2026-05-15T09:00:00Z',
-  },
-  {
-    file_hash: '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
-    file_info: {
-      name: 'IMG_8392_Kyoto_Bamboo_Path.CR3',
-      path: '/media/raw/IMG_8392_Kyoto_Bamboo_Path.CR3',
-      size_bytes: 38920140,
-      mime_type: 'image/x-canon-cr3',
-    },
-    dimensions: { width: 8192, height: 5464 },
-    exif: {
-      camera_make: 'Canon',
-      camera_model: 'EOS R5',
-      f_stop: 4.0,
-      exposure_time: '1/125s',
-      iso: 800,
-      focal_length: '24.0 mm',
-      captured_at: '2026-05-16T08:15:30Z',
-      camera_profile: 'raw',
-      location: { latitude: 35.0167, longitude: 135.6713, datum: 'WGS84' },
-      flash_fired: false,
-      orientation: 1,
-      raw_tags: { LensModel: 'RF 24-70mm F2.8 L IS USM' },
-    },
-    labels: ['travel', 'nature', 'landscape', 'green'],
-    rating: 4,
-    flagged: true,
-    added_at: '2026-05-17T11:20:00Z',
-  },
-  {
-    file_hash: '1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d',
-    file_info: {
-      name: 'iPhone_15Pro_Shibuya_Night.HEIC',
-      path: '/media/raw/iPhone_15Pro_Shibuya_Night.HEIC',
-      size_bytes: 4892100,
-      mime_type: 'image/heic',
-    },
-    dimensions: { width: 4032, height: 3024 },
-    exif: {
-      camera_make: 'Apple',
-      camera_model: 'iPhone 15 Pro',
-      f_stop: 1.78,
-      exposure_time: '1/40s',
-      iso: 1250,
-      focal_length: '24.0 mm',
-      captured_at: '2026-05-16T22:30:15Z',
-      camera_profile: 'standard',
-      location: { latitude: 35.6595, longitude: 139.7005, datum: 'WGS84' },
-      flash_fired: false,
-      orientation: 1,
-      raw_tags: { LensModel: 'iPhone 15 Pro back camera 6.86mm f/1.78' },
-    },
-    labels: ['travel', 'urban', 'night', 'street'],
-    rating: 4,
-    flagged: false,
-    added_at: '2026-05-17T14:00:00Z',
-  },
-  {
-    file_hash: '7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d1e2f',
-    file_info: {
-      name: '_DSC9102_Fuji_Sunrise.NEF',
-      path: '/media/raw/_DSC9102_Fuji_Sunrise.NEF',
-      size_bytes: 45210980,
-      mime_type: 'image/x-nikon-nef',
-    },
-    dimensions: { width: 8256, height: 5504 },
-    exif: {
-      camera_make: 'Nikon',
-      camera_model: 'Z8',
-      f_stop: 8.0,
-      exposure_time: '1/500s',
-      iso: 100,
-      focal_length: '70.0 mm',
-      captured_at: '2026-05-18T05:10:00Z',
-      camera_profile: 'raw',
-      location: { latitude: 35.3606, longitude: 138.7274, datum: 'WGS84' },
-      flash_fired: false,
-      orientation: 1,
-      raw_tags: { LensModel: 'NIKKOR Z 24-70mm f/2.8 S' },
-    },
-    labels: ['travel', 'landscape', 'mountain', 'sunrise'],
-    rating: 5,
-    flagged: true,
-    added_at: '2026-05-19T08:00:00Z',
-  },
-]
+const NO_PHOTOS: PhotoMetadata[] = []
 
 export const App: React.FC = () => {
-  const {
-    theme,
-    activeView,
-    lightsOut,
-    toggleLightsOut,
-    filterCameras,
-    filterTags,
-    filterCollection,
-    filterTimeframe,
-    searchQuery,
-    inspectedPhoto,
-    setInspectedPhoto,
-    toastMessage,
-  } = useUiStore()
+  const { theme, activeView, lightsOut, toggleLightsOut, filterCameras, filterTags, filterCollection, filterTimeframe, searchQuery, inspectedHash, setInspectedHash, toastMessage, toastKind } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, filterCameras: s.filterCameras, filterTags: s.filterTags, filterCollection: s.filterCollection, filterTimeframe: s.filterTimeframe, searchQuery: s.searchQuery, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind })))
 
-  const [photos, setPhotos] = useState<PhotoMetadata[]>(SAMPLE_PHOTOS)
-  const [isLoading, setIsLoading] = useState(false)
-
-  // Fetch real photos from FastAPI backend, fallback to demo dataset if empty.
-  // Uses page_size=500 (backend max) and fetches all pages to ensure every
-  // indexed photo is visible — not just the first 100.
-  const loadData = async () => {
-    try {
-      setIsLoading(true)
-
-      // Fetch first page
-      const PAGE_SIZE = 500
-      const firstPage = await fetchPhotos(1, PAGE_SIZE, 'captured_at', 'desc')
-
-      if (!firstPage || !firstPage.items || firstPage.items.length === 0) {
-        // No real data — keep demo photos
-        if (!inspectedPhoto) setInspectedPhoto(SAMPLE_PHOTOS[0])
-        return
-      }
-
-      let allPhotos = [...firstPage.items]
-
-      // Fetch remaining pages if any
-      if (firstPage.total_pages > 1) {
-        const pageRequests = []
-        for (let p = 2; p <= firstPage.total_pages; p++) {
-          pageRequests.push(fetchPhotos(p, PAGE_SIZE, 'captured_at', 'desc'))
-        }
-        const additionalPages = await Promise.all(pageRequests)
-        for (const page of additionalPages) {
-          if (page && page.items) {
-            allPhotos = allPhotos.concat(page.items)
-          }
-        }
-      }
-
-      setPhotos(allPhotos)
-      if (!inspectedPhoto) {
-        setInspectedPhoto(allPhotos[0])
-      }
-    } catch {
-      // Fallback to demo dataset on API error
-      if (!inspectedPhoto) {
-        setInspectedPhoto(SAMPLE_PHOTOS[0])
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // The library lives in the react-query cache: every view and every edit goes through it.
+  const { data, isPending, isError, error, refetch, isFetching } = usePhotos()
+  const photos = data ?? NO_PHOTOS
+  const { scan, isScanning } = useScanFolder()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
-    loadData()
+  }, [theme])
 
-    const handleReload = () => {
-      loadData()
-    }
-    window.addEventListener('photos-updated', handleReload)
-    return () => window.removeEventListener('photos-updated', handleReload)
-  }, [])
+  // Open the inspector on the first photo once there is one. It is keyed by hash, so reloads keep the selection.
+  useEffect(() => {
+    if (!inspectedHash && photos.length > 0) setInspectedHash(photos[0].file_hash)
+  }, [inspectedHash, photos, setInspectedHash])
 
   // Keyboard shortcut listener for 'L' (Lights Out)
   useEffect(() => {
@@ -220,8 +50,9 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggleLightsOut])
 
-  // Filter photos based on store filter criteria
-  const filteredPhotos = photos.filter((p) => {
+  // Filter photos based on store filter criteria. Memoised: with thousands of photos this must not
+  // re-run on unrelated store changes (toasts, slider drags, the lightbox opening).
+  const filteredPhotos = useMemo(() => photos.filter((p) => {
     if (filterCameras.length > 0 && !filterCameras.includes(p.exif.camera_make || 'Unknown')) {
       return false
     }
@@ -244,7 +75,7 @@ export const App: React.FC = () => {
       if (!matchName && !matchMake && !matchModel && !matchTag) return false
     }
     return true
-  })
+  }), [photos, filterCameras, filterTags, filterCollection, filterTimeframe, searchQuery])
 
   return (
     <div
@@ -262,24 +93,37 @@ export const App: React.FC = () => {
       {/* App Header */}
       <AppHeader />
 
-      {/* Main Content Area */}
+      {/* A failed refresh must not hide photos we already have, but must not pass them off as current */}
+      {isError && data && <StaleBanner message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />}
+
+      {/* Main Content Area: loading, error and empty are distinct states, never a stand-in library */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        {activeView === 'studio' && (
+        {isPending ? (
+          <LoadingState />
+        ) : !data ? (
+          <ErrorState message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />
+        ) : photos.length === 0 ? (
+          <EmptyLibraryState onScan={scan} scanning={isScanning} />
+        ) : (
           <>
-            <FilterSidebar />
-            <PhotoGallery photos={filteredPhotos} isLoading={isLoading} />
-            <ExifInspector />
+            {activeView === 'studio' && (
+              <>
+                <FilterSidebar />
+                <PhotoGallery photos={filteredPhotos} />
+                <ExifInspector />
+              </>
+            )}
+
+            {activeView === 'timeline' && <TimelineView photos={filteredPhotos} />}
+            {activeView === 'map' && <MapExplorerView photos={filteredPhotos} />}
+            {activeView === 'kanban' && <KanbanBoardView photos={filteredPhotos} />}
+            {activeView === 'analytics' && <DashboardView photos={photos} />}
           </>
         )}
-
-        {activeView === 'timeline' && <TimelineView photos={filteredPhotos} />}
-        {activeView === 'map' && <MapExplorerView photos={filteredPhotos} />}
-        {activeView === 'kanban' && <KanbanBoardView photos={filteredPhotos} onRefresh={loadData} />}
-        {activeView === 'analytics' && <DashboardView photos={photos} />}
       </div>
 
       {/* Floating Selection Dock */}
-      <SelectionDock photos={photos} onRefresh={loadData} />
+      <SelectionDock photos={photos} />
 
       {/* Modals & Overlays */}
       <CommandPalette />
@@ -287,8 +131,12 @@ export const App: React.FC = () => {
 
       {/* Toast notifications */}
       {toastMessage && (
-        <div className="toast-notice">
-          <CheckCircle2 size={16} color="var(--accent-primary)" />
+        <div className={`toast-notice${toastKind === 'error' ? ' toast-error' : ''}`} role={toastKind === 'error' ? 'alert' : 'status'}>
+          {toastKind === 'error' ? (
+            <AlertCircle size={16} color="var(--accent-danger)" />
+          ) : (
+            <CheckCircle2 size={16} color="var(--accent-primary)" />
+          )}
           <span>{toastMessage}</span>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import type { PhotoMetadata } from '../types/metadata'
 
 export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
+export type ToastKind = 'success' | 'error'
 
 interface UiState {
   theme: 'dark' | 'light'
@@ -10,7 +10,8 @@ interface UiState {
   sidebarOpen: boolean
   inspectorOpen: boolean
   gridItemSize: number
-  inspectedPhoto: PhotoMetadata | null
+  /** Which photo the inspector shows. The record itself comes from the photos query, so it is never stale. */
+  inspectedHash: string | null
   lightboxIndex: number | null
   commandPaletteOpen: boolean
   searchQuery: string
@@ -21,6 +22,7 @@ interface UiState {
   filterCity: string
   radiusKm: number
   toastMessage: string | null
+  toastKind: ToastKind
 
   setTheme: (theme: 'dark' | 'light') => void
   toggleTheme: () => void
@@ -29,7 +31,7 @@ interface UiState {
   toggleSidebar: () => void
   toggleInspector: () => void
   setGridItemSize: (size: number) => void
-  setInspectedPhoto: (photo: PhotoMetadata | null) => void
+  setInspectedHash: (hash: string | null) => void
   setLightboxIndex: (idx: number | null) => void
   setCommandPaletteOpen: (open: boolean) => void
   setSearchQuery: (q: string) => void
@@ -40,7 +42,7 @@ interface UiState {
   setCityFilter: (city: string) => void
   setRadiusKm: (r: number) => void
   resetFilters: () => void
-  showToast: (msg: string) => void
+  showToast: (msg: string, kind?: ToastKind) => void
   hideToast: () => void
 }
 
@@ -49,6 +51,8 @@ const savedTheme = (typeof window !== 'undefined' && localStorage.getItem('pmo_t
   | 'light'
   | null
 
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
 export const useUiStore = create<UiState>((set) => ({
   theme: savedTheme || 'dark',
   activeView: 'studio',
@@ -56,7 +60,7 @@ export const useUiStore = create<UiState>((set) => ({
   sidebarOpen: true,
   inspectorOpen: true,
   gridItemSize: 220,
-  inspectedPhoto: null,
+  inspectedHash: null,
   lightboxIndex: null,
   commandPaletteOpen: false,
   searchQuery: '',
@@ -67,6 +71,7 @@ export const useUiStore = create<UiState>((set) => ({
   filterCity: 'all',
   radiusKm: 25,
   toastMessage: null,
+  toastKind: 'success',
 
   setTheme: (theme) => {
     localStorage.setItem('pmo_theme', theme)
@@ -87,7 +92,7 @@ export const useUiStore = create<UiState>((set) => ({
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   toggleInspector: () => set((state) => ({ inspectorOpen: !state.inspectorOpen })),
   setGridItemSize: (gridItemSize) => set({ gridItemSize }),
-  setInspectedPhoto: (inspectedPhoto) => set({ inspectedPhoto }),
+  setInspectedHash: (inspectedHash) => set({ inspectedHash }),
   setLightboxIndex: (lightboxIndex) => set({ lightboxIndex }),
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -121,12 +126,19 @@ export const useUiStore = create<UiState>((set) => ({
       searchQuery: '',
     }),
 
-  showToast: (toastMessage) => {
-    set({ toastMessage })
-    setTimeout(() => {
+  showToast: (toastMessage, toastKind = 'success') => {
+    // One timer: an older toast's timeout must not dismiss the newer one early (an error would vanish).
+    if (toastTimer) clearTimeout(toastTimer)
+    set({ toastMessage, toastKind })
+    toastTimer = setTimeout(() => {
+      toastTimer = null
       set({ toastMessage: null })
-    }, 2500)
+    }, toastKind === 'error' ? 6000 : 2500)
   },
 
-  hideToast: () => set({ toastMessage: null }),
+  hideToast: () => {
+    if (toastTimer) clearTimeout(toastTimer)
+    toastTimer = null
+    set({ toastMessage: null })
+  },
 }))
