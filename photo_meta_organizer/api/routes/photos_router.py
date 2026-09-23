@@ -50,6 +50,9 @@ from photo_meta_organizer.domain.models import ImageMetadata
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
 )
+from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
+    TinyDBCollectionRepository,
+)
 from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
     TinyDBRepository,
 )
@@ -61,6 +64,17 @@ search_router = APIRouter(prefix="/api", tags=["search"])
 index_router = APIRouter(prefix="/api/index", tags=["indexing"])
 
 _thumbnail_service = ThumbnailService()
+
+
+def get_collection_repository() -> TinyDBCollectionRepository:
+    """Placeholder dependency; ``create_app`` overrides this with the shared instance.
+
+    Unlike ``TinyDBRepository`` (whose ``__init__(db_path: str)`` FastAPI can treat as
+    a harmless, always-overridden query param), ``TinyDBCollectionRepository.__init__``
+    takes a ``TinyDB`` instance, which FastAPI cannot turn into a request field. A
+    plain function dependency sidesteps that.
+    """
+    raise RuntimeError("Collection repository dependency not configured")
 
 
 def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
@@ -269,6 +283,7 @@ def patch_photo(
 def delete_photo(
     file_hash: str,
     repository: TinyDBRepository = Depends(),
+    collection_repository: TinyDBCollectionRepository = Depends(get_collection_repository),
 ) -> DeleteResponse:
     """Remove a photo from the metadata index by its SHA-256 file hash."""
     deleted = repository.delete(file_hash)
@@ -277,6 +292,7 @@ def delete_photo(
             status_code=404,
             detail=f"Photo with hash '{file_hash}' not found.",
         )
+    collection_repository.remove_photo_from_all(file_hash)
     return DeleteResponse(
         deleted=True,
         file_hash=file_hash,
@@ -286,37 +302,36 @@ def delete_photo(
 
 @collections_router.get("", response_model=List[CollectionResponse], summary="List all collections")
 def list_collections(
-    repository: TinyDBRepository = Depends(),
+    collection_repository: TinyDBCollectionRepository = Depends(get_collection_repository),
 ) -> List[CollectionResponse]:
     """Retrieve all curated photo collections."""
-    cols = repository.get_collections()
     return [
         CollectionResponse(
-            name=c.get("name", ""),
-            description=c.get("description", ""),
-            photo_hashes=c.get("photo_hashes", []),
-            updated_at=c.get("updated_at", ""),
+            name=c.name,
+            description=c.description,
+            photo_hashes=c.photo_hashes,
+            updated_at=c.updated_at,
         )
-        for c in cols
+        for c in collection_repository.list_all()
     ]
 
 
 @collections_router.post("", response_model=CollectionResponse, summary="Create or update collection")
 def create_collection(
     request: CollectionCreateRequest,
-    repository: TinyDBRepository = Depends(),
+    collection_repository: TinyDBCollectionRepository = Depends(get_collection_repository),
 ) -> CollectionResponse:
     """Create or update a named photo collection."""
-    saved = repository.save_collection(
+    saved = collection_repository.save(
         name=request.name,
         photo_hashes=request.photo_hashes,
         description=request.description,
     )
     return CollectionResponse(
-        name=saved["name"],
-        description=saved["description"],
-        photo_hashes=saved["photo_hashes"],
-        updated_at=saved["updated_at"],
+        name=saved.name,
+        description=saved.description,
+        photo_hashes=saved.photo_hashes,
+        updated_at=saved.updated_at,
     )
 
 

@@ -186,15 +186,15 @@ class TestImageMetadataRepositoryProtocol:
         result = mock_repository.delete("nonexistent_hash")
         assert result is False
 
-    def test_repository_bulk_save(
+    def test_repository_save_many(
         self,
         mock_repository: MockImageMetadataRepository,
         sample_image_metadata,
         sample_image_metadata_minimal,
     ) -> None:
-        """Test bulk save operation."""
+        """Test batch save operation."""
         metadata_list = [sample_image_metadata, sample_image_metadata_minimal]
-        mock_repository.bulk_save(metadata_list)
+        mock_repository.save_many(metadata_list)
         assert len(mock_repository.list_all()) == 2
 
     def test_repository_upsert_semantics(

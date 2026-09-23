@@ -372,14 +372,36 @@ class MockImageMetadataRepository:
             return True
         return False
 
-    def bulk_save(self, metadata_list: List[ImageMetadata]) -> None:
-        """Save multiple metadata objects.
+    def save_many(self, items: List[ImageMetadata]) -> None:
+        """Save multiple metadata objects (matches ``ImageMetadataRepository.save_many``).
 
         Args:
-            metadata_list: List of ImageMetadata objects to save.
+            items: List of ImageMetadata objects to save.
         """
-        for metadata in metadata_list:
+        for metadata in items:
             self.save(metadata)
+
+    def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
+        """Swap the record stored under ``old_hash`` for ``metadata``."""
+        if old_hash != metadata.file_hash:
+            self.storage.pop(old_hash, None)
+        self.save(metadata)
+
+    def count(self) -> int:
+        """Return the number of stored records."""
+        return len(self.storage)
+
+    def delete_by_path(self, path: str) -> bool:
+        """Delete metadata by file path."""
+        metadata = self.get_by_path(path)
+        if metadata is None:
+            return False
+        return self.delete(metadata.file_hash)
+
+    def find_by_paths(self, paths: List[str]) -> List[ImageMetadata]:
+        """Find multiple metadata records by file paths."""
+        by_path = {m.file_info.path: m for m in self.storage.values()}
+        return [by_path[p] for p in paths if p in by_path]
 
 
 # ============================================================================

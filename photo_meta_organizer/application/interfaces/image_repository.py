@@ -14,6 +14,8 @@ The repository pattern provides:
 from datetime import datetime
 from typing import List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
+from photo_meta_organizer.application.interfaces.search_types import Facets, Page, SearchQuery
+from photo_meta_organizer.domain.curation import CurationCommand
 from photo_meta_organizer.domain.models import ImageMetadata
 
 
@@ -35,6 +37,49 @@ class ImageMetadataRepository(Protocol):
         find_by_paths: Retrieve multiple records by paths (for sync comparison).
         count: Return total number of stored records.
     """
+
+    def save_many(self, items: Sequence[ImageMetadata]) -> None:
+        """Upsert many records in one batch (one write, one index rebuild).
+
+        Used by parallel indexing so a run of N files costs one storage write,
+        not N.
+        """
+        ...
+
+    def query(self, query: SearchQuery) -> Page[ImageMetadata]:
+        """Filter, sort, and page records entirely inside the repository.
+
+        Replaces the old pattern of ``list_all()`` followed by Python-side
+        filtering: an implementation may use whatever index or SQL query is
+        appropriate, so a single page of results never requires deserializing
+        the whole store.
+        """
+        ...
+
+    def facets(self) -> Facets:
+        """Return aggregate counts (cameras, tags, years, GPS bounds) for filter UIs."""
+        ...
+
+    def apply(self, file_hash: str, command: CurationCommand) -> Optional[ImageMetadata]:
+        """Apply one typed curation command to a single record.
+
+        Returns:
+            The updated record, or ``None`` if ``file_hash`` does not exist.
+        """
+        ...
+
+    def apply_batch(self, file_hashes: Sequence[str], command: CurationCommand) -> int:
+        """Apply one typed curation command to many records.
+
+        Returns:
+            The number of existing records the command was applied to. Unknown
+            hashes are skipped.
+        """
+        ...
+
+    def batch_delete(self, file_hashes: Sequence[str]) -> int:
+        """Delete many records by hash. Returns the number actually deleted."""
+        ...
 
     def save(self, metadata: ImageMetadata) -> None:
         """Persist image metadata to storage.
@@ -147,6 +192,10 @@ class ImageMetadataRepository(Protocol):
     def update_metadata(self, file_hash: str, updates: dict) -> Optional[ImageMetadata]:
         """Update specific fields of an ImageMetadata entity (e.g. rating, flagged, labels).
 
+        Deprecated: superseded by :meth:`apply`, which takes a typed
+        :data:`~photo_meta_organizer.domain.curation.CurationCommand` instead of
+        a free-form dict. Kept only until callers finish migrating (PMO-09).
+
         Args:
             file_hash: SHA-256 hash of the record to update.
             updates: Dictionary of fields to update.
@@ -159,6 +208,9 @@ class ImageMetadataRepository(Protocol):
     def batch_update(self, file_hashes: List[str], updates: dict) -> int:
         """Apply batch updates across multiple image records atomically.
 
+        Deprecated: superseded by :meth:`apply_batch`. Kept only until callers
+        finish migrating (PMO-09).
+
         Args:
             file_hashes: List of SHA-256 hashes.
             updates: Dictionary of fields to update or actions.
@@ -166,12 +218,4 @@ class ImageMetadataRepository(Protocol):
         Returns:
             Count of successfully updated records.
         """
-        ...
-
-    def get_collections(self) -> List[dict]:
-        """Retrieve all stored collections/albums."""
-        ...
-
-    def save_collection(self, name: str, photo_hashes: List[str], description: str = "") -> dict:
-        """Create or update a named photo collection/album."""
         ...

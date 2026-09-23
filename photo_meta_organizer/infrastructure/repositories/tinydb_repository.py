@@ -17,13 +17,27 @@ Example:
 
 import json
 import logging
+import math
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from tinydb import TinyDB, Query
 
+from photo_meta_organizer.application.interfaces.search_types import (
+    Facets,
+    FacetCount,
+    GpsBounds,
+    Page,
+    SearchQuery,
+)
 from photo_meta_organizer.domain.curation import (
+    AddTag,
+    CurationCommand,
+    RemoveTag,
+    SetFlag,
+    SetLabels,
+    SetRating,
     merge_labels,
     validate_rating,
     validate_tag,
@@ -39,6 +53,18 @@ from photo_meta_organizer.domain.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance between two points, in kilometers."""
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 class TinyDBRepository:
@@ -135,9 +161,20 @@ class TinyDBRepository:
         """Close the database connection."""
         self._db.close()
 
+    @property
+    def db(self) -> TinyDB:
+        """The underlying TinyDB instance, shared with :class:`TinyDBCollectionRepository`."""
+        return self._db
+
     # =========================================================================
     # Protocol Methods
     # =========================================================================
+
+    def save_many(self, items: Sequence[ImageMetadata]) -> None:
+        """Upsert many records in one batch (one index rebuild, not one per record)."""
+        for metadata in items:
+            self._upsert(metadata)
+        self.rebuild_indexes()
 
     def save(self, metadata: ImageMetadata) -> None:
         """Persist image metadata with upsert semantics.
@@ -361,6 +398,209 @@ class TinyDBRepository:
         return results
 
     # =========================================================================
+    # Search, paging and facets (PMO-07/09)
+    # =========================================================================
+
+    def query(self, query: SearchQuery) -> Page[ImageMetadata]:
+        """Filter, sort and page records. TinyDB has no query planner, so this
+        still deserializes every record; the SQLite implementation is where
+        paging actually avoids that cost.
+        """
+        all_records = self.list_all()
+        filtered = [record for record in all_records if self._matches_query(record, query)]
+        sorted_records = self._sort_records(filtered, query.sort_by, query.sort_order)
+
+        total_count = len(sorted_records)
+        page_size = max(1, query.page_size)
+        total_pages = max(1, math.ceil(total_count / page_size)) if total_count > 0 else 1
+        page = max(1, min(query.page, total_pages))
+
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+
+        return Page(
+            items=sorted_records[start_idx:end_idx],
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+
+    @staticmethod
+    def _matches_query(record: ImageMetadata, query: SearchQuery) -> bool:
+        exif = record.exif
+        info = record.file_info
+
+        if query.date_start or query.date_end:
+            captured_at = to_naive(exif.captured_at) if exif else None
+            if not captured_at:
+                return False
+            if query.date_start and captured_at < query.date_start:
+                return False
+            if query.date_end and captured_at > query.date_end:
+                return False
+
+        if query.camera_make:
+            make = exif.camera_make if exif else None
+            if not make or query.camera_make.lower() not in make.lower():
+                return False
+        if query.camera_model:
+            model = exif.camera_model if exif else None
+            if not model or query.camera_model.lower() not in model.lower():
+                return False
+
+        if (
+            query.location_lat is not None
+            and query.location_lon is not None
+            and query.radius_km is not None
+        ):
+            gps = exif.location if exif else None
+            if not gps or gps.latitude is None or gps.longitude is None:
+                return False
+            dist = _haversine_distance_km(
+                query.location_lat, query.location_lon, gps.latitude, gps.longitude
+            )
+            if dist > query.radius_km:
+                return False
+
+        if query.tags:
+            rec_tags = set(record.labels or [])
+            if not set(query.tags).issubset(rec_tags):
+                return False
+
+        if query.rating is not None and record.rating != query.rating:
+            return False
+
+        if query.flagged is not None and record.flagged != query.flagged:
+            return False
+
+        if query.search_term:
+            haystack = " ".join(
+                filter(
+                    None,
+                    [
+                        info.name,
+                        info.path,
+                        exif.camera_make if exif else None,
+                        exif.camera_model if exif else None,
+                        *record.labels,
+                    ],
+                )
+            ).lower()
+            if query.search_term.lower() not in haystack:
+                return False
+
+        return True
+
+    @staticmethod
+    def _sort_records(
+        records: List[ImageMetadata], sort_by: str, sort_order: str
+    ) -> List[ImageMetadata]:
+        reverse = sort_order.lower() == "desc"
+
+        def get_sort_key(record: ImageMetadata):
+            if sort_by == "size_bytes":
+                return record.file_info.size_bytes or 0
+            elif sort_by == "camera_model":
+                return (record.exif.camera_model if record.exif else "") or ""
+            elif sort_by == "file_name":
+                return record.file_info.name or ""
+            else:  # captured_at
+                dt = to_naive(record.exif.captured_at) if record.exif else None
+                return dt if dt is not None else datetime.min
+
+        return sorted(records, key=get_sort_key, reverse=reverse)
+
+    def facets(self) -> Facets:
+        """Aggregate counts for filter UIs, computed over every record."""
+        cameras: Dict[str, int] = {}
+        tags: Dict[str, int] = {}
+        years: Dict[str, int] = {}
+        lats: List[float] = []
+        lons: List[float] = []
+
+        for record in self.list_all():
+            if record.exif and record.exif.camera_make:
+                cameras[record.exif.camera_make] = cameras.get(record.exif.camera_make, 0) + 1
+            for tag in record.labels:
+                tags[tag] = tags.get(tag, 0) + 1
+            captured_at = record.exif.captured_at if record.exif else None
+            if captured_at:
+                year = str(captured_at.year)
+                years[year] = years.get(year, 0) + 1
+            if record.exif and record.exif.location:
+                lats.append(record.exif.location.latitude)
+                lons.append(record.exif.location.longitude)
+
+        gps_bounds = None
+        if lats and lons:
+            gps_bounds = GpsBounds(
+                min_lat=min(lats), max_lat=max(lats), min_lon=min(lons), max_lon=max(lons)
+            )
+
+        return Facets(
+            cameras=[FacetCount(name=k, count=v) for k, v in sorted(cameras.items())],
+            tags=[FacetCount(name=k, count=v) for k, v in sorted(tags.items())],
+            years=[FacetCount(name=k, count=v) for k, v in sorted(years.items())],
+            gps_bounds=gps_bounds,
+        )
+
+    # =========================================================================
+    # Typed curation commands (PMO-07)
+    # =========================================================================
+
+    def apply(self, file_hash: str, command: CurationCommand) -> Optional[ImageMetadata]:
+        """Apply one typed curation command to a single record."""
+        doc = self._hash_index.get(file_hash)
+        if not doc:
+            return None
+        self._apply_command_to_doc(doc, command)
+        q = Query()
+        self._table.update(doc, q.file_hash == file_hash)
+        self.rebuild_indexes()
+        return self._deserialize(doc)
+
+    def apply_batch(self, file_hashes: Sequence[str], command: CurationCommand) -> int:
+        """Apply one typed curation command to many records. Unknown hashes are skipped."""
+        count = 0
+        q = Query()
+        for f_hash in file_hashes:
+            doc = self._hash_index.get(f_hash)
+            if not doc:
+                continue
+            self._apply_command_to_doc(doc, command)
+            self._table.update(doc, q.file_hash == f_hash)
+            count += 1
+        self.rebuild_indexes()
+        return count
+
+    @staticmethod
+    def _apply_command_to_doc(doc: Dict[str, Any], command: CurationCommand) -> None:
+        """Mutate ``doc`` in place per ``command``. Commands validate at construction,
+        so nothing here can raise on a bad value.
+        """
+        if isinstance(command, SetRating):
+            doc["rating"] = command.value
+        elif isinstance(command, SetFlag):
+            doc["flagged"] = command.value
+        elif isinstance(command, AddTag):
+            doc["labels"] = merge_labels(doc.get("labels", []), [command.value])
+        elif isinstance(command, RemoveTag):
+            doc["labels"] = [t for t in doc.get("labels", []) if t != command.value]
+        elif isinstance(command, SetLabels):
+            doc["labels"] = merge_labels([], list(command.value))
+        else:
+            raise TypeError(f"unknown curation command: {command!r}")
+
+    def batch_delete(self, file_hashes: Sequence[str]) -> int:
+        """Delete many records by hash. Returns the number actually deleted."""
+        count = 0
+        for f_hash in file_hashes:
+            if self.delete(f_hash):
+                count += 1
+        return count
+
+    # =========================================================================
     # Serialization: Domain Models → TinyDB Documents
     # =========================================================================
 
@@ -527,24 +767,6 @@ class TinyDBRepository:
         self.rebuild_indexes()
         return count
 
-    def get_collections(self) -> List[dict]:
-        """Retrieve all stored collections."""
-        col_table = self._db.table("collections")
-        return col_table.all()
-
-    def save_collection(self, name: str, photo_hashes: List[str], description: str = "") -> dict:
-        """Save or update a named collection."""
-        col_table = self._db.table("collections")
-        q = Query()
-        col_doc = {
-            "name": name,
-            "description": description,
-            "photo_hashes": list(photo_hashes),
-            "updated_at": datetime.utcnow().isoformat(),
-        }
-        col_table.upsert(col_doc, q.name == name)
-        return col_doc
-
     # =========================================================================
     # Deserialization: TinyDB Documents → Domain Models
     # =========================================================================
@@ -636,7 +858,3 @@ class TinyDBRepository:
             orientation=exif_doc.get("orientation"),
             raw_tags=exif_doc.get("raw_tags", {}),
         )
-
-    def close(self) -> None:
-        """Close the underlying TinyDB database file."""
-        self._db.close()

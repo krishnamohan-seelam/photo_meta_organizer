@@ -4,8 +4,8 @@ These invariants belong to the domain, not to any one entry point, so the API
 schema, the repository and the CLI all share them.
 """
 
-from dataclasses import replace
-from typing import Any, Optional
+from dataclasses import dataclass, field, replace
+from typing import Any, List, Optional, Union
 
 from photo_meta_organizer.domain.models import ImageMetadata
 
@@ -23,7 +23,11 @@ def validate_rating(value: Any) -> Optional[int]:
     """
     if value is None:
         return None
-    if isinstance(value, bool) or not isinstance(value, int) or not MIN_RATING <= value <= MAX_RATING:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not MIN_RATING <= value <= MAX_RATING
+    ):
         raise ValueError(
             f"rating must be an integer from {MIN_RATING} to {MAX_RATING}, or null; got {value!r}"
         )
@@ -77,3 +81,64 @@ def carry_over_curation(target: ImageMetadata, *sources: ImageMetadata) -> Image
         flagged=any(r.flagged for r in records),
         labels=labels,
     )
+
+
+# ============================================================================
+# Typed curation commands (PMO-07): a closed set replacing the old
+# ``{"action": ..., "value": ...}`` dicts passed to the repository. Validation
+# happens at construction time, so a repository never has to trust a caller's dict.
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class SetRating:
+    """Set (or clear, with ``value=None``) a photo's rating."""
+
+    value: Optional[int]
+
+    def __post_init__(self) -> None:
+        validate_rating(self.value)
+
+
+@dataclass(frozen=True)
+class SetFlag:
+    """Set a photo's flagged state."""
+
+    value: bool
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, bool):
+            raise ValueError(f"flagged must be a boolean; got {self.value!r}")
+
+
+@dataclass(frozen=True)
+class AddTag:
+    """Add one label to a photo, if not already present."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", validate_tag(self.value))
+
+
+@dataclass(frozen=True)
+class RemoveTag:
+    """Remove one label from a photo, if present."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", validate_tag(self.value))
+
+
+@dataclass(frozen=True)
+class SetLabels:
+    """Replace a photo's whole label list."""
+
+    value: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", [validate_tag(t) for t in self.value])
+
+
+CurationCommand = Union[SetRating, SetFlag, AddTag, RemoveTag, SetLabels]

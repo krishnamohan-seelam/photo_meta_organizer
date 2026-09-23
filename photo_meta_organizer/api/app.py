@@ -30,9 +30,13 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
+    get_collection_repository,
     index_router,
     photos_router,
     search_router,
+)
+from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
+    TinyDBCollectionRepository,
 )
 from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
     TinyDBRepository,
@@ -96,14 +100,19 @@ def create_app(
         allowed_hosts=list(allowed_hosts or _env_list("PMO_ALLOWED_HOSTS") or DEFAULT_ALLOWED_HOSTS),
     )
 
-    # Build shared repository
+    # Build shared repositories
     repository = TinyDBRepository(db_path=db_path)
+    collection_repository = TinyDBCollectionRepository(repository.db)
 
-    # Override dependency to inject repository
+    # Override dependencies to inject the shared instances
     def get_repository() -> TinyDBRepository:
         return repository
 
+    def _get_collection_repository() -> TinyDBCollectionRepository:
+        return collection_repository
+
     app.dependency_overrides[TinyDBRepository] = get_repository
+    app.dependency_overrides[get_collection_repository] = _get_collection_repository
 
     # Mount routers
     app.include_router(photos_router)

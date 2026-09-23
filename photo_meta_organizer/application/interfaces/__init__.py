@@ -63,6 +63,10 @@ Exports:
     RemoteFileHandle: Value object for file metadata before processing.
 """
 
+from photo_meta_organizer.application.interfaces.collection_repository import (
+    CollectionRecord,
+    CollectionRepository,
+)
 from photo_meta_organizer.application.interfaces.image_extractor import (
     ImageMetadataExtractor,
 )
@@ -73,10 +77,24 @@ from photo_meta_organizer.application.interfaces.image_retriever import (
     ImageRetriever,
     RemoteFileHandle,
 )
+from photo_meta_organizer.application.interfaces.search_types import (
+    Facets,
+    FacetCount,
+    GpsBounds,
+    Page,
+    SearchQuery,
+)
 
 __all__ = [
+    "CollectionRecord",
+    "CollectionRepository",
+    "Facets",
+    "FacetCount",
+    "GpsBounds",
     "ImageMetadataExtractor",
     "ImageMetadataRepository",
     "ImageRetriever",
+    "Page",
     "RemoteFileHandle",
+    "SearchQuery",
 ]
