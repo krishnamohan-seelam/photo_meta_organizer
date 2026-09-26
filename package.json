@@ -10,6 +10,6 @@
     "desktop:dev": "npm --prefix desktop run dev",
     "desktop:start": "npm --prefix desktop run start",
     "desktop:package": "npm run frontend:build && npm --prefix desktop run package",
-    "backend:package": ".\\.venv\\Scripts\\python.exe scripts/build_backend.py"
+    "backend:package": "uv run --group build python scripts/build_backend.py"
   }
 }

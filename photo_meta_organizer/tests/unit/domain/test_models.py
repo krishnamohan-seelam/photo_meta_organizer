@@ -10,9 +10,11 @@ Tests cover:
 - ImageMetadata domain entity
 """
 
-import pytest
 from datetime import datetime
 
+import pytest
+
+from photo_meta_organizer.domain.datetimes import utc_now_naive
 from photo_meta_organizer.domain.models import (
     CameraProfile,
     GpsCoordinates,
@@ -302,7 +304,7 @@ class TestImageMetadata:
             sample_image_metadata.file_hash = "different_hash"  # type: ignore
 
         with pytest.raises(AttributeError):
-            sample_image_metadata.added_at = datetime.utcnow()  # type: ignore
+            sample_image_metadata.added_at = utc_now_naive()  # type: ignore
 
     def test_added_at_defaults_to_now(self) -> None:
         """Test that added_at defaults to current timestamp."""
@@ -314,7 +316,7 @@ class TestImageMetadata:
         )
         assert metadata.added_at is not None
         assert isinstance(metadata.added_at, datetime)
-        now = datetime.utcnow()
+        now = utc_now_naive()
         assert (now - metadata.added_at).total_seconds() < 1
 
     def test_labels_default_to_empty_list(self) -> None:

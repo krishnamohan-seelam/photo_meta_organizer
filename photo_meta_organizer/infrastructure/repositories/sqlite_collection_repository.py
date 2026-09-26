@@ -9,11 +9,11 @@ never have to special-case the backend.
 
 import sqlite3
 import threading
-from datetime import datetime
 
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRecord,
 )
+from photo_meta_organizer.domain.datetimes import utc_now_naive
 
 
 class SqliteCollectionRepository:
@@ -40,7 +40,7 @@ class SqliteCollectionRepository:
     def save(
         self, name: str, photo_hashes: list[str], description: str = ""
     ) -> CollectionRecord:
-        updated_at = datetime.utcnow().isoformat()
+        updated_at = utc_now_naive().isoformat()
         with self._lock, self._conn:
             self._conn.execute(
                 """

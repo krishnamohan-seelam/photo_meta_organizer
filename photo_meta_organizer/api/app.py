@@ -28,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from photo_meta_organizer import __version__
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
     get_collection_repository,
@@ -93,7 +94,7 @@ def create_app(
             "REST API for querying, searching, and managing photo metadata "
             "indexed by the Photo Meta Organizer."
         ),
-        version="4.0.0",
+        version=__version__,
         docs_url="/docs",
         redoc_url="/redoc",
     )

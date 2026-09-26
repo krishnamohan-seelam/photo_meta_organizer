@@ -23,6 +23,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
+from photo_meta_organizer.domain.datetimes import utc_now_naive
 
 # =============================================================================
 # Enums
@@ -230,7 +231,7 @@ class ImageMetadata:
     labels: list[str] = field(default_factory=list)
     rating: Optional[int] = None
     flagged: bool = False
-    added_at: datetime = field(default_factory=datetime.utcnow)
+    added_at: datetime = field(default_factory=utc_now_naive)
 
 
 # =============================================================================

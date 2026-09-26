@@ -1,0 +1,70 @@
+[project]
+name = "photo-meta-organizer"
+dynamic = ["version"]
+description = "High-performance metadata indexing and organization system for large photo libraries"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+# Runtime only: what the CLI, the API and the packaged desktop backend import.
+dependencies = [
+    "Pillow>=12.0",
+    "exifread>=3.5",
+    "fastapi>=0.141",
+    "pydantic>=2.13",
+    "uvicorn>=0.52",
+    "tabulate>=0.10",       # CLI search/stats tables
+    "tqdm>=4.67",           # CLI progress bar
+    "tinydb>=4.8",          # read-only: importing a legacy metadata.json (ADR-001)
+]
+
+[project.optional-dependencies]
+# S3ImageRetriever exists but is not wired into the CLI or API yet (Phase 6).
+s3 = ["boto3>=1.35"]
+
+[project.scripts]
+photo-meta-organizer = "photo_meta_organizer.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "pytest-cov>=7.0",
+    "httpx>=0.28",          # FastAPI TestClient
+    "mypy>=1.19",
+    "types-tqdm",
+    "ruff>=0.15",
+    "black>=26.1",
+]
+# Desktop packaging only: `uv sync --group build` or `npm run backend:package`.
+build = ["pyinstaller>=6.11"]
+
+[tool.uv]
+default-groups = ["dev"]
+# Use the OS certificate store: this machine's HTTPS is intercepted by a local certificate
+# that Windows trusts but uv's bundled roots do not. Harmless elsewhere.
+native-tls = true
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+# The one version source.
+version = { attr = "photo_meta_organizer.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["photo_meta_organizer*"]
+exclude = ["photo_meta_organizer.tests*"]
+
+# pytest: configured in photo_meta_organizer/pytest.ini (run tests from that directory).
+# mypy:   configured in photo_meta_organizer/setup.cfg (run mypy from that directory).
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]

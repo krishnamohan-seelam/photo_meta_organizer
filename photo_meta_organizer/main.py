@@ -21,12 +21,14 @@ Example:
     $ python -m photo_meta_organizer.main index --path /photos --db metadata.json
 """
 
+
 import argparse
 import logging
 import sys
 from datetime import datetime
 from logging.config import dictConfig
 
+from photo_meta_organizer import __version__
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
     ImageMetadataRepository,
@@ -547,7 +549,7 @@ def main() -> int:
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.0 (Phase 0 Foundation)",
+        version=f"%(prog)s {__version__}",
     )
 
     parser.add_argument(

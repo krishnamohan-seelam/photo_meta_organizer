@@ -50,7 +50,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+ & npm (for frontend development)
-- pip
+- [uv](https://docs.astral.sh/uv/) (manages the Python environment and the lockfile)
 
 ### Installation
 
@@ -59,19 +59,17 @@ Metadata indexing and organization system built specifically for large-scale pho
 git clone https://github.com/krishnamohan-seelam/photo_meta_organizer.git
 cd photo_meta_organizer
 
-# Create and activate virtual environment
-python -m venv .venv
+# Create .venv with the exact locked versions (runtime + dev tools)
+uv sync
 
-# Windows
-.venv\Scripts\activate
-
-# macOS/Linux
-source .venv/bin/activate
-
-# Install Python backend dependencies.
-# The requirements file lives in the package directory, and uvicorn is not listed in it.
-pip install -r photo_meta_organizer/requirements.txt uvicorn
+# Activate it, or prefix commands with `uv run`
+.venv\Scripts\activate          # Windows
+source .venv/bin/activate       # macOS/Linux
 ```
+
+Dependencies live in the root `pyproject.toml` (runtime, the `dev` group, the `build`
+group for desktop packaging, and the optional `s3` extra) and are pinned in `uv.lock`.
+Add one with `uv add <package>` (or `uv add --group dev <package>`) and commit both files.
 
 ---
 
@@ -132,7 +130,7 @@ npm run desktop:start
 npm run desktop:dev
 
 # Package into an NSIS installer and portable executable (see Known limitations first)
-npm run backend:package      # PyInstaller build of the backend (PyInstaller must be installed)
+npm run backend:package      # PyInstaller build of the backend (uv adds PyInstaller from the `build` group)
 npm run desktop:package
 ```
 *Output binaries are generated in:* `desktop/dist-package/`

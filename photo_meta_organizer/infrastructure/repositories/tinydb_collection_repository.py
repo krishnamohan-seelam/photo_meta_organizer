@@ -5,12 +5,12 @@ Shares the same open ``TinyDB`` instance as a sibling ``TinyDBRepository`` (pass
 """
 
 import logging
-from datetime import datetime
 from typing import List, Optional
 
-from tinydb import TinyDB, Query
+from tinydb import Query, TinyDB
 
 from photo_meta_organizer.application.interfaces.collection_repository import CollectionRecord
+from photo_meta_organizer.domain.datetimes import utc_now_naive
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class TinyDBCollectionRepository:
             "name": name,
             "description": description,
             "photo_hashes": list(photo_hashes),
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": utc_now_naive().isoformat(),
         }
         self._table.upsert(doc, q.name == name)
         return self._to_record(doc)
