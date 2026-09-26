@@ -2,10 +2,11 @@ import React, { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { errorMessage } from './api/client'
 import { usePhotos } from './hooks/usePhotos'
-import { useScanFolder } from './hooks/useScanFolder'
+import { useJobCompletionNotices, useJobs } from './hooks/useJobs'
 import { useUiStore } from './stores/useUiStore'
 import { AppHeader } from './components/header/AppHeader'
 import { CommandPalette } from './components/header/CommandPalette'
+import { FolderJobDialog } from './components/jobs/FolderJobDialog'
 import { FilterSidebar } from './components/filters/FilterSidebar'
 import { PhotoGallery } from './components/gallery/PhotoGallery'
 import { ExifInspector } from './components/inspector/ExifInspector'
@@ -27,7 +28,9 @@ export const App: React.FC = () => {
   // The library lives in the react-query cache: every view and every edit goes through it.
   const { data, isPending, isError, error, refetch, isFetching } = usePhotos()
   const photos = data ?? NO_PHOTOS
-  const { scan, isScanning } = useScanFolder()
+  const { activeJob } = useJobs()
+  const setJobDialog = useUiStore((s) => s.setJobDialog)
+  useJobCompletionNotices()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -103,7 +106,7 @@ export const App: React.FC = () => {
         ) : !data ? (
           <ErrorState message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />
         ) : photos.length === 0 ? (
-          <EmptyLibraryState onScan={scan} scanning={isScanning} />
+          <EmptyLibraryState onScan={() => setJobDialog('index')} scanning={activeJob !== null} />
         ) : (
           <>
             {activeView === 'studio' && (
@@ -127,6 +130,7 @@ export const App: React.FC = () => {
 
       {/* Modals & Overlays */}
       <CommandPalette />
+      <FolderJobDialog />
       <LightboxModal photos={filteredPhotos} />
 
       {/* Toast notifications */}

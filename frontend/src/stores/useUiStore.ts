@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
 export type ToastKind = 'success' | 'error'
+export type JobDialogKind = 'index' | 'sync'
 
 interface UiState {
   theme: 'dark' | 'light'
@@ -14,6 +15,8 @@ interface UiState {
   inspectedHash: string | null
   lightboxIndex: number | null
   commandPaletteOpen: boolean
+  /** Which folder dialog is open: Scan (index) or Sync. */
+  jobDialog: JobDialogKind | null
   searchQuery: string
   filterCameras: string[]
   filterTags: string[]
@@ -34,6 +37,7 @@ interface UiState {
   setInspectedHash: (hash: string | null) => void
   setLightboxIndex: (idx: number | null) => void
   setCommandPaletteOpen: (open: boolean) => void
+  setJobDialog: (kind: JobDialogKind | null) => void
   setSearchQuery: (q: string) => void
   toggleCameraFilter: (camera: string) => void
   toggleTagFilter: (tag: string) => void
@@ -63,6 +67,7 @@ export const useUiStore = create<UiState>((set) => ({
   inspectedHash: null,
   lightboxIndex: null,
   commandPaletteOpen: false,
+  jobDialog: null,
   searchQuery: '',
   filterCameras: [],
   filterTags: [],
@@ -95,6 +100,7 @@ export const useUiStore = create<UiState>((set) => ({
   setInspectedHash: (inspectedHash) => set({ inspectedHash }),
   setLightboxIndex: (lightboxIndex) => set({ lightboxIndex }),
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+  setJobDialog: (jobDialog) => set({ jobDialog }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 
   toggleCameraFilter: (camera) =>

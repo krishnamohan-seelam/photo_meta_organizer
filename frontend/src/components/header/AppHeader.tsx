@@ -2,7 +2,8 @@ import React from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
 import type { ViewMode } from '../../stores/useUiStore'
-import { useScanFolder } from '../../hooks/useScanFolder'
+import { useJobs } from '../../hooks/useJobs'
+import { JobProgress } from '../jobs/JobProgress'
 import {
   Camera,
   Search,
@@ -18,10 +19,12 @@ import {
   PanelRightClose,
   Download,
   FolderPlus,
+  RefreshCw,
 } from 'lucide-react'
 
 export const AppHeader: React.FC = () => {
-  const { scan: handleScanFolder, isScanning: isIndexing } = useScanFolder()
+  const { activeJob } = useJobs()
+  const setJobDialog = useUiStore((s) => s.setJobDialog)
   const { theme, toggleTheme, activeView, setActiveView, lightsOut, toggleLightsOut, sidebarOpen, toggleSidebar, inspectorOpen, toggleInspector, setCommandPaletteOpen, showToast } = useUiStore(useShallow((s) => ({ theme: s.theme, toggleTheme: s.toggleTheme, activeView: s.activeView, setActiveView: s.setActiveView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, sidebarOpen: s.sidebarOpen, toggleSidebar: s.toggleSidebar, inspectorOpen: s.inspectorOpen, toggleInspector: s.toggleInspector, setCommandPaletteOpen: s.setCommandPaletteOpen, showToast: s.showToast })))
 
   const views: { key: ViewMode; label: string; icon: React.ReactNode }[] = [
@@ -132,18 +135,32 @@ export const AppHeader: React.FC = () => {
           </>
         )}
 
-        <button
-          className="btn btn-secondary"
-          onClick={handleScanFolder}
-          disabled={isIndexing}
-          title="Scan and index photos from a local folder"
-          style={{ padding: '6px 12px', gap: '6px' }}
-        >
-          <FolderPlus size={15} color="var(--accent-primary)" />
-          <span>{isIndexing ? 'Indexing...' : 'Scan Folder'}</span>
-        </button>
+        {activeJob ? (
+          <JobProgress job={activeJob} />
+        ) : (
+          <>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setJobDialog('index')}
+              title="Scan and index photos from a local folder"
+              style={{ padding: '6px 12px', gap: '6px', whiteSpace: 'nowrap' }}
+            >
+              <FolderPlus size={15} color="var(--accent-primary)" />
+              <span>Scan</span>
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setJobDialog('sync')}
+              title="Re-check a scanned folder for new, edited and deleted photos"
+              style={{ padding: '6px 12px', gap: '6px', whiteSpace: 'nowrap' }}
+            >
+              <RefreshCw size={15} color="var(--accent-primary)" />
+              <span>Sync</span>
+            </button>
+          </>
+        )}
 
-        <button className="btn btn-primary" onClick={handleExportJson}>
+        <button className="btn btn-primary" onClick={handleExportJson} style={{ whiteSpace: 'nowrap' }}>
           <Download size={15} />
           <span>Export JSON</span>
         </button>

@@ -293,3 +293,153 @@ body.lights-out .inspector-pane {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+
+/* Folder dialog (Scan / Sync) */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  z-index: 99990;
+}
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+  background: var(--modal-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 18px 20px;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent-primary);
+}
+.dialog-header h2 {
+  font-size: 1rem;
+  margin: 0;
+  color: var(--text-primary);
+}
+.dialog-close {
+  margin-left: auto;
+  padding: 4px 6px;
+}
+.dialog-intro {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.dialog-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.dialog-row {
+  display: flex;
+  gap: 8px;
+}
+.dialog-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.dialog-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.dialog-options {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.dialog-options legend {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+.dialog-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Running job in the header */
+.job-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--accent-primary);
+  min-width: 220px;
+}
+.job-progress-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.job-progress-label {
+  font-size: 0.74rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.job-progress-failed {
+  color: var(--accent-danger);
+}
+.job-progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+.job-progress-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  transition: width 0.3s ease;
+}
+.job-progress-fill.indeterminate {
+  width: 30%;
+  animation: job-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes job-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+.job-progress-cancel {
+  padding: 3px 5px;
+}

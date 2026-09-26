@@ -166,6 +166,25 @@ export function startIndexJobApi(folderPath: string, numWorkers: number = 4): Pr
   )
 }
 
+/** Flags of an incremental sync; the server defaults match the CLI (cleanup off, new + modified on). */
+export interface SyncOptions {
+  cleanup_deleted?: boolean
+  reprocess_modified?: boolean
+  index_new?: boolean
+  dry_run?: boolean
+  rehash?: boolean
+}
+
+/** Start an incremental sync of a folder. Only photos under that folder are affected. */
+export function startSyncJobApi(folderPath: string, options: SyncOptions = {}): Promise<Job> {
+  return request('/sync', 'Syncing the folder', jsonInit('POST', { folder_path: folderPath, ...options }))
+}
+
+/** Recent jobs, newest first (the server keeps them in memory only). */
+export function listJobsApi(): Promise<Job[]> {
+  return request('/jobs', 'Loading jobs')
+}
+
 export function getJobApi(jobId: string): Promise<Job> {
   return request(`/jobs/${jobId}`, 'Checking the job')
 }
