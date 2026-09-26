@@ -20,6 +20,7 @@ Security model (local application):
 """
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -30,8 +31,10 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
     get_collection_repository,
+    get_job_manager,
     get_repository,
     index_router,
+    jobs_router,
     photos_router,
     search_router,
 )
@@ -39,6 +42,7 @@ from photo_meta_organizer.application.composition import (
     build_collection_repository,
     build_repository,
 )
+from photo_meta_organizer.application.jobs import JobManager
 
 # "testserver" is the host name Starlette's TestClient uses; it is not resolvable
 # from the public internet, so it does not weaken the rebinding defence.
@@ -73,7 +77,16 @@ def create_app(
     Returns:
         A fully configured FastAPI application instance with all routes mounted.
     """
+    job_manager = JobManager()
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        # Stop background jobs cleanly so none is killed mid-write at exit.
+        job_manager.shutdown()
+
     app = FastAPI(
+        lifespan=lifespan,
         title="Photo Meta Organizer API",
         description=(
             "REST API for querying, searching, and managing photo metadata "
@@ -116,12 +129,14 @@ def create_app(
 
     app.dependency_overrides[get_repository] = _get_repository
     app.dependency_overrides[get_collection_repository] = _get_collection_repository
+    app.dependency_overrides[get_job_manager] = lambda: job_manager
 
     # Mount routers
     app.include_router(photos_router)
     app.include_router(collections_router)
     app.include_router(search_router)
     app.include_router(index_router)
+    app.include_router(jobs_router)
 
     frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
     assets_dir = frontend_dist / "assets"

@@ -159,7 +159,7 @@ def handle_index_command(args: argparse.Namespace) -> int:
         args: Parsed CLI arguments (--path, --db, etc.).
 
     Returns:
-        Exit code (0 = success, non-zero = error).
+        Exit code: 0 = success, 2 = some files failed (listed on stdout).
     """
     retriever = build_retriever(args)
     extractor = build_extractor()
@@ -171,22 +171,26 @@ def handle_index_command(args: argparse.Namespace) -> int:
             ParallelIndexPhotosUseCase,
         )
 
-        use_case = ParallelIndexPhotosUseCase(
+        report = ParallelIndexPhotosUseCase(
             retriever=retriever,
             extractor=extractor,
             repository=repository,
             num_workers=workers,
-        )
-    else:
-        from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
+        ).run()
+        print(f"Successfully indexed {len(report.indexed)} photos")
+        if report.errors:
+            print(f"Errors ({len(report.errors)}):")
+            for err in report.errors:
+                print(f"  ✗ {err}")
+        return 0 if not report.errors else 2
 
-        use_case = IndexPhotosUseCase(
-            retriever=retriever,
-            extractor=extractor,
-            repository=repository,
-        )
+    from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
 
-    results = use_case.execute()
+    results = IndexPhotosUseCase(
+        retriever=retriever,
+        extractor=extractor,
+        repository=repository,
+    ).execute()
     print(f"Successfully indexed {len(results)} photos")
     return 0
 

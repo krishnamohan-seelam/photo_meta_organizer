@@ -341,6 +341,9 @@ class TestImageMetadata:
         file_info = ImageFileInfo("test.jpg", "/test.jpg", 1024, "image/jpeg")
         dims = ImageDimensions(1920, 1080)
         exif = ImageExifData(camera_make="Canon")
+        # Pinned: the default is "now", which differs between the two constructions
+        # whenever the clock ticks in between (a flaky failure otherwise).
+        added_at = datetime(2024, 1, 1, 12, 0, 0)
 
         metadata1 = ImageMetadata(
             file_hash="abc123",
@@ -348,6 +351,7 @@ class TestImageMetadata:
             dimensions=dims,
             exif=exif,
             labels=["test"],
+            added_at=added_at,
         )
         metadata2 = ImageMetadata(
             file_hash="abc123",
@@ -355,6 +359,7 @@ class TestImageMetadata:
             dimensions=dims,
             exif=exif,
             labels=["test"],
+            added_at=added_at,
         )
         assert metadata1 == metadata2
 

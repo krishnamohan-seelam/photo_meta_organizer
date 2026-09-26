@@ -179,12 +179,28 @@ class IndexFolderRequest(BaseModel):
     num_workers: int = Field(default=4, ge=1, le=32, description="Concurrent extraction threads")
 
 
-class IndexFolderResponse(BaseModel):
-    """Response schema for folder indexing operation."""
+class JobResponse(BaseModel):
+    """A background job (PMO-18): poll ``GET /api/jobs/{id}`` until ``status`` is final.
 
-    indexed_count: int
+    ``processed`` counts successes and failures; ``failed_count`` is the failures so
+    far. ``counts`` holds the kind-specific final numbers (for an index job:
+    ``total``, ``indexed``, ``failed``). ``errors`` lists per-file messages, capped.
+    """
+
+    id: str
+    kind: str
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
     folder_path: str
-    message: str
+    total: int | None = None
+    processed: int = 0
+    failed_count: int = 0
+    counts: dict[str, int] = Field(default_factory=dict)
+    errors: list[str] = Field(default_factory=list)
+    message: str = ""
+    cancel_requested: bool = False
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class FacetCountSchema(BaseModel):

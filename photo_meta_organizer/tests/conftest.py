@@ -461,3 +461,19 @@ def di_wired_components(
         "extractor": mock_extractor,
         "repository": mock_repository,
     }
+
+
+def wait_for_job(client, job: dict, timeout: float = 10.0) -> dict:
+    """Poll ``GET /api/jobs/{id}`` until the job is final (PMO-18); returns the final body."""
+    import time
+
+    deadline = time.monotonic() + timeout
+    body = job
+    while body["status"] in ("queued", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError(f"job {job['id']} still {body['status']} after {timeout}s")
+        time.sleep(0.02)
+        resp = client.get(f"/api/jobs/{job['id']}")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+    return body

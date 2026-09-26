@@ -129,16 +129,47 @@ export function getRawImageUrl(fileHash: string): string {
   return `${BASE_URL}/photos/${fileHash}/raw`
 }
 
-export interface IndexFolderResponse {
-  indexed_count: number
+export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+
+/** A background job (`POST /api/index` returns one); poll `getJobApi` until `isJobFinished`. */
+export interface Job {
+  id: string
+  kind: 'index' | 'sync' | string
+  status: JobStatus
   folder_path: string
+  /** Unknown until discovery finishes. */
+  total: number | null
+  /** Successes and failures so far. */
+  processed: number
+  failed_count: number
+  /** Final kind-specific numbers, e.g. `{total, indexed, failed}` for an index job. */
+  counts: Record<string, number>
+  /** Per-file error messages (capped by the server). */
+  errors: string[]
   message: string
+  cancel_requested: boolean
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
 }
 
-export function indexFolderApi(folderPath: string, numWorkers: number = 4): Promise<IndexFolderResponse> {
+export function isJobFinished(job: Job): boolean {
+  return job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled'
+}
+
+/** Start indexing a folder in the background. A 409 means a job is already running on it. */
+export function startIndexJobApi(folderPath: string, numWorkers: number = 4): Promise<Job> {
   return request(
     '/index',
     'Indexing the folder',
     jsonInit('POST', { folder_path: folderPath, num_workers: numWorkers })
   )
+}
+
+export function getJobApi(jobId: string): Promise<Job> {
+  return request(`/jobs/${jobId}`, 'Checking the job')
+}
+
+export function cancelJobApi(jobId: string): Promise<Job> {
+  return request(`/jobs/${jobId}/cancel`, 'Cancelling the job', { method: 'POST' })
 }

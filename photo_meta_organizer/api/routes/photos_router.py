@@ -12,6 +12,10 @@ Endpoints:
     POST  /api/search                 - Advanced search with SearchRequest body
     GET   /api/facets                 - Aggregate camera/tag/year counts and GPS bounds
     DELETE /api/photos/{file_hash}    - Remove photo from index
+    POST  /api/index                  - Start a background index job (202 + job)
+    GET   /api/jobs                   - Recent background jobs, newest first
+    GET   /api/jobs/{job_id}          - One job's progress and result
+    POST  /api/jobs/{job_id}/cancel   - Ask a running job to stop
 """
 
 import os
@@ -33,7 +37,7 @@ from photo_meta_organizer.api.schemas import (
     GpsBoundsSchema,
     GpsCoordinatesSchema,
     IndexFolderRequest,
-    IndexFolderResponse,
+    JobResponse,
     PaginatedPhotosResponse,
     PatchPhotoRequest,
     PhotoMetadataResponse,
@@ -46,6 +50,8 @@ from photo_meta_organizer.application.interfaces.collection_repository import (
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
+from photo_meta_organizer.application.job_work import index_work
+from photo_meta_organizer.application.jobs import Job, JobConflictError, JobManager
 from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
     ParallelIndexPhotosUseCase,
 )
@@ -72,6 +78,7 @@ photos_router = APIRouter(prefix="/api/photos", tags=["photos"])
 collections_router = APIRouter(prefix="/api/collections", tags=["collections"])
 search_router = APIRouter(prefix="/api", tags=["search"])
 index_router = APIRouter(prefix="/api/index", tags=["indexing"])
+jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 _thumbnail_service = ThumbnailService()
 
@@ -89,6 +96,11 @@ def get_repository() -> ImageMetadataRepository:
 def get_collection_repository() -> CollectionRepository:
     """Placeholder dependency; ``create_app`` overrides this with the shared instance."""
     raise RuntimeError("Collection repository dependency not configured")
+
+
+def get_job_manager() -> JobManager:
+    """Placeholder dependency; ``create_app`` overrides this with the shared instance."""
+    raise RuntimeError("Job manager dependency not configured")
 
 
 def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
@@ -450,30 +462,94 @@ def search_photos(
     )
 
 
-@index_router.post("", response_model=IndexFolderResponse, summary="Index local photo directory")
+def _job_response(job: Job) -> JobResponse:
+    return JobResponse(
+        id=job.id,
+        kind=job.kind,
+        status=job.status.value,
+        folder_path=job.folder_path,
+        total=job.total,
+        processed=job.processed,
+        failed_count=job.failed_count,
+        counts=job.counts,
+        errors=job.errors,
+        message=job.message,
+        cancel_requested=job.cancel_requested,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+    )
+
+
+def _existing_directory(folder_path: str) -> str:
+    """Absolute path of ``folder_path``, or 400 if it is not an existing directory."""
+    absolute = os.path.abspath(folder_path)
+    if not os.path.isdir(absolute):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Directory '{folder_path}' does not exist or is not a directory.",
+        )
+    return absolute
+
+
+def _submit(jobs: JobManager, kind: str, folder_path: str, work) -> JobResponse:
+    try:
+        return _job_response(jobs.submit(kind, folder_path, work))
+    except JobConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@index_router.post(
+    "",
+    response_model=JobResponse,
+    status_code=202,
+    summary="Start indexing a local photo directory",
+)
 def index_directory(
     request: IndexFolderRequest,
     repository: ImageMetadataRepository = Depends(get_repository),
-) -> IndexFolderResponse:
-    """Index image files from a local directory into the metadata repository."""
-    folder_path = os.path.abspath(request.folder_path)
-    if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Directory '{request.folder_path}' does not exist or is not a directory.",
-        )
+    jobs: JobManager = Depends(get_job_manager),
+) -> JobResponse:
+    """Start a background index job and return it at once (202).
 
-    retriever = build_local_retriever(folder_path)
-    extractor = DiskMetaDataExtractor()
+    Poll ``GET /api/jobs/{id}`` for progress and the final counts, including
+    per-file errors. A second job on the same (or an overlapping) folder while
+    one is running is refused with 409.
+    """
+    folder_path = _existing_directory(request.folder_path)
     use_case = ParallelIndexPhotosUseCase(
-        retriever=retriever,
-        extractor=extractor,
+        retriever=build_local_retriever(folder_path),
+        extractor=DiskMetaDataExtractor(),
         repository=repository,
         num_workers=request.num_workers,
     )
-    results = use_case.execute()
-    return IndexFolderResponse(
-        indexed_count=len(results),
-        folder_path=folder_path,
-        message=f"Successfully indexed {len(results)} photo(s) from '{folder_path}'.",
-    )
+    return _submit(jobs, "index", folder_path, index_work(use_case, folder_path))
+
+
+@jobs_router.get("", response_model=list[JobResponse], summary="List recent jobs")
+def list_jobs(jobs: JobManager = Depends(get_job_manager)) -> list[JobResponse]:
+    """Recent background jobs, newest first (kept in memory; a restart forgets them)."""
+    return [_job_response(j) for j in jobs.list()]
+
+
+@jobs_router.get("/{job_id}", response_model=JobResponse, summary="Get a job")
+def get_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobResponse:
+    """Progress and, once finished, the result of one job."""
+    try:
+        return _job_response(jobs.get(job_id))
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.") from None
+
+
+@jobs_router.post(
+    "/{job_id}/cancel", response_model=JobResponse, status_code=202, summary="Cancel a job"
+)
+def cancel_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobResponse:
+    """Ask a running job to stop. It finishes the files in hand, then reports ``cancelled``.
+
+    Cancelling a job that already finished is a no-op that returns it unchanged.
+    """
+    try:
+        return _job_response(jobs.cancel(job_id))
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.") from None
