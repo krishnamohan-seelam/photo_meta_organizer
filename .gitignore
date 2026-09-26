@@ -180,3 +180,4 @@ CLAUDE.md
 metadata.*
 
 *.db*
+.claude/skills/archify
