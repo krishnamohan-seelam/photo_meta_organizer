@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ChildProcess, exec, spawn } from 'child_process';
@@ -10,6 +11,10 @@ let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 let backendPort = 8000;
 let isOwnBackendProcess = false;
+// Per-launch API token (PMO-26). Set only when the packaged app spawns its own backend;
+// the backend requires it as a cookie that only this app's session holds.
+let apiToken: string | null = null;
+const TOKEN_COOKIE = 'pmo_token';
 const isDev = process.argv.includes('--dev') || !app.isPackaged;
 
 /**
@@ -87,7 +92,9 @@ function getBackendCommand(port: number): { cmd: string; args: string[]; cwd: st
           '--port', port.toString(),
           '--host', '127.0.0.1',
           '--db', path.join(dataDir, 'photos.db'),
-          '--cache-dir', path.join(dataDir, 'cache', 'thumbnails'),
+          // Not under userData/Cache: that is Chromium's HTTP cache (and on Windows
+          // "cache" and "Cache" are the same directory).
+          '--cache-dir', path.join(dataDir, 'thumbnails'),
           '--log-dir', path.join(dataDir, 'logs'),
           '--legacy-dir', process.resourcesPath,
         ],
@@ -156,9 +163,18 @@ async function startBackend(): Promise<boolean> {
   const { cmd, args, cwd } = getBackendCommand(backendPort);
   console.log(`[Desktop Main] Spawning backend: ${cmd} ${args.join(' ')} (cwd: ${cwd})`);
 
+  // The token goes in the child's environment, never on its command line (which any
+  // local process can list). Dev mode loads through the Vite proxy on another host,
+  // where this cookie would not be sent, so it relies on the PMO-11 host/CORS checks.
+  apiToken = app.isPackaged ? randomBytes(32).toString('base64url') : null;
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  if (apiToken) env.PMO_API_TOKEN = apiToken;
+
   try {
     backendProcess = spawn(cmd, args, {
       cwd,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -269,7 +285,19 @@ async function createWindow() {
       }
     });
   } else {
-    mainWindow.loadURL(`http://127.0.0.1:${backendPort}/`);
+    const backendUrl = `http://127.0.0.1:${backendPort}`;
+    if (apiToken) {
+      // HttpOnly: page scripts cannot read it. SameSite=Strict: no other site can send it.
+      await session.defaultSession.cookies.set({
+        url: backendUrl,
+        name: TOKEN_COOKIE,
+        value: apiToken,
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+      });
+    }
+    mainWindow.loadURL(`${backendUrl}/`);
   }
 }
 

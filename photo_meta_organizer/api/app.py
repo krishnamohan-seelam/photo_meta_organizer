@@ -26,12 +26,13 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from photo_meta_organizer import __version__
+from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticated
 from photo_meta_organizer.api.dependencies import Services
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
@@ -128,6 +129,9 @@ def create_app(
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
+    # Desktop launch token (PMO-26): only the shell's own session has the cookie.
+    if settings.api_token:
+        app.add_middleware(TokenCookieMiddleware, token=settings.api_token)
     # Added last so it runs first: reject unexpected Host headers before anything else.
     app.add_middleware(
         TrustedHostMiddleware,
@@ -180,8 +184,11 @@ def create_app(
             _make_static_route(_captured_path, _captured_name)
 
     @app.get("/health", tags=["health"])
-    def health_check():
-        """Health check endpoint."""
+    def health_check(request: Request):
+        """Health check endpoint (open even with a launch token; then the photo count
+        is reported only to requests that carry the token cookie)."""
+        if settings.api_token and not is_authenticated(request.scope, settings.api_token):
+            return {"status": "ok"}
         return {"status": "ok", "photo_count": repository.count()}
 
     @app.get("/", tags=["frontend"], response_class=HTMLResponse)

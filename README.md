@@ -136,7 +136,7 @@ npm run desktop:package
 *Output binaries are generated in:* `desktop/dist-package/`
 
 The installed app keeps its data in the per-user data directory
-(`%APPDATA%\Photo Meta Organizer\`): `photos.db`, `cache\thumbnails\` and `logs\backend.log`.
+(`%APPDATA%\Photo Meta Organizer\`): `photos.db`, `thumbnails\` and `logs\backend.log`.
 Nothing is written to the install directory, so updates and reinstalls keep the library.
 A database left by an older build in the install's `resources\` folder (`photos.db` or
 `metadata.json`) is copied or imported once on first start; the original is not modified.
@@ -152,7 +152,7 @@ An explicit flag or argument wins, then the environment, then the development de
 |---|---|---|
 | `PMO_DATA_DIR` | Base directory for the three paths below | (unset) |
 | `PMO_DB` | SQLite database file | `<data dir>/photos.db`, else `photos.db` |
-| `PMO_CACHE_DIR` | Thumbnail cache | `<data dir>/cache/thumbnails`, else `.cache/thumbnails` |
+| `PMO_CACHE_DIR` | Thumbnail cache | `<data dir>/thumbnails`, else `.cache/thumbnails` |
 | `PMO_LOG_DIR` | Backend log directory (desktop backend) | `<data dir>/logs`, else no log file |
 | `PMO_ALLOWED_HOSTS` | Host names the API accepts | `localhost,127.0.0.1` |
 | `PMO_CORS_ORIGINS` | Origins granted CORS | the Vite dev origins |
@@ -161,12 +161,13 @@ Relative paths are relative to the working directory, so start the API from the 
 
 ### Security model
 
-The API has **no authentication**, so it must only be reachable by the local user's own front end. Two defenses enforce that:
+The API is meant to be reachable only by the local user's own front end. Three defenses enforce that:
 
 - **CORS** allows only the Vite dev origins (`http://localhost:5173`, `http://127.0.0.1:5173`), never `*`, and grants no credentials. The built UI and the desktop shell are same-origin and need no CORS.
 - **Host header check** accepts only `localhost` and `127.0.0.1` (plus `testserver` for the test client). Requests with any other `Host` get `400`, which blocks DNS-rebinding.
+- **Per-launch API token** (desktop app). When `PMO_API_TOKEN` is set, every request except `/health` must carry it in the `pmo_token` cookie, or it gets `401`. The packaged desktop app generates a random token on each launch, passes it to the backend in the environment (never on the command line), and sets it as an `HttpOnly`, `SameSite=Strict` cookie in its own window only. Other local programs and web pages therefore cannot use the backend. Without the cookie, `/health` returns only `{"status": "ok"}`. The dev server and `uvicorn` runs have no token unless you set `PMO_API_TOKEN` yourself.
 
-Keep the server bound to `127.0.0.1`. If you deliberately expose it on a LAN name, set `PMO_ALLOWED_HOSTS` (comma-separated) and/or `PMO_CORS_ORIGINS`, and accept that anyone on that network can then read and change the library. Note that CORS stops a hostile web page from *reading* responses, not from *sending* requests; a per-launch API token is planned.
+Keep the server bound to `127.0.0.1`. If you deliberately expose it on a LAN name, set `PMO_ALLOWED_HOSTS` (comma-separated) and/or `PMO_CORS_ORIGINS`, and accept that anyone on that network can then read and change the library unless you also set a token. CORS stops a hostile web page from *reading* responses, not from *sending* requests; the token is what blocks sending.
 
 ---
 
@@ -329,8 +330,9 @@ These are open, documented defects and gaps. The full analysis is in [design_doc
 - **RAW and HEIC** files are accepted for indexing, but Pillow has no built-in decoder for them, so expect missing dimensions and thumbnails.
 - **UI prototype areas:** the filter sidebar lists, the Map Explorer clusters, the EXIF histogram, and ZIP/JSON export are placeholders (see [Features](#-features)). The Collections API is not connected to the UI. The frontend loads the whole library at startup and filters it in the browser.
 - **Indexing through the UI is one blocking request** with no progress or cancel.
-- **Desktop packaging on Windows needs symlink permission.** electron-builder unpacks its `winCodeSign` tool, which contains symlinks; without Windows Developer Mode (or an elevated shell) `npm run desktop:package` fails at that step. The packaged app itself (`electron-builder --win --dir`) was verified: it serves the UI and writes only to the per-user data directory.
-- **No API authentication** beyond the CORS and Host checks described above.
+- **Desktop packaging on Windows needs symlink permission once.** electron-builder unpacks its `winCodeSign` tool, which contains macOS symlinks; without Windows Developer Mode (or one run from an elevated shell) `npm run desktop:package` fails at that step. Do not work around it with `"signAndEditExecutable": false`: that also skips writing the app's name and version into the exe, which is left posing as `electron.exe`, and antivirus heuristics then flag it. Once `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0` exists, later builds need no special permission.
+- **The Windows build is unsigned**, so SmartScreen warns on first run and some antivirus products may still flag it until it is code-signed. On a freshly built copy, the first start can take several seconds while the antivirus scans the backend files.
+- **API token only in the desktop app.** The dev server and `uvicorn` runs rely on the CORS and Host checks unless `PMO_API_TOKEN` is set.
 
 ---
 

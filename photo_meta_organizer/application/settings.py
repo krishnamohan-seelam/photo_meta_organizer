@@ -12,6 +12,8 @@ Environment variables:
     PMO_LOG_DIR        log directory
     PMO_ALLOWED_HOSTS  comma-separated Host header names the API accepts
     PMO_CORS_ORIGINS   comma-separated origins granted CORS
+    PMO_API_TOKEN      per-launch token the desktop shell sets; when present the API
+                       requires it as a cookie (api/auth.py). Never logged or repr'd.
 
 With nothing set the development layout applies: ``photos.db`` and ``.cache/thumbnails``
 relative to the working directory, and no log file.
@@ -19,7 +21,7 @@ relative to the working directory, and no log file.
 
 import os
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +52,7 @@ class Settings:
     log_dir: Path | None = None
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
+    api_token: str | None = field(default=None, repr=False)
 
     @property
     def thumbnail_dir(self) -> Path:
@@ -67,6 +70,7 @@ class Settings:
         log_dir: "str | Path | None" = None,
         allowed_hosts: Iterable[str] | None = None,
         cors_origins: Iterable[str] | None = None,
+        api_token: str | None = None,
     ) -> "Settings":
         """Build settings from explicit values, then ``env`` (default ``os.environ``).
 
@@ -84,7 +88,7 @@ class Settings:
             db_path=pick(db_path, "PMO_DB", base / "photos.db" if base else None)
             or Path("photos.db"),
             cache_dir=pick(
-                cache_dir, "PMO_CACHE_DIR", base / "cache" / "thumbnails" if base else None
+                cache_dir, "PMO_CACHE_DIR", base / "thumbnails" if base else None
             ),
             log_dir=pick(log_dir, "PMO_LOG_DIR", base / "logs" if base else None),
             allowed_hosts=(
@@ -97,4 +101,5 @@ class Settings:
                 if cors_origins is not None
                 else _env_list(env, "PMO_CORS_ORIGINS") or DEFAULT_CORS_ORIGINS
             ),
+            api_token=api_token or env.get("PMO_API_TOKEN", "").strip() or None,
         )

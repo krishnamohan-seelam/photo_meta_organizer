@@ -5,7 +5,7 @@ an update replaces it wholesale, so nothing may be written there (PMO-12). Elect
 passes paths under ``app.getPath("userData")``:
 
     --db PATH         SQLite database           (default: <data-dir>/photos.db)
-    --cache-dir PATH  thumbnail cache           (default: <data-dir>/cache/thumbnails)
+    --cache-dir PATH  thumbnail cache           (default: <data-dir>/thumbnails)
     --log-dir PATH    rotating backend log      (default: <data-dir>/logs)
     --data-dir PATH   supplies the three defaults above
     --legacy-dir PATH where older builds kept their data (the install's resources dir);

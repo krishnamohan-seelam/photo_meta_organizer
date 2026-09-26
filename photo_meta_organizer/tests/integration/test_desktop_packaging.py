@@ -107,7 +107,7 @@ class TestDesktopSettings:
         s = resolve_settings(parse_args(["--data-dir", str(tmp_path)]))
         assert s == Settings(
             db_path=tmp_path / "photos.db",
-            cache_dir=tmp_path / "cache" / "thumbnails",
+            cache_dir=tmp_path / "thumbnails",
             log_dir=tmp_path / "logs",
         )
 

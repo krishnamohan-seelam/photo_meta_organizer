@@ -22,7 +22,7 @@ def test_factory_without_arguments_reads_the_environment(tmp_path, monkeypatch):
     settings = app.state.services.settings
     assert settings.db_path == tmp_path / "data" / "photos.db"
     assert (tmp_path / "data" / "photos.db").exists()
-    assert settings.thumbnail_dir == tmp_path / "data" / "cache" / "thumbnails"
+    assert settings.thumbnail_dir == tmp_path / "data" / "thumbnails"
     # The Host allow-list came from the environment too.
     assert TestClient(app).get("/health").status_code == 400
     assert TestClient(app, base_url="http://photos.example").get("/health").status_code == 200

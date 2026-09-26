@@ -40,7 +40,7 @@ class TestSettings:
     def test_data_dir_supplies_every_path(self, tmp_path) -> None:
         s = Settings.from_env({"PMO_DATA_DIR": str(tmp_path)})
         assert s.db_path == tmp_path / "photos.db"
-        assert s.cache_dir == tmp_path / "cache" / "thumbnails"
+        assert s.cache_dir == tmp_path / "thumbnails"
         assert s.log_dir == tmp_path / "logs"
 
     def test_specific_variable_beats_data_dir(self, tmp_path) -> None:
@@ -61,7 +61,7 @@ class TestSettings:
     def test_explicit_data_dir(self, tmp_path) -> None:
         s = Settings.from_env({"PMO_DB": "env.db"}, data_dir=tmp_path)
         assert s.db_path == Path("env.db")  # a specific setting still beats a data dir
-        assert s.cache_dir == tmp_path / "cache" / "thumbnails"
+        assert s.cache_dir == tmp_path / "thumbnails"
 
     def test_is_immutable(self) -> None:
         with pytest.raises(AttributeError):
