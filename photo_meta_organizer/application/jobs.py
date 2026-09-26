@@ -10,7 +10,9 @@ Rules:
       the other): an index and a sync of the same tree would race on the same
       records. Unrelated folders run side by side; the repository is thread-safe
       (ADR-001, PMO-08).
-    * Cancel is cooperative: the work function polls ``ctx.cancel_requested()``.
+    * Cancel is cooperative: the work function polls ``ctx.cancel_requested()`` and
+      reports ``JobOutcome(cancelled=True)`` if it stopped early. A request that came
+      too late leaves the job ``succeeded`` (with ``cancel_requested`` still true).
     * Only the most recent ``history`` jobs are kept; nothing is persisted, so a
       restart forgets them (the data they wrote is of course kept).
 """
@@ -204,7 +206,9 @@ class JobManager:
                 finished_at=datetime.now(),
             )
         else:
-            cancelled = outcome.cancelled or ctx.cancel_requested()
+            # The work says whether it stopped early. A cancel that arrived after the
+            # last file was already in hand changed nothing, so the job succeeded.
+            cancelled = outcome.cancelled
             final: dict[str, object] = {}
             if "failed" in outcome.counts:
                 final["failed_count"] = outcome.counts["failed"]

@@ -82,6 +82,26 @@ class TestJobManager:
         assert done.status is JobStatus.CANCELLED
         assert done.message == "stopped early"
 
+    def test_cancel_that_came_too_late_leaves_job_succeeded(self, tmp_path) -> None:
+        manager = JobManager()
+        started = threading.Event()
+        release = threading.Event()
+
+        def work(ctx):
+            started.set()
+            release.wait(5)  # all work already done; the cancel changes nothing
+            return JobOutcome(message="Indexed 3 photo(s)")
+
+        job = manager.submit("index", str(tmp_path), work)
+        assert started.wait(5)
+        manager.cancel(job.id)
+        release.set()
+
+        done = _wait(manager, job.id)
+        assert done.status is JobStatus.SUCCEEDED
+        assert done.cancel_requested is True
+        assert done.message == "Indexed 3 photo(s)"
+
     def test_cancel_unknown_job_raises_key_error(self) -> None:
         with pytest.raises(KeyError):
             JobManager().cancel("nope")
