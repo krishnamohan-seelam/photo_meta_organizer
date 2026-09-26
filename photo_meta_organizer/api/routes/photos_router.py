@@ -24,6 +24,12 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
+from photo_meta_organizer.api.dependencies import (
+    get_collection_repository,
+    get_job_manager,
+    get_repository,
+    get_thumbnail_service,
+)
 from photo_meta_organizer.api.schemas import (
     BatchPhotoRequest,
     BatchPhotoResponse,
@@ -85,33 +91,6 @@ search_router = APIRouter(prefix="/api", tags=["search"])
 index_router = APIRouter(prefix="/api/index", tags=["indexing"])
 jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 sync_router = APIRouter(prefix="/api/sync", tags=["indexing"])
-
-
-
-def get_repository() -> ImageMetadataRepository:
-    """Placeholder dependency; ``create_app`` overrides this with the shared instance.
-
-    A plain function dependency (rather than the concrete repository class as its
-    own dependency) keeps this router from having to know which storage engine is
-    behind the ``ImageMetadataRepository`` protocol.
-    """
-    raise RuntimeError("Repository dependency not configured")
-
-
-def get_collection_repository() -> CollectionRepository:
-    """Placeholder dependency; ``create_app`` overrides this with the shared instance."""
-    raise RuntimeError("Collection repository dependency not configured")
-
-
-def get_thumbnail_service() -> ThumbnailService:
-    """Placeholder dependency; ``create_app`` overrides it with one bound to its cache dir."""
-    raise RuntimeError("Thumbnail service dependency not configured")
-
-
-def get_job_manager() -> JobManager:
-    """Placeholder dependency; ``create_app`` overrides this with the shared instance."""
-    raise RuntimeError("Job manager dependency not configured")
-
 
 def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
     """Convert domain ImageMetadata to PhotoMetadataResponse schema."""

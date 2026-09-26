@@ -10,11 +10,11 @@ from tests.conftest import wait_for_job
 
 from photo_meta_organizer.api.app import create_app, default_frontend_dist
 from photo_meta_organizer.api.desktop import (
-    DesktopPaths,
     adopt_legacy_database,
     parse_args,
-    resolve_paths,
+    resolve_settings,
 )
+from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
 )
@@ -76,7 +76,12 @@ class TestCacheDir:
         assert (tmp_path / "fresh" / "nested" / "p.db").exists()
 
 
-class TestDesktopPaths:
+class TestDesktopSettings:
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch):
+        for var in ("PMO_DATA_DIR", "PMO_DB", "PMO_CACHE_DIR", "PMO_LOG_DIR"):
+            monkeypatch.delenv(var, raising=False)
+
     def test_explicit_paths_win(self, tmp_path):
         args = parse_args(
             [
@@ -90,23 +95,31 @@ class TestDesktopPaths:
                 "9001",
             ]
         )
-        paths = resolve_paths(args)
-        assert paths == DesktopPaths(
-            db=tmp_path / "x.db", cache_dir=tmp_path / "c", log_dir=tmp_path / "l"
+        s = resolve_settings(args)
+        assert (s.db_path, s.cache_dir, s.log_dir) == (
+            tmp_path / "x.db",
+            tmp_path / "c",
+            tmp_path / "l",
         )
         assert args.port == 9001
 
     def test_data_dir_supplies_the_defaults(self, tmp_path):
-        paths = resolve_paths(parse_args(["--data-dir", str(tmp_path)]))
-        assert paths == DesktopPaths(
-            db=tmp_path / "photos.db",
+        s = resolve_settings(parse_args(["--data-dir", str(tmp_path)]))
+        assert s == Settings(
+            db_path=tmp_path / "photos.db",
             cache_dir=tmp_path / "cache" / "thumbnails",
             log_dir=tmp_path / "logs",
         )
 
+    def test_environment_applies_when_no_flag_is_given(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PMO_DATA_DIR", str(tmp_path))
+        s = resolve_settings(parse_args(["--db", str(tmp_path / "flag.db")]))
+        assert s.db_path == tmp_path / "flag.db"
+        assert s.log_dir == tmp_path / "logs"
+
     def test_no_arguments_keeps_the_dev_layout(self):
-        paths = resolve_paths(parse_args([]))
-        assert paths.db == Path("photos.db") and paths.cache_dir is None and paths.log_dir is None
+        s = resolve_settings(parse_args([]))
+        assert s.db_path == Path("photos.db") and s.cache_dir is None and s.log_dir is None
 
 
 class TestAdoptLegacyDatabase:

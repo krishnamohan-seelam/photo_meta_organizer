@@ -143,6 +143,22 @@ A database left by an older build in the install's `resources\` folder (`photos.
 
 ---
 
+### Configuration
+
+The CLI, the API and the desktop backend read the same settings (`application/settings.py`).
+An explicit flag or argument wins, then the environment, then the development default:
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `PMO_DATA_DIR` | Base directory for the three paths below | (unset) |
+| `PMO_DB` | SQLite database file | `<data dir>/photos.db`, else `photos.db` |
+| `PMO_CACHE_DIR` | Thumbnail cache | `<data dir>/cache/thumbnails`, else `.cache/thumbnails` |
+| `PMO_LOG_DIR` | Backend log directory (desktop backend) | `<data dir>/logs`, else no log file |
+| `PMO_ALLOWED_HOSTS` | Host names the API accepts | `localhost,127.0.0.1` |
+| `PMO_CORS_ORIGINS` | Origins granted CORS | the Vite dev origins |
+
+Relative paths are relative to the working directory, so start the API from the repository root.
+
 ### Security model
 
 The API has **no authentication**, so it must only be reachable by the local user's own front end. Two defenses enforce that:

@@ -22,20 +22,14 @@ import shutil
 import sys
 import tempfile
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
 from pathlib import Path
+
+from photo_meta_organizer.application.settings import Settings
 
 READY_PREFIX = "DESKTOP_BACKEND_READY:"
 LEGACY_DB_NAMES = ("photos.db", "metadata.json")
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class DesktopPaths:
-    db: Path
-    cache_dir: Path | None
-    log_dir: Path | None
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -52,12 +46,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def resolve_paths(args: argparse.Namespace) -> DesktopPaths:
-    data: Path | None = args.data_dir
-    return DesktopPaths(
-        db=args.db or (data / "photos.db" if data else Path("photos.db")),
-        cache_dir=args.cache_dir or (data / "cache" / "thumbnails" if data else None),
-        log_dir=args.log_dir or (data / "logs" if data else None),
+def resolve_settings(args: argparse.Namespace) -> Settings:
+    """Settings for this run: flags first, then the PMO_* environment, then the dev layout."""
+    return Settings.from_env(
+        data_dir=args.data_dir, db_path=args.db, cache_dir=args.cache_dir, log_dir=args.log_dir
     )
 
 
@@ -125,17 +117,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     from photo_meta_organizer.api.app import create_app
 
     args = parse_args(argv)
-    paths = resolve_paths(args)
-    configure_logging(paths.log_dir)
+    settings = resolve_settings(args)
+    configure_logging(settings.log_dir)
 
     if args.legacy_dir is not None:
-        adopt_legacy_database(paths.db, [args.legacy_dir / name for name in LEGACY_DB_NAMES])
+        adopt_legacy_database(
+            settings.db_path, [args.legacy_dir / name for name in LEGACY_DB_NAMES]
+        )
 
-    app = create_app(
-        db_path=str(paths.db),
-        cache_dir=str(paths.cache_dir) if paths.cache_dir else None,
-    )
-    logger.info("Database: %s | cache: %s", paths.db.resolve(), paths.cache_dir or ".cache")
+    app = create_app(settings=settings)
+    logger.info("Database: %s | cache: %s", settings.db_path.resolve(), settings.thumbnail_dir)
 
     class _Server(uvicorn.Server):
         async def startup(self, sockets: list | None = None) -> None:

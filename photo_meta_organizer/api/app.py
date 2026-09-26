@@ -1,9 +1,11 @@
 """FastAPI application factory for Photo Meta Organizer.
 
 Usage:
-    # Production
-    app = create_app(db_path="photos.db")
+    # Production: settings from explicit values, then PMO_* environment variables
+    app = create_app(settings=Settings.from_env(db_path="photos.db"))
     uvicorn.run(app, host="127.0.0.1", port=8000)  # loopback only; see security notes below
+
+    # uvicorn factory: create_app() with no arguments reads the environment (PMO_DB, ...)
 
     # Testing
     from fastapi.testclient import TestClient
@@ -19,7 +21,7 @@ Security model (local application):
     anyone on that network can read and change the library.
 """
 
-import os
+import dataclasses
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -30,12 +32,9 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from photo_meta_organizer import __version__
+from photo_meta_organizer.api.dependencies import Services
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
-    get_collection_repository,
-    get_job_manager,
-    get_repository,
-    get_thumbnail_service,
     index_router,
     jobs_router,
     photos_router,
@@ -47,19 +46,12 @@ from photo_meta_organizer.application.composition import (
     build_repository,
 )
 from photo_meta_organizer.application.jobs import JobManager
+from photo_meta_organizer.application.settings import (  # noqa: F401 (re-exported)
+    DEFAULT_ALLOWED_HOSTS,
+    DEFAULT_CORS_ORIGINS,
+    Settings,
+)
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
-
-# "testserver" is the host name Starlette's TestClient uses; it is not resolvable
-# from the public internet, so it does not weaken the rebinding defence.
-DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
-DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
-
-
-def _env_list(name: str) -> "list[str] | None":
-    """Comma-separated environment variable as a list, or None if unset/blank."""
-    raw = os.environ.get(name, "")
-    items = [item.strip() for item in raw.split(",") if item.strip()]
-    return items or None
 
 
 def default_frontend_dist() -> Path:
@@ -72,33 +64,41 @@ def default_frontend_dist() -> Path:
 
 
 def create_app(
-    db_path: str = "photos.db",
+    db_path: "str | Path | None" = None,
     allowed_hosts: "list[str] | None" = None,
     cors_origins: "list[str] | None" = None,
     *,
-    cache_dir: "str | None" = None,
+    settings: "Settings | None" = None,
+    cache_dir: "str | Path | None" = None,
     frontend_dist: "str | Path | None" = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
-        db_path: Path to the SQLite database file (ADR-001). A path to an existing
-                 legacy TinyDB ``.json`` file is imported once into a sibling
+        db_path: SQLite database file (ADR-001); ``:memory:`` for tests. A path to an
+                 existing legacy TinyDB ``.json`` file is imported once into a sibling
                  ``.db`` file; see ``application.composition.build_repository``.
-                 Created automatically if it does not exist.
-        allowed_hosts: Accepted Host header names (port ignored). Defaults to
-                 ``PMO_ALLOWED_HOSTS`` or the local names.
-        cors_origins: Origins granted CORS access. Defaults to ``PMO_CORS_ORIGINS`` or
-                 the Vite dev origins. Never a wildcard.
-        cache_dir: Thumbnail cache directory. Defaults to ``.cache/thumbnails`` under
-                 the working directory (the dev layout); the desktop app passes one
-                 under the user's data directory.
+        allowed_hosts: Accepted Host header names (port ignored).
+        cors_origins: Origins granted CORS access. Never a wildcard.
+        settings: The full configuration. When omitted it is read from the ``PMO_*``
+                 environment variables (see ``application.settings``); the arguments
+                 above override single fields either way.
+        cache_dir: Thumbnail cache directory (default ``.cache/thumbnails``).
         frontend_dist: The built UI to serve at ``/``. Defaults to
                  :func:`default_frontend_dist`.
 
     Returns:
         A fully configured FastAPI application instance with all routes mounted.
     """
+    base = settings or Settings.from_env()
+    overrides = {
+        "db_path": Path(db_path) if db_path is not None else None,
+        "cache_dir": Path(cache_dir) if cache_dir is not None else None,
+        "allowed_hosts": tuple(allowed_hosts) if allowed_hosts is not None else None,
+        "cors_origins": tuple(cors_origins) if cors_origins is not None else None,
+    }
+    settings = dataclasses.replace(base, **{k: v for k, v in overrides.items() if v is not None})
+
     job_manager = JobManager()
 
     @asynccontextmanager
@@ -123,7 +123,7 @@ def create_app(
     # Electron shell are same-origin). No wildcard, no credentials.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(cors_origins or _env_list("PMO_CORS_ORIGINS") or DEFAULT_CORS_ORIGINS),
+        allow_origins=list(settings.cors_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
@@ -131,29 +131,22 @@ def create_app(
     # Added last so it runs first: reject unexpected Host headers before anything else.
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=list(
-            allowed_hosts or _env_list("PMO_ALLOWED_HOSTS") or DEFAULT_ALLOWED_HOSTS
-        ),
+        allowed_hosts=list(settings.allowed_hosts),
     )
 
-    # Build shared repositories
-    if db_path != ":memory:":
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    repository = build_repository(db_path)
-    thumbnail_service = ThumbnailService(cache_dir)
-    collection_repository = build_collection_repository(repository)
-
-    # Override dependencies to inject the shared instances
-    def _get_repository():
-        return repository
-
-    def _get_collection_repository():
-        return collection_repository
-
-    app.dependency_overrides[get_repository] = _get_repository
-    app.dependency_overrides[get_collection_repository] = _get_collection_repository
-    app.dependency_overrides[get_job_manager] = lambda: job_manager
-    app.dependency_overrides[get_thumbnail_service] = lambda: thumbnail_service
+    # The composition root: build the services once; routes reach them through
+    # api.dependencies (typed as the application Protocols).
+    db = str(settings.db_path)
+    if db != ":memory:":
+        settings.db_path.parent.mkdir(parents=True, exist_ok=True)
+    repository = build_repository(db)
+    app.state.services = Services(
+        settings=settings,
+        repository=repository,
+        collections=build_collection_repository(repository),
+        jobs=job_manager,
+        thumbnails=ThumbnailService(str(settings.thumbnail_dir)),
+    )
 
     # Mount routers
     app.include_router(photos_router)

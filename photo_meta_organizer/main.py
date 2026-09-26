@@ -29,6 +29,7 @@ from datetime import datetime
 from logging.config import dictConfig
 
 from photo_meta_organizer import __version__
+from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
     ImageMetadataRepository,
@@ -529,6 +530,9 @@ def handle_prune_command(args: argparse.Namespace) -> int:
 # ============================================================================
 
 
+DB_HELP = "Path to metadata database file (default: $PMO_DB, else photos.db)"
+
+
 def main() -> int:
     """Main entry point for the application.
 
@@ -573,8 +577,8 @@ def main() -> int:
     )
     index_parser.add_argument(
         "--db",
-        default="photos.db",
-        help="Path to metadata database file (default: photos.db)",
+        default=None,
+        help=DB_HELP,
     )
     index_parser.add_argument(
         "--workers",
@@ -589,7 +593,7 @@ def main() -> int:
         "search",
         help="Search indexed photos (Phase 3)",
     )
-    search_parser.add_argument("--db", default="photos.db", help="Path to metadata database file")
+    search_parser.add_argument("--db", default=None, help=DB_HELP)
     search_parser.add_argument("--date", help="Date filter (YYYY-MM or YYYY-MM-DD)")
     search_parser.add_argument("--date-from", help="Start date (YYYY-MM-DD)")
     search_parser.add_argument("--date-to", help="End date (YYYY-MM-DD)")
@@ -634,8 +638,8 @@ def main() -> int:
     )
     sync_parser.add_argument(
         "--db",
-        default="photos.db",
-        help="Path to metadata database file (default: photos.db)",
+        default=None,
+        help=DB_HELP,
     )
     sync_parser.add_argument(
         "--cleanup-deleted",
@@ -690,7 +694,7 @@ def main() -> int:
             "records whose file is not an image. Dry run unless --apply is given."
         ),
     )
-    prune_parser.add_argument("--db", default="photos.db", help="Path to metadata database file")
+    prune_parser.add_argument("--db", default=None, help=DB_HELP)
     prune_parser.add_argument(
         "--apply",
         action="store_true",
@@ -709,7 +713,7 @@ def main() -> int:
             "flag and labels of the others into it. Dry run unless --apply is given."
         ),
     )
-    dedupe_parser.add_argument("--db", default="photos.db", help="Path to metadata database file")
+    dedupe_parser.add_argument("--db", default=None, help=DB_HELP)
     dedupe_parser.add_argument(
         "--apply",
         action="store_true",
@@ -723,11 +727,14 @@ def main() -> int:
         "stats",
         help="Show library statistics (Phase 2)",
     )
-    stats_parser.add_argument("--db", default="photos.db")
+    stats_parser.add_argument("--db", default=None, help=DB_HELP)
     stats_parser.set_defaults(func=handle_stats_command)
 
     try:
         args = parser.parse_args()
+        if hasattr(args, "db"):
+            # Same precedence as the API and desktop backend: flag > environment > default.
+            args.db = str(Settings.from_env(db_path=args.db).db_path)
 
         # Update log level based on argument
         logging.getLogger().setLevel(args.log_level)
