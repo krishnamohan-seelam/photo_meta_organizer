@@ -178,3 +178,5 @@ desktop/node_modules/
 CLAUDE.md
 
 metadata.*
+
+*.db*
