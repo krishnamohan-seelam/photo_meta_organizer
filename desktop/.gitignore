@@ -1,0 +1,3 @@
+# Build outputs (npm run backend:package / desktop:package)
+backend_dist/
+dist-package/

@@ -129,11 +129,17 @@ npm run desktop:start
 # Live development mode with hot-reloading
 npm run desktop:dev
 
-# Package into an NSIS installer and portable executable (see Known limitations first)
-npm run backend:package      # PyInstaller build of the backend (uv adds PyInstaller from the `build` group)
+# Package into an NSIS installer and portable executable
+npm run backend:package      # builds the frontend, then the PyInstaller backend (uv's `build` group) with the UI inside
 npm run desktop:package
 ```
 *Output binaries are generated in:* `desktop/dist-package/`
+
+The installed app keeps its data in the per-user data directory
+(`%APPDATA%\Photo Meta Organizer\`): `photos.db`, `cache\thumbnails\` and `logs\backend.log`.
+Nothing is written to the install directory, so updates and reinstalls keep the library.
+A database left by an older build in the install's `resources\` folder (`photos.db` or
+`metadata.json`) is copied or imported once on first start; the original is not modified.
 
 ---
 
@@ -307,7 +313,7 @@ These are open, documented defects and gaps. The full analysis is in [design_doc
 - **RAW and HEIC** files are accepted for indexing, but Pillow has no built-in decoder for them, so expect missing dimensions and thumbnails.
 - **UI prototype areas:** the filter sidebar lists, the Map Explorer clusters, the EXIF histogram, and ZIP/JSON export are placeholders (see [Features](#-features)). The Collections API is not connected to the UI. The frontend loads the whole library at startup and filters it in the browser.
 - **Indexing through the UI is one blocking request** with no progress or cancel.
-- **Desktop packaging is unverified.** As configured, the built frontend is not bundled into the PyInstaller backend and the database would be created in the install directory. Do not distribute an installer until this is checked.
+- **Desktop packaging on Windows needs symlink permission.** electron-builder unpacks its `winCodeSign` tool, which contains symlinks; without Windows Developer Mode (or an elevated shell) `npm run desktop:package` fails at that step. The packaged app itself (`electron-builder --win --dir`) was verified: it serves the UI and writes only to the per-user data directory.
 - **No API authentication** beyond the CORS and Host checks described above.
 
 ---

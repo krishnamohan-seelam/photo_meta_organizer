@@ -102,10 +102,22 @@ function getBackendCommand(port) {
         // Packaged production mode: look for packaged executable in resources
         const packagedExe = path.join(process.resourcesPath, 'backend', 'photo_meta_organizer_backend.exe');
         if (fs.existsSync(packagedExe)) {
+            // Everything the backend writes goes under the per-user data directory, never the
+            // install directory (read-only for normal users, replaced on update). Older builds
+            // kept their database in resources/; --legacy-dir adopts it once.
+            const dataDir = electron_1.app.getPath('userData');
+            fs.mkdirSync(dataDir, { recursive: true });
             return {
                 cmd: packagedExe,
-                args: ['--port', port.toString(), '--host', '127.0.0.1'],
-                cwd: process.resourcesPath,
+                args: [
+                    '--port', port.toString(),
+                    '--host', '127.0.0.1',
+                    '--db', path.join(dataDir, 'photos.db'),
+                    '--cache-dir', path.join(dataDir, 'cache', 'thumbnails'),
+                    '--log-dir', path.join(dataDir, 'logs'),
+                    '--legacy-dir', process.resourcesPath,
+                ],
+                cwd: dataDir,
             };
         }
     }
@@ -154,8 +166,9 @@ function waitForBackendReady(port, timeoutMs = 15000) {
  * Spawn the backend child process (or attach to an existing running backend).
  */
 async function startBackend() {
-    // 1. Check if backend is already running on port 8000
-    const isAlreadyRunning = await checkExistingBackend(8000);
+    // 1. In development, reuse a backend already running on port 8000 (e.g. uvicorn --reload).
+    //    Never when packaged: that would silently use someone else's database.
+    const isAlreadyRunning = !electron_1.app.isPackaged && (await checkExistingBackend(8000));
     if (isAlreadyRunning) {
         console.log('[Desktop Main] Active backend detected on port 8000. Reusing existing instance.');
         backendPort = 8000;

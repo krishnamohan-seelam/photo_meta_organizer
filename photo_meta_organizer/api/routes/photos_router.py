@@ -86,7 +86,6 @@ index_router = APIRouter(prefix="/api/index", tags=["indexing"])
 jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 sync_router = APIRouter(prefix="/api/sync", tags=["indexing"])
 
-_thumbnail_service = ThumbnailService()
 
 
 def get_repository() -> ImageMetadataRepository:
@@ -102,6 +101,11 @@ def get_repository() -> ImageMetadataRepository:
 def get_collection_repository() -> CollectionRepository:
     """Placeholder dependency; ``create_app`` overrides this with the shared instance."""
     raise RuntimeError("Collection repository dependency not configured")
+
+
+def get_thumbnail_service() -> ThumbnailService:
+    """Placeholder dependency; ``create_app`` overrides it with one bound to its cache dir."""
+    raise RuntimeError("Thumbnail service dependency not configured")
 
 
 def get_job_manager() -> JobManager:
@@ -247,13 +251,14 @@ def get_photo_thumbnail(
     w: int = Query(default=320, ge=64, le=1200, description="Thumbnail width in pixels"),
     h: int = Query(default=320, ge=64, le=1200, description="Thumbnail height in pixels"),
     repository: ImageMetadataRepository = Depends(get_repository),
+    thumbnails: ThumbnailService = Depends(get_thumbnail_service),
 ):
     """Stream an optimized WebP thumbnail for the specified photo."""
     metadata = repository.get_by_filehash(file_hash)
     if metadata is None:
         raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
 
-    thumb_bytes = _thumbnail_service.generate_thumbnail(
+    thumb_bytes = thumbnails.generate_thumbnail(
         source_path=metadata.file_info.path,
         file_hash=file_hash,
         width=w,

@@ -20,6 +20,7 @@ Security model (local application):
 """
 
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from photo_meta_organizer.api.routes.photos_router import (
     get_collection_repository,
     get_job_manager,
     get_repository,
+    get_thumbnail_service,
     index_router,
     jobs_router,
     photos_router,
@@ -45,6 +47,7 @@ from photo_meta_organizer.application.composition import (
     build_repository,
 )
 from photo_meta_organizer.application.jobs import JobManager
+from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 # "testserver" is the host name Starlette's TestClient uses; it is not resolvable
 # from the public internet, so it does not weaken the rebinding defence.
@@ -59,10 +62,22 @@ def _env_list(name: str) -> "list[str] | None":
     return items or None
 
 
+def default_frontend_dist() -> Path:
+    """Where the built UI lives: inside the PyInstaller bundle when frozen (the build
+    adds ``frontend/dist`` as ``frontend_dist``), else ``frontend/dist`` in the checkout."""
+    bundle_dir = getattr(sys, "_MEIPASS", None)
+    if getattr(sys, "frozen", False) and bundle_dir:
+        return Path(bundle_dir) / "frontend_dist"
+    return Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+
 def create_app(
     db_path: str = "photos.db",
     allowed_hosts: "list[str] | None" = None,
     cors_origins: "list[str] | None" = None,
+    *,
+    cache_dir: "str | None" = None,
+    frontend_dist: "str | Path | None" = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -75,6 +90,11 @@ def create_app(
                  ``PMO_ALLOWED_HOSTS`` or the local names.
         cors_origins: Origins granted CORS access. Defaults to ``PMO_CORS_ORIGINS`` or
                  the Vite dev origins. Never a wildcard.
+        cache_dir: Thumbnail cache directory. Defaults to ``.cache/thumbnails`` under
+                 the working directory (the dev layout); the desktop app passes one
+                 under the user's data directory.
+        frontend_dist: The built UI to serve at ``/``. Defaults to
+                 :func:`default_frontend_dist`.
 
     Returns:
         A fully configured FastAPI application instance with all routes mounted.
@@ -117,7 +137,10 @@ def create_app(
     )
 
     # Build shared repositories
+    if db_path != ":memory:":
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     repository = build_repository(db_path)
+    thumbnail_service = ThumbnailService(cache_dir)
     collection_repository = build_collection_repository(repository)
 
     # Override dependencies to inject the shared instances
@@ -130,6 +153,7 @@ def create_app(
     app.dependency_overrides[get_repository] = _get_repository
     app.dependency_overrides[get_collection_repository] = _get_collection_repository
     app.dependency_overrides[get_job_manager] = lambda: job_manager
+    app.dependency_overrides[get_thumbnail_service] = lambda: thumbnail_service
 
     # Mount routers
     app.include_router(photos_router)
@@ -139,7 +163,7 @@ def create_app(
     app.include_router(sync_router)
     app.include_router(jobs_router)
 
-    frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    frontend_dist = Path(frontend_dist) if frontend_dist is not None else default_frontend_dist()
     assets_dir = frontend_dist / "assets"
     if assets_dir.exists():
         from fastapi.staticfiles import StaticFiles
