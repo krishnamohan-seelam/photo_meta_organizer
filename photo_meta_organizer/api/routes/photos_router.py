@@ -13,6 +13,7 @@ Endpoints:
     GET   /api/facets                 - Aggregate camera/tag/year counts and GPS bounds
     DELETE /api/photos/{file_hash}    - Remove photo from index
     POST  /api/index                  - Start a background index job (202 + job)
+    POST  /api/sync                   - Start a background incremental sync job (202 + job)
     GET   /api/jobs                   - Recent background jobs, newest first
     GET   /api/jobs/{job_id}          - One job's progress and result
     POST  /api/jobs/{job_id}/cancel   - Ask a running job to stop
@@ -42,6 +43,7 @@ from photo_meta_organizer.api.schemas import (
     PatchPhotoRequest,
     PhotoMetadataResponse,
     SearchRequest,
+    SyncFolderRequest,
 )
 from photo_meta_organizer.application.composition import build_local_retriever
 from photo_meta_organizer.application.interfaces.collection_repository import (
@@ -50,7 +52,7 @@ from photo_meta_organizer.application.interfaces.collection_repository import (
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
-from photo_meta_organizer.application.job_work import index_work
+from photo_meta_organizer.application.job_work import index_work, sync_work
 from photo_meta_organizer.application.jobs import Job, JobConflictError, JobManager
 from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
     ParallelIndexPhotosUseCase,
@@ -58,6 +60,9 @@ from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case i
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,
+)
+from photo_meta_organizer.application.use_cases.synchronize_metadata_use_case import (
+    SynchronizeMetadataUseCase,
 )
 from photo_meta_organizer.domain.curation import (
     AddTag,
@@ -79,6 +84,7 @@ collections_router = APIRouter(prefix="/api/collections", tags=["collections"])
 search_router = APIRouter(prefix="/api", tags=["search"])
 index_router = APIRouter(prefix="/api/index", tags=["indexing"])
 jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+sync_router = APIRouter(prefix="/api/sync", tags=["indexing"])
 
 _thumbnail_service = ThumbnailService()
 
@@ -524,6 +530,43 @@ def index_directory(
         num_workers=request.num_workers,
     )
     return _submit(jobs, "index", folder_path, index_work(use_case, folder_path))
+
+
+@sync_router.post(
+    "",
+    response_model=JobResponse,
+    status_code=202,
+    summary="Start an incremental sync of a local photo directory",
+)
+def sync_directory(
+    request: SyncFolderRequest,
+    repository: ImageMetadataRepository = Depends(get_repository),
+    jobs: JobManager = Depends(get_job_manager),
+) -> JobResponse:
+    """Re-scan a folder and apply only what changed (NEW / MODIFIED / DELETED).
+
+    Returns a job at once (202); its final ``counts`` report ``new``, ``modified``,
+    ``deleted`` and ``unchanged``. Deleted files are removed only with
+    ``cleanup_deleted``; ``dry_run`` reports the counts and writes nothing. Only
+    records under ``folder_path`` are considered, so photos indexed from other
+    folders are never affected.
+    """
+    folder_path = _existing_directory(request.folder_path)
+    use_case = SynchronizeMetadataUseCase(
+        retriever=build_local_retriever(folder_path),
+        extractor=DiskMetaDataExtractor(),
+        repository=repository,
+    )
+    work = sync_work(
+        use_case,
+        folder_path,
+        cleanup_deleted=request.cleanup_deleted,
+        reprocess_modified=request.reprocess_modified,
+        index_new=request.index_new,
+        dry_run=request.dry_run,
+        rehash=request.rehash,
+    )
+    return _submit(jobs, "sync", folder_path, work)
 
 
 @jobs_router.get("", response_model=list[JobResponse], summary="List recent jobs")

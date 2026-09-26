@@ -37,6 +37,7 @@ from photo_meta_organizer.api.routes.photos_router import (
     jobs_router,
     photos_router,
     search_router,
+    sync_router,
 )
 from photo_meta_organizer.application.composition import (
     build_collection_repository,
@@ -101,9 +102,7 @@ def create_app(
     # Electron shell are same-origin). No wildcard, no credentials.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(
-            cors_origins or _env_list("PMO_CORS_ORIGINS") or DEFAULT_CORS_ORIGINS
-        ),
+        allow_origins=list(cors_origins or _env_list("PMO_CORS_ORIGINS") or DEFAULT_CORS_ORIGINS),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
@@ -136,6 +135,7 @@ def create_app(
     app.include_router(collections_router)
     app.include_router(search_router)
     app.include_router(index_router)
+    app.include_router(sync_router)
     app.include_router(jobs_router)
 
     frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"

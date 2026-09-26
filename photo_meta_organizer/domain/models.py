@@ -298,6 +298,7 @@ class SyncResult:
             missing (legacy record) or stale (``touch``) and was brought up to date.
         errors: List of error messages for files that failed processing.
         duration_seconds: Wall-clock time for the full sync run.
+        cancelled: The run was stopped early; the counts cover what was done.
     """
 
     new_files: int = 0
@@ -307,6 +308,7 @@ class SyncResult:
     fingerprints_refreshed: int = 0
     errors: List[str] = field(default_factory=list)
     duration_seconds: float = 0.0
+    cancelled: bool = False
 
     @property
     def total_changes(self) -> int:

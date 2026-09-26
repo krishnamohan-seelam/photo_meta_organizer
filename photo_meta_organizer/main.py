@@ -448,6 +448,9 @@ def handle_sync_command(args: argparse.Namespace) -> int:
         index_new=args.index_new,
         dry_run=args.dry_run,
         rehash=args.rehash,
+        # Only records under --path take part, so --cleanup-deleted can never
+        # remove photos indexed from another folder.
+        scope_root=args.path,
     )
 
     prefix = "[DRY RUN] " if args.dry_run else ""

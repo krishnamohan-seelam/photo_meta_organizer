@@ -22,7 +22,9 @@ Example:
 """
 
 import logging
+import os
 import time
+from collections.abc import Callable
 from pathlib import Path
 from datetime import datetime
 
@@ -36,6 +38,16 @@ from photo_meta_organizer.domain.services import MetadataStateAnalyzer
 from photo_meta_organizer.application.orchestrators import SyncOrchestrator
 
 logger = logging.getLogger(__name__)
+
+
+def _within(path: str, root: str) -> bool:
+    """True if ``path`` is ``root`` or inside it (case-insensitive where the OS is)."""
+    p = os.path.normcase(str(Path(path).resolve()))
+    r = os.path.normcase(str(Path(root).resolve()))
+    try:
+        return os.path.commonpath([p, r]) == r
+    except ValueError:  # different drives
+        return False
 
 
 class SynchronizeMetadataUseCase:
@@ -91,6 +103,9 @@ class SynchronizeMetadataUseCase:
         index_new: bool = True,
         dry_run: bool = False,
         rehash: bool = False,
+        scope_root: str | None = None,
+        progress: Callable[[int, int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> SyncResult:
         """Run the incremental metadata synchronization pipeline.
 
@@ -113,6 +128,14 @@ class SynchronizeMetadataUseCase:
             rehash: If True, hash every file already in the DB instead of trusting
                     its (size, mtime) fingerprint. Slow (reads the whole library),
                     but the only way to catch an edit that kept both size and mtime.
+            scope_root: The folder the retriever scans. Only DB records under it take
+                    part, so a file elsewhere in the library is never classified as
+                    DELETED (and removed by ``cleanup_deleted``) just because this scan
+                    did not look there. ``None`` compares against the whole DB, which
+                    is only safe when the retriever covers every indexed folder.
+            progress: Called with (done, total) while changes are applied.
+            should_cancel: Polled before the analysis and before each write; see
+                    ``SyncOrchestrator.sync``. ``result.cancelled`` reports it.
 
         Returns:
             SyncResult summarising what was added, updated, deleted, and skipped.
@@ -150,7 +173,14 @@ class SynchronizeMetadataUseCase:
         # Step 2: Load DB entries
         # ------------------------------------------------------------------
         db_entries = self._repository.list_all()
-        logger.info("DB loaded: %d existing entries", len(db_entries))
+        if scope_root is not None:
+            db_entries = [e for e in db_entries if _within(e.file_info.path, scope_root)]
+        logger.info("DB loaded: %d existing entries in scope", len(db_entries))
+
+        if should_cancel is not None and should_cancel():
+            result.cancelled = True
+            result.duration_seconds = time.monotonic() - start_time
+            return result
 
         # ------------------------------------------------------------------
         # Step 3: Analyze changes
@@ -189,6 +219,8 @@ class SynchronizeMetadataUseCase:
             cleanup_deleted=cleanup_deleted,
             reprocess_modified=reprocess_modified,
             index_new=index_new,
+            progress=progress,
+            should_cancel=should_cancel,
         )
 
         # Merge orchestrator result into our result
@@ -197,6 +229,7 @@ class SynchronizeMetadataUseCase:
         result.deleted_entries = sync_result.deleted_entries
         result.fingerprints_refreshed = sync_result.fingerprints_refreshed
         result.errors.extend(sync_result.errors)
+        result.cancelled = sync_result.cancelled
 
         result.duration_seconds = time.monotonic() - start_time
 

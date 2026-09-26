@@ -20,7 +20,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime
 from io import BytesIO
-from typing import List
+from typing import Callable, List, Optional
 
 from photo_meta_organizer.application.interfaces.image_extractor import (
     ImageMetadataExtractor,
@@ -171,6 +171,8 @@ class SyncOrchestrator:
         cleanup_deleted: bool = False,
         reprocess_modified: bool = True,
         index_new: bool = True,
+        progress: Optional[Callable[[int, int], None]] = None,
+        should_cancel: Optional[Callable[[], bool]] = None,
     ) -> SyncResult:
         """Apply sync changes to the repository.
 
@@ -182,32 +184,43 @@ class SyncOrchestrator:
             cleanup_deleted: Remove DELETED entries from the repository.
             reprocess_modified: Re-extract and update MODIFIED files.
             index_new: Extract and insert NEW files.
+            progress: Called with (done, total) after each file state.
+            should_cancel: Polled before each write (extract/save or delete). When it
+                returns True the loop stops and ``result.cancelled`` is set; fingerprints
+                gathered so far are still recorded.
 
         Returns:
             SyncResult with counters for each action taken.
         """
         result = SyncResult()
         stale_fingerprints: list[tuple[str, int, datetime]] = []
+        total = len(file_states)
 
-        for fs in file_states:
+        for done, fs in enumerate(file_states, start=1):
             if fs.state == "UNCHANGED":
                 result.unchanged_files += 1
                 if fs.refresh_fingerprint and fs.file_hash and fs.last_modified:
                     stale_fingerprints.append(
                         (fs.file_hash, fs.size_bytes or 0, fs.last_modified)
                     )
-                continue
+            else:
+                acts = (
+                    (fs.state == "DELETED" and cleanup_deleted)
+                    or (fs.state == "NEW" and index_new)
+                    or (fs.state == "MODIFIED" and reprocess_modified)
+                )
+                if acts and should_cancel is not None and should_cancel():
+                    result.cancelled = True
+                    break
+                if fs.state == "DELETED":
+                    # If not cleaning up, the orphan is kept and not counted.
+                    if cleanup_deleted:
+                        self._delete_entry(fs, result)
+                elif acts:
+                    self._extract_and_save(fs, result)
 
-            if fs.state == "DELETED":
-                if cleanup_deleted:
-                    self._delete_entry(fs, result)
-                # If not cleaning up, just count as unchanged (orphaned but kept)
-                continue
-
-            if fs.state == "NEW" and index_new:
-                self._extract_and_save(fs, result)
-            elif fs.state == "MODIFIED" and reprocess_modified:
-                self._extract_and_save(fs, result)
+            if progress is not None:
+                progress(done, total)
 
         self._refresh_fingerprints(stale_fingerprints, result)
         return result

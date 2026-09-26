@@ -449,3 +449,73 @@ class TestSyncMtimeFingerprint:
 
         assert result.modified_files == 1
         assert repository.get_by_filehash(_sha(edited)) is not None
+
+
+# ---------------------------------------------------------------------------
+# PMO-19: sync is scoped to its root; progress and cancel for the job API
+# ---------------------------------------------------------------------------
+
+
+def _use_case(root: Path, repo: SqliteRepository) -> SynchronizeMetadataUseCase:
+    retriever = ExtensionFilteredRetriever(LocalDiskRetriever(str(root)), IMAGE_EXTENSIONS)
+    return SynchronizeMetadataUseCase(retriever, FakeExtractor(), repo)
+
+
+class TestSyncScope:
+    def test_cleanup_of_one_folder_keeps_records_from_another(self, tmp_path) -> None:
+        a, b = tmp_path / "a", tmp_path / "b"
+        a.mkdir()
+        b.mkdir()
+        (a / "a1.jpg").write_bytes(b"a1")
+        (b / "b1.jpg").write_bytes(b"b1")
+        repo = SqliteRepository(":memory:")
+        _use_case(a, repo).execute(scope_root=str(a))
+        _use_case(b, repo).execute(scope_root=str(b))
+        assert repo.count() == 2
+
+        (a / "a1.jpg").unlink()
+        result = _use_case(a, repo).execute(cleanup_deleted=True, scope_root=str(a))
+
+        assert result.deleted_entries == 1
+        assert [m.file_info.name for m in repo.list_all()] == ["b1.jpg"]
+
+    def test_sibling_with_common_name_prefix_is_out_of_scope(self, tmp_path) -> None:
+        a, ab = tmp_path / "a", tmp_path / "ab"
+        a.mkdir()
+        ab.mkdir()
+        (ab / "x.jpg").write_bytes(b"x")
+        repo = SqliteRepository(":memory:")
+        _use_case(ab, repo).execute(scope_root=str(ab))
+
+        result = _use_case(a, repo).execute(cleanup_deleted=True, scope_root=str(a))
+        assert result.deleted_entries == 0
+        assert repo.count() == 1
+
+    def test_progress_and_cancel(self, tmp_path) -> None:
+        root = tmp_path / "many"
+        root.mkdir()
+        for i in range(20):
+            (root / f"p{i}.jpg").write_bytes(f"content {i}".encode())
+        repo = SqliteRepository(":memory:")
+
+        seen: list[tuple[int, int]] = []
+        result = _use_case(root, repo).execute(
+            scope_root=str(root), progress=lambda done, total: seen.append((done, total))
+        )
+        assert result.new_files == 20 and not result.cancelled
+        assert seen[-1] == (20, 20)
+
+        for i in range(20, 40):
+            (root / f"p{i}.jpg").write_bytes(f"content {i}".encode())
+        calls = []
+
+        def cancel_after_five() -> bool:
+            calls.append(1)
+            return len(calls) > 5
+
+        result = _use_case(root, repo).execute(
+            scope_root=str(root), should_cancel=cancel_after_five
+        )
+        assert result.cancelled is True
+        assert 0 < result.new_files < 20
+        assert repo.count() == 20 + result.new_files

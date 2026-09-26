@@ -60,7 +60,10 @@ class Job:
 
 @dataclass
 class JobOutcome:
-    """What a work function returns when it finishes (normally or after a cancel)."""
+    """What a work function returns when it finishes (normally or after a cancel).
+
+    ``counts["failed"]``, when present, becomes the job's final ``failed_count``.
+    """
 
     message: str = ""
     counts: dict[str, int] = field(default_factory=dict)
@@ -202,8 +205,12 @@ class JobManager:
             )
         else:
             cancelled = outcome.cancelled or ctx.cancel_requested()
+            final: dict[str, object] = {}
+            if "failed" in outcome.counts:
+                final["failed_count"] = outcome.counts["failed"]
             self._update(
                 job_id,
+                **final,
                 status=JobStatus.CANCELLED if cancelled else JobStatus.SUCCEEDED,
                 message=outcome.message,
                 counts=dict(outcome.counts),

@@ -179,12 +179,32 @@ class IndexFolderRequest(BaseModel):
     num_workers: int = Field(default=4, ge=1, le=32, description="Concurrent extraction threads")
 
 
+class SyncFolderRequest(BaseModel):
+    """Request schema for an incremental sync of one folder (PMO-19).
+
+    Only records under ``folder_path`` take part, so syncing one folder never
+    touches photos indexed from another.
+    """
+
+    folder_path: str = Field(description="Absolute path to the directory to re-scan")
+    cleanup_deleted: bool = Field(
+        default=False, description="Remove records whose file is gone (off by default)"
+    )
+    reprocess_modified: bool = Field(default=True, description="Re-extract changed files")
+    index_new: bool = Field(default=True, description="Index files not yet in the library")
+    dry_run: bool = Field(default=False, description="Report what would change; write nothing")
+    rehash: bool = Field(
+        default=False, description="Hash every file instead of trusting size+mtime (slow)"
+    )
+
+
 class JobResponse(BaseModel):
     """A background job (PMO-18): poll ``GET /api/jobs/{id}`` until ``status`` is final.
 
     ``processed`` counts successes and failures; ``failed_count`` is the failures so
-    far. ``counts`` holds the kind-specific final numbers (for an index job:
-    ``total``, ``indexed``, ``failed``). ``errors`` lists per-file messages, capped.
+    far. ``counts`` holds the kind-specific final numbers (index: ``total``,
+    ``indexed``, ``failed``; sync: ``new``, ``modified``, ``deleted``, ``unchanged``,
+    ``fingerprints_refreshed``, ``failed``). ``errors`` lists per-file messages, capped.
     """
 
     id: str
