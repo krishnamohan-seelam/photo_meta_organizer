@@ -56,7 +56,7 @@ export const App: React.FC = () => {
     if (filterCameras.length > 0 && !filterCameras.includes(p.exif.camera_make || 'Unknown')) {
       return false
     }
-    if (filterTags.length > 0 && !filterTags.some((t) => p.labels.includes(t))) {
+    if (filterTags.length > 0 && !filterTags.every((t) => p.labels.includes(t))) {
       return false
     }
     if (filterCollection === 'Favorites' && !p.flagged) {
