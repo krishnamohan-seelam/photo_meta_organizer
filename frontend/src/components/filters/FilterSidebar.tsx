@@ -119,6 +119,7 @@ export const FilterSidebar: React.FC = () => {
               <button
                 key={t.name}
                 onClick={() => toggleTagFilter(t.name)}
+                aria-pressed={filterTags.includes(t.name)}
                 className={`badge ${active ? 'badge-tag' : ''}`}
                 style={{
                   padding: '4px 8px',
@@ -144,7 +145,10 @@ export const FilterSidebar: React.FC = () => {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {collections.map((col) => (
-            <div
+            <button
+              type="button"
+              className="btn-reset"
+              aria-pressed={filterCollection === col.name}
               key={col.name}
               onClick={() => setCollectionFilter(col.name)}
               style={{
@@ -158,7 +162,7 @@ export const FilterSidebar: React.FC = () => {
               }}
             >
               {col.label}
-            </div>
+            </button>
           ))}
         </div>
       </DropdownFilterCard>

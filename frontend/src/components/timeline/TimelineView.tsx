@@ -73,7 +73,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
               }}
             >
               {items.map((item) => (
-                <div
+                <button
+                  type="button"
+                  className="btn-reset"
+                  aria-label={`Open ${item.file_info.name}`}
                   key={item.file_hash}
                   onClick={() => {
                     const idx = photos.findIndex((p) => p.file_hash === item.file_hash)
@@ -119,7 +122,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
                       {item.exif.camera_make}{item.rating ? ` • ${'★'.repeat(item.rating)}` : ''}
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>

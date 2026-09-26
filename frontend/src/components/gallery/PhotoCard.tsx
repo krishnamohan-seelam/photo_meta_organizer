@@ -21,10 +21,17 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
   const selected = useSelectionStore((s) => s.selectedHashes.has(photo.file_hash))
   const toggleSelect = useSelectionStore((s) => s.toggleSelect)
 
+  const name = photo.file_info.name
+  const description = [
+    name,
+    photo.rating ? `${photo.rating} star${photo.rating > 1 ? 's' : ''}` : null,
+    photo.flagged ? 'flagged' : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
   return (
     <div
-      onClick={() => setInspectedHash(photo.file_hash)}
-      onDoubleClick={() => setLightboxIndex(index)}
       style={{
         background: 'var(--bg-card)',
         borderRadius: 'var(--radius-md)',
@@ -56,6 +63,23 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
         }
       }}
     >
+      {/* The whole card is one button (click: inspect; double-click, or Enter on the inspected card: open). */}
+      <button
+        type="button"
+        className="btn-reset card-hit"
+        aria-label={description}
+        aria-current={inspected ? 'true' : undefined}
+        title="Click to inspect · double-click or Enter to open"
+        onClick={() => setInspectedHash(photo.file_hash)}
+        onDoubleClick={() => setLightboxIndex(index)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && inspected) {
+            e.preventDefault()
+            setLightboxIndex(index)
+          }
+        }}
+      />
+
       {/* Thumbnail Wrap */}
       <div
         style={{
@@ -65,12 +89,14 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
           overflow: 'hidden',
         }}
       >
-        {/* Selection Checkbox */}
-        <div
-          onClick={(e) => {
-            e.stopPropagation()
-            toggleSelect(photo.file_hash)
-          }}
+        {/* Selection Checkbox: a sibling of the card button, never nested in it */}
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={selected}
+          aria-label={`Select ${name}`}
+          className="btn-reset"
+          onClick={() => toggleSelect(photo.file_hash)}
           style={{
             position: 'absolute',
             top: '8px',
@@ -89,7 +115,7 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
           }}
         >
           {selected && <Check size={14} strokeWidth={3} />}
-        </div>
+        </button>
 
         {/* Flag Badge */}
         {photo.flagged && (
@@ -109,7 +135,9 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
               gap: '2px',
               boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
               zIndex: 10,
+              pointerEvents: 'none',
             }}
+            aria-hidden="true"
           >
             <Flag size={12} fill="var(--accent-warning)" />
           </div>
@@ -117,7 +145,7 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
 
         <img
           src={getThumbnailUrl(photo.file_hash)}
-          alt={photo.file_info.name}
+          alt=""
           loading="lazy"
           style={{
             width: '100%',

@@ -4,6 +4,7 @@ import { errorMessage } from './api/client'
 import { usePhotos } from './hooks/usePhotos'
 import { useJobCompletionNotices, useJobs } from './hooks/useJobs'
 import { useUiStore } from './stores/useUiStore'
+import { shouldIgnoreHotkey } from './utils/hotkeys'
 import { AppHeader } from './components/header/AppHeader'
 import { CommandPalette } from './components/header/CommandPalette'
 import { FolderJobDialog } from './components/jobs/FolderJobDialog'
@@ -44,7 +45,8 @@ export const App: React.FC = () => {
   // Keyboard shortcut listener for 'L' (Lights Out)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      // Not while typing, not with modifiers (Ctrl+L is the address bar), not inside a dialog.
+      if (shouldIgnoreHotkey(e) || document.querySelector('[aria-modal="true"]')) return
       if (e.key.toLowerCase() === 'l') {
         toggleLightsOut()
       }

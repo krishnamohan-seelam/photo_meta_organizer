@@ -186,10 +186,13 @@ export const ExifInspector: React.FC = () => {
           Rating & Curation
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div role="radiogroup" aria-label="Rating" style={{ display: 'flex', gap: '4px' }}>
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
+                role="radio"
+                aria-checked={inspectedPhoto.rating === star}
+                aria-label={`${star} star${star > 1 ? 's' : ''}`}
                 onClick={() => handleRatingChange(star)}
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}
               >
@@ -204,6 +207,7 @@ export const ExifInspector: React.FC = () => {
 
           <button
             onClick={handleFlagToggle}
+            aria-pressed={inspectedPhoto.flagged}
             className={`btn ${inspectedPhoto.flagged ? 'btn-primary' : 'btn-secondary'}`}
             style={{ padding: '4px 10px', fontSize: '0.75rem' }}
           >

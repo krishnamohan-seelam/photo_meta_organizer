@@ -443,3 +443,47 @@ body.lights-out .inspector-pane {
 .job-progress-cancel {
   padding: 3px 5px;
 }
+
+/* A <button> that looks like whatever it wraps (clickable rows, cards, markers). */
+.btn-reset {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+/* Keyboard focus must be visible everywhere; mouse clicks do not show the ring. */
+button:focus-visible,
+[role="option"]:focus-visible,
+.btn-reset:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Photo card: the whole card is one button; the select checkbox sits above it. */
+.card-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--radius-md);
+}
+.card-hit:focus-visible {
+  outline-offset: -2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

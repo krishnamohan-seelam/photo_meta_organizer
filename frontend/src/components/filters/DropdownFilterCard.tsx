@@ -32,6 +32,7 @@ export const DropdownFilterCard: React.FC<DropdownFilterCardProps> = ({
     >
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         style={{
           width: '100%',
           padding: '10px 14px',

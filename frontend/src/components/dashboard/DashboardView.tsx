@@ -110,7 +110,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ photos }) => {
               {Object.entries(cameraCounts).map(([make, count]) => {
                 const pct = totalPhotos > 0 ? Math.round((count / totalPhotos) * 100) : 0
                 return (
-                  <div
+                  <button
+                    type="button"
+                    className="btn-reset"
+                    aria-label={`Filter the gallery by ${make}: ${count} photos`}
                     key={make}
                     onClick={() => {
                       toggleCameraFilter(make)
@@ -133,7 +136,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ photos }) => {
                         }}
                       />
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>

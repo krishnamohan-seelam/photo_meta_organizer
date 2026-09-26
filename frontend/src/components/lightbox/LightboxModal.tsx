@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { getThumbnailUrl } from '../../api/client'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { swapToPlaceholder } from '../../utils/placeholder'
+import { shouldIgnoreHotkey } from '../../utils/hotkeys'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { X, ChevronLeft, ChevronRight, Flag } from 'lucide-react'
 
 interface LightboxModalProps {
@@ -13,17 +15,33 @@ interface LightboxModalProps {
 
 export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
   const { lightboxIndex, setLightboxIndex } = useUiStore(useShallow((s) => ({ lightboxIndex: s.lightboxIndex, setLightboxIndex: s.setLightboxIndex })))
-  const { patchPhoto } = useCuration()
-
   const currentPhoto = lightboxIndex !== null && photos[lightboxIndex] ? photos[lightboxIndex] : null
+  if (lightboxIndex === null || !currentPhoto) return null
+  return <Lightbox photos={photos} index={lightboxIndex} currentPhoto={currentPhoto} setIndex={setLightboxIndex} />
+}
+
+interface LightboxProps {
+  photos: PhotoMetadata[]
+  index: number
+  currentPhoto: PhotoMetadata
+  setIndex: (idx: number | null) => void
+}
+
+/** Mounted only while open, so focus moves in on open and back to the card on close. */
+const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, currentPhoto, setIndex: setLightboxIndex }) => {
+  const { patchPhoto } = useCuration()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useDialogFocus(dialogRef, closeRef)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (lightboxIndex === null || !currentPhoto) return
-
       if (e.key === 'Escape') {
         setLightboxIndex(null)
-      } else if (e.key === 'ArrowRight') {
+        return
+      }
+      if (shouldIgnoreHotkey(e)) return
+      if (e.key === 'ArrowRight') {
         setLightboxIndex((lightboxIndex + 1) % photos.length)
       } else if (e.key === 'ArrowLeft') {
         setLightboxIndex((lightboxIndex - 1 + photos.length) % photos.length)
@@ -41,12 +59,15 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [lightboxIndex, currentPhoto, photos, setLightboxIndex, patchPhoto])
 
-  if (lightboxIndex === null || !currentPhoto) return null
-
   const exif = currentPhoto.exif
 
   return (
     <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photo viewer: ${currentPhoto.file_info.name}, ${lightboxIndex + 1} of ${photos.length}`}
+      aria-keyshortcuts="ArrowLeft ArrowRight P 1 2 3 4 5 Escape"
       style={{
         position: 'fixed',
         inset: 0,
@@ -87,13 +108,15 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
               const next = !currentPhoto.flagged
               void patchPhoto(currentPhoto.file_hash, { flagged: next }, next ? '🚩 Flagged as Pick' : 'Unflagged photo')
             }}
+            aria-pressed={currentPhoto.flagged}
+            aria-keyshortcuts="P"
             style={{ color: currentPhoto.flagged ? 'var(--accent-warning)' : '#fff' }}
           >
             <Flag size={15} fill={currentPhoto.flagged ? 'currentColor' : 'none'} />
             <span>{currentPhoto.flagged ? 'Flagged (P)' : 'Pick (P)'}</span>
           </button>
 
-          <button className="btn btn-secondary" onClick={() => setLightboxIndex(null)}>
+          <button ref={closeRef} className="btn btn-secondary" onClick={() => setLightboxIndex(null)} aria-label="Close viewer (Esc)">
             <X size={18} />
           </button>
         </div>
@@ -116,6 +139,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
         {/* Left Chevron */}
         <button
           onClick={() => setLightboxIndex((lightboxIndex - 1 + photos.length) % photos.length)}
+          aria-label="Previous photo"
           style={{
             position: 'absolute',
             left: '20px',
@@ -153,6 +177,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
         {/* Right Chevron */}
         <button
           onClick={() => setLightboxIndex((lightboxIndex + 1) % photos.length)}
+          aria-label="Next photo"
           style={{
             position: 'absolute',
             right: '20px',
@@ -215,23 +240,31 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
         onClick={(e) => e.stopPropagation()}
       >
         {photos.map((p, idx) => (
-          <img
+          <button
             key={p.file_hash}
-            src={getThumbnailUrl(p.file_hash, 100, 100)}
-            alt={p.file_info.name}
+            type="button"
+            className="btn-reset"
             onClick={() => setLightboxIndex(idx)}
-            style={{
-              width: '52px',
-              height: '52px',
-              borderRadius: '4px',
-              objectFit: 'cover',
-              cursor: 'pointer',
-              opacity: idx === lightboxIndex ? 1 : 0.4,
-              border: idx === lightboxIndex ? '2px solid var(--accent-primary)' : '1px solid transparent',
-              transition: 'all 0.15s ease',
-            }}
-            onError={swapToPlaceholder}
-          />
+            aria-label={`Show ${p.file_info.name}`}
+            aria-current={idx === lightboxIndex ? 'true' : undefined}
+            style={{ flex: '0 0 auto', borderRadius: '4px' }}
+          >
+            <img
+              src={getThumbnailUrl(p.file_hash, 100, 100)}
+              alt=""
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '4px',
+                objectFit: 'cover',
+                display: 'block',
+                opacity: idx === lightboxIndex ? 1 : 0.4,
+                border: idx === lightboxIndex ? '2px solid var(--accent-primary)' : '1px solid transparent',
+                transition: 'all 0.15s ease',
+              }}
+              onError={swapToPlaceholder}
+            />
+          </button>
         ))}
       </div>
     </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { FolderOpen, FolderPlus, RefreshCw, X } from 'lucide-react'
 import { useJobActions } from '../../hooks/useJobs'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useUiStore } from '../../stores/useUiStore'
 import type { JobDialogKind } from '../../stores/useUiStore'
 import { loadRecentFolders, rememberFolder } from '../../utils/recentFolders'
@@ -36,13 +37,14 @@ const DialogBody: React.FC<{ kind: JobDialogKind; onClose: () => void }> = ({ ki
   const [rehash, setRehash] = useState(false)
   const { startJob, isStarting } = useJobActions()
   const inputRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  useDialogFocus(formRef, inputRef)
   const titleId = useId()
   const listId = useId()
   const copy = COPY[kind]
   const canBrowse = Boolean(window.electronAPI?.openDirectory)
 
   useEffect(() => {
-    inputRef.current?.focus()
     inputRef.current?.select()
   }, [])
 
@@ -78,7 +80,7 @@ const DialogBody: React.FC<{ kind: JobDialogKind; onClose: () => void }> = ({ ki
 
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <form className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
+      <form ref={formRef} className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
         <div className="dialog-header">
           {kind === 'index' ? <FolderPlus size={18} /> : <RefreshCw size={18} />}
           <h2 id={titleId}>{copy.title}</h2>

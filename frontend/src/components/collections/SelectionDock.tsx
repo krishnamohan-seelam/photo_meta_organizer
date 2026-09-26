@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useUiStore } from '../../stores/useUiStore'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useCuration } from '../../hooks/usePhotoMutations'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { Tag, Flag, Download, X } from 'lucide-react'
 
 interface SelectionDockProps {
@@ -75,67 +76,107 @@ export const SelectionDock: React.FC<SelectionDockProps> = ({ photos }) => {
             <span>Export ZIP</span>
           </button>
 
-          <button className="btn btn-secondary" onClick={clearSelection} style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
+          <button className="btn btn-secondary" onClick={clearSelection} aria-label="Clear selection" title="Clear selection" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
             <X size={13} />
           </button>
         </div>
       </div>
 
-      {/* Batch Tagging Modal */}
       {tagModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 99999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          onClick={() => setTagModalOpen(false)}
-        >
-          <div
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              padding: '20px',
-              width: '320px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Add Tag to {selectedCount} Photos</div>
-            <input
-              type="text"
-              autoFocus
-              placeholder="e.g. tokyo-curated, highlights"
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleBatchTag()}
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '8px 10px',
-                color: 'var(--text-primary)',
-                outline: 'none',
-              }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button className="btn btn-secondary" onClick={() => setTagModalOpen(false)}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" onClick={handleBatchTag}>
-                Apply Tag
-              </button>
-            </div>
-          </div>
-        </div>
+        <BatchTagDialog
+          count={selectedCount}
+          value={newTag}
+          onChange={setNewTag}
+          onApply={handleBatchTag}
+          onClose={() => setTagModalOpen(false)}
+        />
       )}
     </>
+  )
+}
+
+interface BatchTagDialogProps {
+  count: number
+  value: string
+  onChange: (tag: string) => void
+  onApply: () => void
+  onClose: () => void
+}
+
+/** Add one tag to every selected photo. Mounted only while open (focus in, trapped, restored). */
+const BatchTagDialog: React.FC<BatchTagDialogProps> = ({ count, value, onChange, onApply, onClose }) => {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const titleId = useId()
+  useDialogFocus(dialogRef, inputRef)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-md)',
+          padding: '20px',
+          width: '320px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div id={titleId} style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+          Add Tag to {count} Photos
+        </div>
+        <input
+          ref={inputRef}
+          type="text"
+          aria-label="Tag"
+          placeholder="e.g. tokyo-curated, highlights"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && onApply()}
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '8px 10px',
+            color: 'var(--text-primary)',
+            outline: 'none',
+          }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <button className="btn btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" onClick={onApply}>
+            Apply Tag
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

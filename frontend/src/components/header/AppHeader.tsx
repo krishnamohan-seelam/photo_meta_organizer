@@ -54,14 +54,21 @@ export const AppHeader: React.FC = () => {
       </div>
 
       {/* Command Palette Trigger */}
-      <div className="cmd-k-trigger" onClick={() => setCommandPaletteOpen(true)}>
+      <button
+        type="button"
+        className="btn-reset cmd-k-trigger"
+        aria-keyshortcuts="Control+K"
+        onClick={() => setCommandPaletteOpen(true)}
+      >
         <Search size={15} />
         <span>Type a command or search...</span>
         <span className="kbd-chip">Ctrl + K</span>
-      </div>
+      </button>
 
       {/* View Switcher Navigation */}
       <div
+        role="group"
+        aria-label="View"
         style={{
           display: 'flex',
           background: 'var(--bg-surface)',
@@ -75,6 +82,7 @@ export const AppHeader: React.FC = () => {
           <button
             key={v.key}
             onClick={() => setActiveView(v.key)}
+            aria-pressed={activeView === v.key}
             className={`btn ${activeView === v.key ? 'btn-primary' : 'btn-secondary'}`}
             style={{
               padding: '5px 10px',
@@ -106,6 +114,8 @@ export const AppHeader: React.FC = () => {
         <button
           className={`btn ${lightsOut ? 'btn-primary' : 'btn-secondary'}`}
           onClick={toggleLightsOut}
+          aria-pressed={lightsOut}
+          aria-keyshortcuts="L"
           title="Toggle Lights Out Mode (Hotkey: L)"
           style={{ padding: '6px 12px' }}
         >
@@ -120,6 +130,8 @@ export const AppHeader: React.FC = () => {
               className={`btn ${sidebarOpen ? 'btn-secondary' : 'btn-primary'}`}
               onClick={toggleSidebar}
               title="Toggle Filter Sidebar"
+              aria-label="Filter sidebar"
+              aria-pressed={sidebarOpen}
               style={{ padding: '6px 10px' }}
             >
               <PanelLeftClose size={15} />
@@ -128,6 +140,8 @@ export const AppHeader: React.FC = () => {
               className={`btn ${inspectorOpen ? 'btn-secondary' : 'btn-primary'}`}
               onClick={toggleInspector}
               title="Toggle EXIF Inspector"
+              aria-label="EXIF inspector"
+              aria-pressed={inspectorOpen}
               style={{ padding: '6px 10px' }}
             >
               <PanelRightClose size={15} />

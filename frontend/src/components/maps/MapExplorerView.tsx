@@ -94,7 +94,10 @@ export const MapExplorerView: React.FC<MapExplorerViewProps> = ({ photos }) => {
 
         {/* GPS Cluster Markers */}
         {clusters.map((c) => (
-          <div
+          <button
+            type="button"
+            className="btn-reset"
+            aria-label={`${c.city}: ${c.count} photos`}
             key={c.city}
             onClick={() => {
               showToast(`Focused on ${c.city} (${c.count} photos within ${radiusKm}km)`)
@@ -151,7 +154,7 @@ export const MapExplorerView: React.FC<MapExplorerViewProps> = ({ photos }) => {
             >
               {c.city}
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

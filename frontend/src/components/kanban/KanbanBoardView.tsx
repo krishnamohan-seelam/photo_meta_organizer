@@ -121,7 +121,10 @@ export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos }) => {
             }}
           >
             {col.items.map((item) => (
-              <div
+              <button
+                type="button"
+                className="btn-reset"
+                aria-label={`Inspect ${item.file_info.name}`}
                 key={item.file_hash}
                 onClick={() => setInspectedHash(item.file_hash)}
                 style={{
@@ -175,7 +178,7 @@ export const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ photos }) => {
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

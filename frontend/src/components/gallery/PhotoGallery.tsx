@@ -102,6 +102,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos }) => {
               min="160"
               max="320"
               value={gridItemSize}
+              aria-label="Thumbnail size"
               onChange={(e) => setGridItemSize(parseInt(e.target.value))}
               style={{ width: '90px', accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
             />
