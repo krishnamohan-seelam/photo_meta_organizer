@@ -170,12 +170,14 @@ def handle_index_command(args: argparse.Namespace) -> int:
         from photo_meta_organizer.application.use_cases import (
             ParallelIndexPhotosUseCase,
         )
+        from photo_meta_organizer.infrastructure.metrics import ProgressReporter
 
         report = ParallelIndexPhotosUseCase(
             retriever=retriever,
             extractor=extractor,
             repository=repository,
             num_workers=workers,
+            progress_reporter=ProgressReporter(),
         ).run()
         print(f"Successfully indexed {len(report.indexed)} photos")
         if report.errors:

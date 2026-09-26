@@ -242,18 +242,19 @@ class ImageMetadata:
 class FileInfo:
     """Lightweight file metadata from a disk scan (for fingerprinting).
 
-    Obtained cheaply via os.stat() without reading file content.
+    Comes from the retriever's listing, without reading file content.
     Used by MetadataStateAnalyzer to detect changes without hashing.
 
     Attributes:
-        path: Normalised absolute file path.
-        size_bytes: File size in bytes (from stat.st_size).
-        modified_time: Last modification time (from stat.st_mtime).
+        path: File path as listed by the retriever.
+        size_bytes: File size in bytes.
+        modified_time: Last modification time, or ``None`` if the storage backend
+            does not report it (the analyzer then confirms by hash).
     """
 
     path: str
     size_bytes: int
-    modified_time: datetime
+    modified_time: Optional[datetime]
 
 
 @dataclass(frozen=True)

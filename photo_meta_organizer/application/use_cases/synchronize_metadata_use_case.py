@@ -26,18 +26,24 @@ import os
 import time
 from collections.abc import Callable
 from pathlib import Path
-from datetime import datetime
 
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
     ImageMetadataRepository,
     ImageRetriever,
+    RemoteFileHandle,
 )
+from photo_meta_organizer.application.orchestrators import SyncOrchestrator
+from photo_meta_organizer.domain.hashing import sha256_of_stream
 from photo_meta_organizer.domain.models import FileInfo, SyncResult
 from photo_meta_organizer.domain.services import MetadataStateAnalyzer
-from photo_meta_organizer.application.orchestrators import SyncOrchestrator
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve(path: str) -> str:
+    """The path both sides of a sync are compared in: absolute, symlinks and case resolved."""
+    return str(Path(path).resolve())
 
 
 def _within(path: str, root: str) -> bool:
@@ -152,20 +158,16 @@ class SynchronizeMetadataUseCase:
         # ------------------------------------------------------------------
         # Step 1: Scan disk
         # ------------------------------------------------------------------
-        disk_files: dict[str, FileInfo] = {}
-        for file_handle in self._retriever.list_files():
-            path = Path(file_handle.original_path)
-            try:
-                stat = path.stat()
-                fi = FileInfo(
-                    path=str(path),
-                    size_bytes=stat.st_size,
-                    modified_time=datetime.fromtimestamp(stat.st_mtime),
-                )
-                disk_files[str(path)] = fi
-            except OSError as exc:
-                logger.warning("Cannot stat file %s: %s", path, exc)
-                result.errors.append(f"stat error: {path}: {exc}")
+        # Size and mtime come from the retriever's own listing (PMO-22): no second
+        # stat per file, and the use case works with any storage backend.
+        disk_files: dict[str, FileInfo] = {
+            handle.original_path: FileInfo(
+                path=handle.original_path,
+                size_bytes=handle.size_bytes,
+                modified_time=handle.modified_time,
+            )
+            for handle in self._retriever.list_files()
+        }
 
         logger.info("Disk scan complete: %d files found", len(disk_files))
 
@@ -188,7 +190,9 @@ class SynchronizeMetadataUseCase:
         file_states = self._analyzer.analyze_changes(
             disk_files=disk_files,
             db_entries=db_entries,
+            compute_hash=self._hash_file,
             force_rehash=rehash,
+            normalise_path=_resolve,
         )
 
         counts = {"NEW": 0, "MODIFIED": 0, "UNCHANGED": 0, "DELETED": 0}
@@ -243,3 +247,9 @@ class SynchronizeMetadataUseCase:
             len(result.errors),
         )
         return result
+
+    def _hash_file(self, path: str) -> str:
+        """Content hash of ``path``, read through the retriever with the shared helper."""
+        handle = RemoteFileHandle(original_path=path, filename=Path(path).name, size_bytes=0)
+        with self._retriever.get_file_stream(handle) as stream:
+            return sha256_of_stream(stream)

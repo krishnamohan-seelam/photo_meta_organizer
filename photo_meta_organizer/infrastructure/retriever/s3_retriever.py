@@ -6,16 +6,22 @@ Supports pagination to handle large buckets efficiently.
 """
 
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import PurePosixPath
-from typing import Any, BinaryIO, Generator
+from typing import Any, BinaryIO, Generator, Optional
 
 import boto3
 
 from photo_meta_organizer.application.interfaces.image_retriever import (
-    ImageRetriever,
     RemoteFileHandle,
 )
 
+
+def _local_naive(value: Optional[datetime]) -> Optional[datetime]:
+    """S3's LastModified (aware UTC) as naive local time, the stored convention (ADR D3)."""
+    if value is None:
+        return None
+    return value.astimezone().replace(tzinfo=None) if value.tzinfo else value
 
 class S3ImageRetriever:
     """Retrieves image files from Amazon S3 buckets.
@@ -75,6 +81,7 @@ class S3ImageRetriever:
                     original_path=key,
                     filename=PurePosixPath(key).name,
                     size_bytes=obj["Size"],
+                    modified_time=_local_naive(obj.get("LastModified")),
                 )
 
     @contextmanager

@@ -83,7 +83,17 @@ class TestMetadataStateAnalyzerNew:
 
         assert len(states) == 1
         assert states[0].state == "NEW"
-        assert states[0].file_hash == HASH_A
+        # PMO-22: NEW files are not pre-hashed; extraction hashes them once.
+        assert states[0].file_hash is None
+
+    def test_new_files_are_never_hashed(self, analyzer):
+        hashed: list[str] = []
+        analyzer.analyze_changes(
+            disk_files={"p": _make_file_info("/lib/new.jpg")},
+            db_entries=[],
+            compute_hash=lambda p: hashed.append(p) or HASH_A,
+        )
+        assert hashed == []
 
     def test_new_file_records_size(self, analyzer, tmp_path):
         photo = tmp_path / "photo.jpg"
@@ -287,23 +297,29 @@ class TestMetadataStateAnalyzerMixed:
 class TestMetadataStateAnalyzerEdgeCases:
     """Edge case tests."""
 
-    def test_hash_os_error_on_new_file_produces_none_hash(self, analyzer, tmp_path):
-        """If hashing fails for a new file, hash is None and state is still NEW."""
-        photo = tmp_path / "new.jpg"
-        photo.write_bytes(b"data")
-        path_str = str(photo)
+    def test_hash_needed_without_hasher_is_an_error(self, analyzer):
+        """The domain never opens files itself: hashing must be injected (PMO-22)."""
+        with pytest.raises(ValueError, match="compute_hash"):
+            analyzer.analyze_changes(
+                disk_files={"p": _make_file_info("/lib/a.jpg", size_bytes=2)},
+                db_entries=[_make_metadata("/lib/a.jpg", HASH_A, size_bytes=1)],
+            )
 
-        def failing_hash(p):
-            raise OSError("Permission denied")
-
-        disk_files = {path_str: _make_file_info(path_str, size_bytes=4)}
+    def test_no_hasher_needed_when_nothing_must_be_hashed(self, analyzer):
         states = analyzer.analyze_changes(
-            disk_files=disk_files,
-            db_entries=[],
-            compute_hash=failing_hash,
+            disk_files={"p": _make_file_info("/lib/new.jpg")},
+            db_entries=[_make_metadata("/lib/gone.jpg", HASH_A)],
         )
-        assert states[0].state == "NEW"
-        assert states[0].file_hash is None
+        assert sorted(s.state for s in states) == ["DELETED", "NEW"]
+
+    def test_injected_path_normaliser_is_used_for_matching(self, analyzer):
+        """The caller decides what "the same path" means (e.g. resolving symlinks/case)."""
+        states = analyzer.analyze_changes(
+            disk_files={"p": _make_file_info("/LIB/A.JPG")},
+            db_entries=[_make_metadata("/lib/a.jpg", HASH_A)],
+            normalise_path=str.lower,
+        )
+        assert [(s.file_path, s.state) for s in states] == [("/lib/a.jpg", "UNCHANGED")]
 
     def test_hash_os_error_on_modified_file_is_skipped(self, analyzer, tmp_path):
         """If hashing fails for a candidate-modified file, it is silently skipped."""

@@ -9,10 +9,10 @@ Domain services are:
 - Contain business rules expressed in domain language
 """
 
-import hashlib
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional
+import ntpath
+import posixpath
+from collections.abc import Callable
 
 from photo_meta_organizer.domain.models import CameraProfile, FileInfo, FileState, ImageMetadata
 
@@ -43,8 +43,8 @@ class CameraClassifier:
 
     @staticmethod
     def classify(
-        camera_make: Optional[str],
-        camera_model: Optional[str],
+        camera_make: str | None,
+        camera_model: str | None,
         has_lens_model: bool = False,
     ) -> CameraProfile:
         """Infer camera profile from make, model, and available field data.
@@ -92,6 +92,13 @@ class CameraClassifier:
 logger = logging.getLogger(__name__)
 
 
+def _lexical_normpath(path: str) -> str:
+    """Normalise a path without touching the filesystem (Windows or POSIX style)."""
+    if "\\" in path or ntpath.splitdrive(path)[0]:
+        return ntpath.normpath(path)
+    return posixpath.normpath(path)
+
+
 class MetadataStateAnalyzer:
     """Domain service: compares disk state vs. DB to classify file changes.
 
@@ -113,48 +120,55 @@ class MetadataStateAnalyzer:
          and mtime.
     4. DB entries whose path is not on disk → **DELETED**.
 
-    This is a pure domain service: no I/O, fully testable.
-    The caller is responsible for computing hashes when requested
-    (injected as a callable so the service stays dependency-free).
+    This is a pure domain service: no I/O, fully testable. The caller injects
+    both the hasher (it opens files, e.g. through the retriever) and the path
+    normaliser (e.g. one that resolves symlinks and on-disk case). NEW files are
+    not hashed here: extraction hashes them anyway, so each is read once (PMO-22).
     """
 
     def analyze_changes(
         self,
-        disk_files: Dict[str, FileInfo],
-        db_entries: List[ImageMetadata],
-        compute_hash: Optional[callable] = None,
+        disk_files: dict[str, FileInfo],
+        db_entries: list[ImageMetadata],
+        compute_hash: Callable[[str], str] | None = None,
         force_rehash: bool = False,
-    ) -> List[FileState]:
+        normalise_path: Callable[[str], str] | None = None,
+    ) -> list[FileState]:
         """Classify every file as NEW / MODIFIED / UNCHANGED / DELETED.
 
         Args:
             disk_files: Mapping of normalised path → FileInfo from disk scan.
             db_entries: All ImageMetadata records currently in the DB.
-            compute_hash: Callable that accepts a file path (str) and returns
-                its SHA-256 hex digest.  Defaults to the built-in SHA-256
-                implementation when None.
+            compute_hash: Callable that accepts a (normalised) file path and returns
+                its SHA-256 hex digest. Required as soon as a file must be hashed;
+                a ``ValueError`` is raised if it is missing then.
             force_rehash: Hash every file that is already in the DB instead of
                 trusting the (size, mtime) fingerprint.
+            normalise_path: Maps a path to the form both sides are compared in.
+                Defaults to a purely lexical ``normpath``.
 
         Returns:
             List of FileState objects covering every disk file and every
             DB-only (deleted) entry.
         """
-        if compute_hash is None:
-            compute_hash = self._sha256
+        normalise = normalise_path or _lexical_normpath
+
+        def hash_of(path: str) -> str:
+            if compute_hash is None:
+                raise ValueError("compute_hash is required to confirm a changed file")
+            return compute_hash(path)
 
         # Index DB entries by normalised path
-        db_by_path: Dict[str, ImageMetadata] = {
-            str(Path(entry.file_info.path).resolve()): entry
-            for entry in db_entries
+        db_by_path: dict[str, ImageMetadata] = {
+            normalise(entry.file_info.path): entry for entry in db_entries
         }
 
         # Normalise disk paths for consistent comparison
-        normalised_disk: Dict[str, FileInfo] = {
-            str(Path(fi.path).resolve()): fi for fi in disk_files.values()
+        normalised_disk: dict[str, FileInfo] = {
+            normalise(fi.path): fi for fi in disk_files.values()
         }
 
-        states: List[FileState] = []
+        states: list[FileState] = []
 
         # ---------------------------------------------------------------
         # Pass 1: process all disk files
@@ -163,17 +177,12 @@ class MetadataStateAnalyzer:
             db_entry = db_by_path.get(norm_path)
 
             if db_entry is None:
-                # File not in DB → NEW (compute hash for extraction)
-                try:
-                    current_hash = compute_hash(norm_path)
-                except OSError as exc:
-                    logger.warning("Cannot hash new file %s: %s", norm_path, exc)
-                    current_hash = None
+                # File not in DB → NEW. Not hashed here: extraction hashes it.
                 states.append(
                     FileState(
                         file_path=norm_path,
                         state="NEW",
-                        file_hash=current_hash,
+                        file_hash=None,
                         size_bytes=fi.size_bytes,
                         last_modified=fi.modified_time,
                     )
@@ -205,7 +214,7 @@ class MetadataStateAnalyzer:
 
             # Size or mtime differs (or a rehash was forced) → hash to confirm
             try:
-                current_hash = compute_hash(norm_path)
+                current_hash = hash_of(norm_path)
             except OSError as exc:
                 logger.warning("Cannot hash file %s: %s", norm_path, exc)
                 continue
@@ -250,28 +259,3 @@ class MetadataStateAnalyzer:
                 )
 
         return states
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _sha256(file_path: str) -> str:
-        """Compute SHA-256 hex digest for the file at *file_path*.
-
-        Reads in 64 KiB chunks to avoid loading large images into RAM.
-
-        Args:
-            file_path: Absolute path to the file.
-
-        Returns:
-            Lowercase hex string of the SHA-256 digest.
-
-        Raises:
-            OSError: If the file cannot be read.
-        """
-        h = hashlib.sha256()
-        with open(file_path, "rb") as fh:
-            for chunk in iter(lambda: fh.read(65536), b""):
-                h.update(chunk)
-        return h.hexdigest()

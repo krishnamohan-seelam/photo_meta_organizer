@@ -126,27 +126,36 @@ class TestSynchronizeMetadataUseCaseFlags:
         result = use_case.execute()
         assert result.duration_seconds >= 0.0
 
-    def test_stat_error_adds_to_errors(self, mock_extractor, mock_repository, mock_analyzer):
-        """Files that cannot be stat'd are logged as errors."""
+    def test_disk_scan_uses_the_retrievers_size_and_mtime(
+        self, mock_extractor, mock_repository, mock_analyzer
+    ):
+        """PMO-22: no Path.stat() in the use case; the handle carries size and mtime."""
+        from datetime import datetime
+
         from photo_meta_organizer.application.interfaces.image_retriever import RemoteFileHandle
 
-        handle = RemoteFileHandle(
-            original_path="/nonexistent/photo.jpg",
-            filename="photo.jpg",
-            size_bytes=0,
+        mtime = datetime(2024, 5, 6, 7, 8, 9)
+        retriever = MagicMock()
+        retriever.list_files.return_value = iter(
+            [
+                RemoteFileHandle("/nowhere/a.jpg", "a.jpg", 123, modified_time=mtime),
+                RemoteFileHandle("/nowhere/b.jpg", "b.jpg", 45),
+            ]
         )
-        real_retriever = MagicMock()
-        real_retriever.list_files.return_value = iter([handle])
         mock_analyzer.analyze_changes.return_value = []
 
-        use_case = SynchronizeMetadataUseCase(
-            retriever=real_retriever,
+        SynchronizeMetadataUseCase(
+            retriever=retriever,
             extractor=mock_extractor,
             repository=mock_repository,
             analyzer=mock_analyzer,
-        )
-        result = use_case.execute()
-        assert any("stat error" in e for e in result.errors)
+        ).execute()
+
+        disk_files = mock_analyzer.analyze_changes.call_args.kwargs["disk_files"]
+        assert disk_files["/nowhere/a.jpg"].size_bytes == 123
+        assert disk_files["/nowhere/a.jpg"].modified_time == mtime
+        # Unknown mtime is passed on as unknown; the analyzer then verifies by hash.
+        assert disk_files["/nowhere/b.jpg"].modified_time is None
 
     def test_unchanged_count_populated(self, mock_retriever, mock_extractor, mock_repository, mock_analyzer):
         mock_retriever.list_files.return_value = iter([])

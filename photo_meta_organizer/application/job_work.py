@@ -20,7 +20,6 @@ def index_work(use_case: ParallelIndexPhotosUseCase, folder_path: str) -> Work:
         report = use_case.run(
             progress=on_progress,
             should_cancel=ctx.cancel_requested,
-            show_progress_bar=False,
         )
         indexed, failed = len(report.indexed), len(report.errors)
         if report.cancelled:

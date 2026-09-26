@@ -9,11 +9,10 @@ and returns an ImageMetadata domain entity. All conversion logic
 in the internal _ExifFieldMapper utility class.
 """
 
-import hashlib
+
 import logging
 import mimetypes
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, Optional
 
@@ -26,6 +25,7 @@ from photo_meta_organizer.application.interfaces.image_extractor import (
 from photo_meta_organizer.application.interfaces.image_retriever import (
     RemoteFileHandle,
 )
+from photo_meta_organizer.domain.hashing import sha256_of_stream
 from photo_meta_organizer.domain.models import (
     GpsCoordinates,
     ImageDimensions,
@@ -376,11 +376,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
             or ""
         )
         if not captured_at:
-            try:
-                mtime = Path(file_handle.original_path).stat().st_mtime
-                captured_at = datetime.fromtimestamp(mtime)
-            except (OSError, ValueError):
-                captured_at = None
+            captured_at = file_handle.modified_time or get_file_mtime(file_handle.original_path)
 
         # --- Camera profile inference (domain service) ---
         has_lens_model = "EXIF LensModel" in exif_tags
@@ -447,19 +443,19 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
             )
             dimensions = ImageDimensions(width=0, height=0)
 
-        # --- Content hash (SHA-256) ---
-        stream.seek(0)
-        file_hash = hashlib.sha256(stream.read()).hexdigest()
+        # --- Content hash (SHA-256), chunked: memory does not grow with file size ---
+        file_hash = sha256_of_stream(stream)
 
-        # --- File info ---
-        file_size = get_file_size(file_handle.original_path)
+        # --- File info: size and mtime from the listing when it has them ---
+        file_size = file_handle.size_bytes or get_file_size(file_handle.original_path)
+        modified_time = file_handle.modified_time or get_file_mtime(file_handle.original_path)
         mime_type = mimetypes.guess_type(file_handle.filename)[0] or "application/octet-stream"
         file_info = ImageFileInfo(
             name=file_handle.filename,
             path=file_handle.original_path,
             size_bytes=file_size,
             mime_type=mime_type,
-            modified_time=get_file_mtime(file_handle.original_path),
+            modified_time=modified_time,
         )
 
         return ImageMetadata(

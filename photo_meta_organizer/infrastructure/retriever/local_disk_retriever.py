@@ -5,15 +5,17 @@ for discovering and accessing image files stored on the local file system.
 Supports recursive directory traversal for comprehensive file discovery.
 """
 
+import logging
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, Generator
 
 from photo_meta_organizer.application.interfaces.image_retriever import (
-    ImageRetriever,
     RemoteFileHandle,
 )
 
+logger = logging.getLogger(__name__)
 
 class LocalDiskRetriever:
     """Retrieves image files from the local file system.
@@ -61,12 +63,20 @@ class LocalDiskRetriever:
             RemoteFileHandle: Metadata for each discovered file.
         """
         for path in self._base_path.rglob("*"):
-            if path.is_file():
-                yield RemoteFileHandle(
-                    original_path=str(path),
-                    filename=path.name,
-                    size_bytes=path.stat().st_size,
-                )
+            try:
+                if not path.is_file():
+                    continue
+                stat = path.stat()
+            except OSError as exc:  # vanished or unreadable between listing and stat
+                logger.warning("Cannot stat %s: %s", path, exc)
+                continue
+            yield RemoteFileHandle(
+                original_path=str(path),
+                filename=path.name,
+                size_bytes=stat.st_size,
+                # Naive local time, the convention for every stored datetime (ADR D3).
+                modified_time=datetime.fromtimestamp(stat.st_mtime),
+            )
 
     @contextmanager
     def get_file_stream(

@@ -19,18 +19,18 @@ Example:
 import logging
 from dataclasses import replace
 from datetime import datetime
-from io import BytesIO
+from pathlib import PurePath
 from typing import Callable, List, Optional
 
 from photo_meta_organizer.application.interfaces.image_extractor import (
     ImageMetadataExtractor,
 )
+from photo_meta_organizer.application.interfaces.image_repository import (
+    ImageMetadataRepository,
+)
 from photo_meta_organizer.application.interfaces.image_retriever import (
     ImageRetriever,
     RemoteFileHandle,
-)
-from photo_meta_organizer.application.interfaces.image_repository import (
-    ImageMetadataRepository,
 )
 from photo_meta_organizer.domain.curation import carry_over_curation
 from photo_meta_organizer.domain.models import FileState, ImageMetadata, SyncResult
@@ -301,12 +301,12 @@ class SyncOrchestrator:
             result: Mutable SyncResult to update.
         """
         try:
-            from pathlib import Path as _Path
-            p = _Path(fs.file_path)
+            # Size and mtime are the ones the disk scan saw; no stat here (PMO-22).
             file_handle = RemoteFileHandle(
-                original_path=str(p),
-                filename=p.name,
-                size_bytes=fs.size_bytes or p.stat().st_size,
+                original_path=fs.file_path,
+                filename=PurePath(fs.file_path).name,
+                size_bytes=fs.size_bytes or 0,
+                modified_time=fs.last_modified,
             )
             with self._retriever.get_file_stream(file_handle) as stream:
                 metadata = self._extractor.extract(file_handle, stream)

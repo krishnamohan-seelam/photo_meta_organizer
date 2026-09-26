@@ -27,8 +27,8 @@ from photo_meta_organizer.application.interfaces import (
     ImageRetriever,
 )
 from photo_meta_organizer.application.interfaces.image_retriever import RemoteFileHandle
+from photo_meta_organizer.application.interfaces.progress import NullProgress, ProgressSink
 from photo_meta_organizer.domain.models import ImageMetadata
-from photo_meta_organizer.infrastructure.metrics import ProgressReporter
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,7 @@ class ParallelIndexPhotosUseCase:
         extractor: ImageMetadataExtractor,
         repository: ImageMetadataRepository,
         num_workers: int = 4,
+        progress_reporter: ProgressSink | None = None,
     ) -> None:
         """Initialize with injected dependencies.
 
@@ -108,11 +109,14 @@ class ParallelIndexPhotosUseCase:
             extractor: Stateless metadata extractor.
             repository: Persistence backend.
             num_workers: Number of extraction threads (default: 4).
+            progress_reporter: Console-style progress output (the CLI passes the
+                tqdm reporter); silent by default.
         """
         self._retriever = retriever
         self._extractor = extractor
         self._repository = repository
         self._num_workers = num_workers
+        self._reporter: ProgressSink = progress_reporter or NullProgress()
 
     def execute(self) -> list[ImageMetadata]:
         """Run the parallel indexing pipeline.
@@ -126,7 +130,6 @@ class ParallelIndexPhotosUseCase:
         self,
         progress: Callable[[IndexProgress], None] | None = None,
         should_cancel: Callable[[], bool] | None = None,
-        show_progress_bar: bool = True,
     ) -> IndexReport:
         """Run the pipeline and report what happened.
 
@@ -135,7 +138,6 @@ class ParallelIndexPhotosUseCase:
                 (from the main thread or the DB-writer thread).
             should_cancel: Polled during discovery and before each submission. Files
                 already extracted when it turns true are still saved.
-            show_progress_bar: Show the console progress bar (off for API jobs).
         """
         cancelled = should_cancel or (lambda: False)
         report = IndexReport()
@@ -156,7 +158,7 @@ class ParallelIndexPhotosUseCase:
         if progress is not None:
             progress(IndexProgress(report.total, 0, 0))
 
-        reporter = ProgressReporter(disable_bar=not show_progress_bar)
+        reporter = self._reporter
         reporter.start(total=len(files), desc="Parallel Indexing")
         db_queue: queue.Queue = queue.Queue(maxsize=100)
         writer_thread = threading.Thread(
@@ -227,14 +229,14 @@ class ParallelIndexPhotosUseCase:
             raise
 
     def _db_writer_worker(
-        self, db_queue: queue.Queue, tally: _Tally, reporter: ProgressReporter
+        self, db_queue: queue.Queue, tally: _Tally, reporter: ProgressSink
     ) -> None:
         """Dedicated thread task to write metadata to the repository.
 
         Args:
             db_queue: Queue providing extracted ImageMetadata objects.
             tally: Shared success/failure counter feeding the report.
-            reporter: ProgressReporter for unified metrics updates.
+            reporter: Progress output (console bar or silent).
         """
         while True:
             item = db_queue.get()

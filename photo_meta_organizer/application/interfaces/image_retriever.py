@@ -21,7 +21,8 @@ Example:
 """
 
 from dataclasses import dataclass
-from typing import BinaryIO, ContextManager, Generator, Protocol
+from datetime import datetime
+from typing import BinaryIO, ContextManager, Generator, Optional, Protocol
 
 
 @dataclass(frozen=True)
@@ -35,11 +36,15 @@ class RemoteFileHandle:
         original_path: The full path or key identifying the file in storage.
         filename: The base filename or object key.
         size_bytes: The file size in bytes.
+        modified_time: Last modification time as naive local time, from the same
+            listing call (no extra stat), or ``None`` if the backend does not know it.
+            Sync compares it with the stored value (PMO-06/22).
     """
 
     original_path: str
     filename: str
     size_bytes: int
+    modified_time: Optional[datetime] = None
 
 
 class ImageRetriever(Protocol):
