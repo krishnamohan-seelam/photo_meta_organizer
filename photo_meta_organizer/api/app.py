@@ -149,7 +149,10 @@ def create_app(
         repository=repository,
         collections=build_collection_repository(repository),
         jobs=job_manager,
-        thumbnails=ThumbnailService(str(settings.thumbnail_dir)),
+        thumbnails=ThumbnailService(
+            str(settings.thumbnail_dir),
+            max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
+        ),
     )
 
     # Mount routers

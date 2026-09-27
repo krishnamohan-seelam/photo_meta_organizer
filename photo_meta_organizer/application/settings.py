@@ -9,6 +9,8 @@ Environment variables:
     PMO_DATA_DIR       base directory: <dir>/photos.db, <dir>/cache/thumbnails, <dir>/logs
     PMO_DB             database file (beats PMO_DATA_DIR)
     PMO_CACHE_DIR      thumbnail cache directory
+    PMO_THUMBNAIL_CACHE_MB  size budget of the thumbnail cache (default 1024); least
+                       recently used thumbnails are evicted beyond it
     PMO_LOG_DIR        log directory
     PMO_ALLOWED_HOSTS  comma-separated Host header names the API accepts
     PMO_CORS_ORIGINS   comma-separated origins granted CORS
@@ -41,6 +43,11 @@ def _env_path(env: Mapping[str, str], name: str) -> Path | None:
     return Path(value) if value else None
 
 
+def _env_int(env: Mapping[str, str], name: str) -> int | None:
+    value = env.get(name, "").strip()
+    return int(value) if value else None
+
+
 def _path(value: Any) -> Path | None:
     return None if value is None else Path(value)
 
@@ -50,6 +57,7 @@ class Settings:
     db_path: Path = Path("photos.db")
     cache_dir: Path | None = None
     log_dir: Path | None = None
+    thumbnail_cache_mb: int = 1024
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
     api_token: str | None = field(default=None, repr=False)
@@ -68,6 +76,7 @@ class Settings:
         db_path: "str | Path | None" = None,
         cache_dir: "str | Path | None" = None,
         log_dir: "str | Path | None" = None,
+        thumbnail_cache_mb: int | None = None,
         allowed_hosts: Iterable[str] | None = None,
         cors_origins: Iterable[str] | None = None,
         api_token: str | None = None,
@@ -91,6 +100,11 @@ class Settings:
                 cache_dir, "PMO_CACHE_DIR", base / "thumbnails" if base else None
             ),
             log_dir=pick(log_dir, "PMO_LOG_DIR", base / "logs" if base else None),
+            thumbnail_cache_mb=(
+                thumbnail_cache_mb
+                if thumbnail_cache_mb is not None
+                else _env_int(env, "PMO_THUMBNAIL_CACHE_MB") or 1024
+            ),
             allowed_hosts=(
                 tuple(allowed_hosts)
                 if allowed_hosts is not None

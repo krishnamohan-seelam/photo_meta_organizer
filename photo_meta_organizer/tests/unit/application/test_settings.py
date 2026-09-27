@@ -66,3 +66,9 @@ class TestSettings:
     def test_is_immutable(self) -> None:
         with pytest.raises(AttributeError):
             Settings().db_path = Path("x")  # type: ignore[misc]
+
+
+def test_thumbnail_cache_budget_from_env_and_default():
+    assert Settings.from_env({}).thumbnail_cache_mb == 1024
+    assert Settings.from_env({"PMO_THUMBNAIL_CACHE_MB": "50"}).thumbnail_cache_mb == 50
+    assert Settings.from_env({}, thumbnail_cache_mb=7).thumbnail_cache_mb == 7
