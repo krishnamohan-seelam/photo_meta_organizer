@@ -35,6 +35,8 @@ dev = [
     "types-tqdm",
     "ruff>=0.15",
     "black>=26.1",
+    "bandit>=1.9.4",
+    "pip-audit>=2.10.1",
 ]
 # Desktop packaging only: `uv sync --group build` or `npm run backend:package`.
 build = ["pyinstaller>=6.11"]
