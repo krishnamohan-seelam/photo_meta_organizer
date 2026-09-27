@@ -194,9 +194,26 @@ class SqliteRepository:
 
     def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
         with self.lock, self.connection:
-            if old_hash != metadata.file_hash:
-                self.connection.execute("DELETE FROM photos WHERE file_hash = ?", (old_hash,))
+            if old_hash == metadata.file_hash:
+                self._upsert(metadata)
+                return
+            # The delete cascades the old hash out of every collection, and the new
+            # record usually has the same (UNIQUE) path, so it can't be inserted first.
+            # Remember the membership rows and restore them under the new hash at the
+            # same rowid, so the photo keeps its place; OR IGNORE skips collections
+            # that already hold the new hash.
+            memberships = self.connection.execute(
+                "SELECT rowid, collection FROM collection_photos WHERE file_hash = ?",
+                (old_hash,),
+            ).fetchall()
+            self.connection.execute("DELETE FROM photos WHERE file_hash = ?", (old_hash,))
             self._upsert(metadata)
+            for row in memberships:
+                self.connection.execute(
+                    "INSERT OR IGNORE INTO collection_photos (rowid, collection, file_hash) "
+                    "VALUES (?, ?, ?)",
+                    (row["rowid"], row["collection"], metadata.file_hash),
+                )
 
     def refresh_fingerprints(self, updates: Sequence[tuple[str, int, datetime]]) -> int:
         with self.lock, self.connection:

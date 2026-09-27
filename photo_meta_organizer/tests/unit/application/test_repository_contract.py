@@ -287,3 +287,20 @@ class TestCollectionRepository:
         assert touched == 2
         assert collection_repository.get("A").photo_hashes == ["h1"]
         assert collection_repository.get("B").photo_hashes == ["h3"]
+
+    def test_replace_keeps_collection_membership(self, repository, collection_repository):
+        """An edited photo (new hash) stays in its collections, in the same position."""
+        repository.save_many([_photo("h1"), _photo("old"), _photo("h3")])
+        collection_repository.save("A", ["h1", "old", "h3"])
+        repository.replace("old", _photo("new", path="/photos/old_photo.jpg"))
+        assert collection_repository.get("A").photo_hashes == ["h1", "new", "h3"]
+
+    def test_replace_onto_existing_member_does_not_duplicate(
+        self, repository, collection_repository
+    ):
+        repository.save_many([_photo("old"), _photo("same")])
+        collection_repository.save("A", ["old", "same"])
+        collection_repository.save("B", ["old"])
+        repository.replace("old", _photo("same"))
+        assert collection_repository.get("A").photo_hashes == ["same"]
+        assert collection_repository.get("B").photo_hashes == ["same"]

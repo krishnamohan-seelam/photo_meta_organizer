@@ -195,13 +195,31 @@ class TinyDBRepository:
         Content is the identity, so an edited file gets a new hash; a plain ``save``
         would leave the old record behind as a duplicate of the same path. If
         ``metadata.file_hash`` already exists (the edit made it identical to another
-        photo) the two collapse into one record. One index rebuild.
+        photo) the two collapse into one record. Collection membership moves to the
+        new hash. One index rebuild.
         """
         q = Query()
         if old_hash != metadata.file_hash:
             self._table.remove(q.file_hash == old_hash)
+            self._repoint_collections(old_hash, metadata.file_hash)
         self._upsert(metadata)
         self.rebuild_indexes()
+
+    def _repoint_collections(self, old_hash: str, new_hash: str) -> None:
+        """Swap ``old_hash`` for ``new_hash`` in every collection, keeping its position."""
+
+        def swap(doc: dict[str, Any]) -> None:
+            swapped: list[str] = []
+            for h in doc.get("photo_hashes", []):
+                h = new_hash if h == old_hash else h
+                if h not in swapped:
+                    swapped.append(h)
+            doc["photo_hashes"] = swapped
+
+        q = Query()
+        self._db.table("collections").update(
+            swap, q.photo_hashes.test(lambda hashes: old_hash in (hashes or []))
+        )
 
     def refresh_fingerprints(self, updates: Sequence[tuple[str, int, datetime]]) -> int:
         """Record ``(file_hash, size_bytes, modified_time)`` on existing records.
