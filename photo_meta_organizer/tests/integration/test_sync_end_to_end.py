@@ -7,6 +7,7 @@ avoid requiring actual image files with EXIF data.
 """
 
 import shutil
+from dataclasses import replace
 from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
@@ -449,6 +450,44 @@ class TestSyncMtimeFingerprint:
 
         assert result.modified_files == 1
         assert repository.get_by_filehash(_sha(edited)) is not None
+
+
+    def test_reextract_refreshes_unchanged_records_and_keeps_curation(
+        self, retriever, repository, photo_dir
+    ):
+        """PMO-24: repair records whose captured_at was the old mtime fallback."""
+        uc, extractor = self._use_case(retriever, repository)
+        uc.execute()
+        target = repository.get_by_path(str((photo_dir / "photo1.jpg").resolve()))
+        polluted = replace(
+            target,
+            exif=replace(target.exif, captured_at=datetime(2026, 1, 1)),
+            rating=4,
+            labels=["keep"],
+        )
+        repository.save(polluted)
+        extractor.extracted.clear()
+
+        result = uc.execute(reextract=True)
+
+        assert sorted(extractor.extracted) == ["photo1.jpg", "photo2.jpg", "photo3.jpg"]
+        assert result.modified_files == 3
+        assert repository.count() == 3
+        repaired = repository.get_by_filehash(target.file_hash)
+        assert repaired.exif.captured_at is None
+        assert repaired.rating == 4
+        assert repaired.labels == ["keep"]
+        assert repaired.added_at == target.added_at
+
+    def test_reextract_dry_run_counts_but_writes_nothing(self, retriever, repository):
+        uc, extractor = self._use_case(retriever, repository)
+        uc.execute()
+        extractor.extracted.clear()
+
+        result = uc.execute(reextract=True, dry_run=True)
+
+        assert result.modified_files == 3
+        assert extractor.extracted == []
 
 
 # ---------------------------------------------------------------------------

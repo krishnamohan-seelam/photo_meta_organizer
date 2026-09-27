@@ -35,6 +35,7 @@ const DialogBody: React.FC<{ kind: JobDialogKind; onClose: () => void }> = ({ ki
   const [cleanupDeleted, setCleanupDeleted] = useState(false)
   const [dryRun, setDryRun] = useState(false)
   const [rehash, setRehash] = useState(false)
+  const [reextract, setReextract] = useState(false)
   const { startJob, isStarting } = useJobActions()
   const inputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
@@ -69,7 +70,7 @@ const DialogBody: React.FC<{ kind: JobDialogKind; onClose: () => void }> = ({ ki
       await startJob({
         kind,
         folderPath,
-        sync: kind === 'sync' ? { cleanup_deleted: cleanupDeleted, dry_run: dryRun, rehash } : undefined,
+        sync: kind === 'sync' ? { cleanup_deleted: cleanupDeleted, dry_run: dryRun, rehash, reextract } : undefined,
       })
       rememberFolder(folderPath)
       onClose()
@@ -134,6 +135,10 @@ const DialogBody: React.FC<{ kind: JobDialogKind; onClose: () => void }> = ({ ki
             <label>
               <input type="checkbox" checked={rehash} onChange={(e) => setRehash(e.target.checked)} />
               Re-hash every file (slow; catches edits that kept size and date)
+            </label>
+            <label>
+              <input type="checkbox" checked={reextract} onChange={(e) => setReextract(e.target.checked)} />
+              Re-read metadata of every photo (slow; keeps ratings, repairs older records)
             </label>
           </fieldset>
         )}

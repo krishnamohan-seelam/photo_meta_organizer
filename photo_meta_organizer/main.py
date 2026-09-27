@@ -453,6 +453,7 @@ def handle_sync_command(args: argparse.Namespace) -> int:
         index_new=args.index_new,
         dry_run=args.dry_run,
         rehash=args.rehash,
+        reextract=args.reextract,
         # Only records under --path take part, so --cleanup-deleted can never
         # remove photos indexed from another folder.
         scope_root=args.path,
@@ -676,6 +677,16 @@ def main() -> int:
             "catches an edit that kept both size and mtime"
         ),
     )
+    sync_parser.add_argument(
+        "--reextract",
+        action="store_true",
+        default=False,
+        help=(
+            "Re-extract every file already in the DB (keeps ratings, flags and labels). "
+            "Slow; repairs records from older versions, e.g. capture dates taken from "
+            "the file's modification time"
+        ),
+    )
     sync_parser.set_defaults(
         func=handle_sync_command,
         cleanup_deleted=False,
@@ -683,6 +694,7 @@ def main() -> int:
         index_new=True,
         dry_run=False,
         rehash=False,
+        reextract=False,
     )
 
     # Prune command (PMO-04)

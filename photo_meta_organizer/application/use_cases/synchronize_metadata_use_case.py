@@ -25,6 +25,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 from photo_meta_organizer.application.interfaces import (
@@ -109,6 +110,7 @@ class SynchronizeMetadataUseCase:
         index_new: bool = True,
         dry_run: bool = False,
         rehash: bool = False,
+        reextract: bool = False,
         scope_root: str | None = None,
         progress: Callable[[int, int], None] | None = None,
         should_cancel: Callable[[], bool] | None = None,
@@ -134,6 +136,10 @@ class SynchronizeMetadataUseCase:
             rehash: If True, hash every file already in the DB instead of trusting
                     its (size, mtime) fingerprint. Slow (reads the whole library),
                     but the only way to catch an edit that kept both size and mtime.
+            reextract: If True, re-extract every file already in the DB, not just the
+                    changed ones (counted as modified; curation is kept). Repairs
+                    records written by an older extractor, e.g. ``captured_at`` set
+                    from the file mtime before PMO-24. Slow: reads the whole library.
             scope_root: The folder the retriever scans. Only DB records under it take
                     part, so a file elsewhere in the library is never classified as
                     DELETED (and removed by ``cleanup_deleted``) just because this scan
@@ -151,8 +157,8 @@ class SynchronizeMetadataUseCase:
 
         logger.info(
             "Starting metadata sync [cleanup_deleted=%s, reprocess_modified=%s, "
-            "index_new=%s, dry_run=%s, rehash=%s]",
-            cleanup_deleted, reprocess_modified, index_new, dry_run, rehash,
+            "index_new=%s, dry_run=%s, rehash=%s, reextract=%s]",
+            cleanup_deleted, reprocess_modified, index_new, dry_run, rehash, reextract,
         )
 
         # ------------------------------------------------------------------
@@ -194,6 +200,16 @@ class SynchronizeMetadataUseCase:
             force_rehash=rehash,
             normalise_path=_resolve,
         )
+
+        if reextract:
+            # Unchanged content is re-extracted in place: the orchestrator's MODIFIED
+            # path replaces the record under the same hash and carries over curation.
+            file_states = [
+                replace(fs, state="MODIFIED", previous_hash=fs.file_hash)
+                if fs.state == "UNCHANGED"
+                else fs
+                for fs in file_states
+            ]
 
         counts = {"NEW": 0, "MODIFIED": 0, "UNCHANGED": 0, "DELETED": 0}
         for fs in file_states:

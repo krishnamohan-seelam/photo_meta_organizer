@@ -89,3 +89,16 @@ def test_sync_accepts_rehash_and_reports_refreshed_fingerprints(
 
     out = capsys.readouterr().out
     assert "unchanged" in out
+
+
+def test_sync_reextract_reprocesses_unchanged_files(tmp_path, monkeypatch, capsys):
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    (photos / "a.jpg").write_bytes(b"not a real jpeg")
+    db = str(tmp_path / "db.db")
+
+    assert _run(monkeypatch, "sync", "--path", str(photos), "--db", db) == 0
+    capsys.readouterr()
+    assert _run(monkeypatch, "sync", "--path", str(photos), "--db", db, "--reextract") == 0
+
+    assert "~1 modified" in capsys.readouterr().out

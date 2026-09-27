@@ -5,6 +5,8 @@ import { useUiStore } from '../../stores/useUiStore'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
 import { Calendar } from 'lucide-react'
+import { useFacets } from '../../hooks/useFacets'
+import { UNKNOWN_DATE } from '../../utils/captureDate'
 
 interface TimelineViewProps {
   photos: PhotoMetadata[]
@@ -13,14 +15,23 @@ interface TimelineViewProps {
 export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
   const { filterTimeframe, setTimeframeFilter, setLightboxIndex } = useUiStore(useShallow((s) => ({ filterTimeframe: s.filterTimeframe, setTimeframeFilter: s.setTimeframeFilter, setLightboxIndex: s.setLightboxIndex })))
 
-  // Group photos by Month / Year
+  const { years } = useFacets()
+
+  // Group photos by month; photos without a capture date go in one last group (PMO-24).
   const groups: Record<string, PhotoMetadata[]> = {}
+  const undated: PhotoMetadata[] = []
   photos.forEach((p) => {
-    const d = p.exif.captured_at ? new Date(p.exif.captured_at) : new Date(p.added_at)
-    const monthYear = d.toLocaleString('default', { month: 'long', year: 'numeric' })
+    if (!p.exif.captured_at) {
+      undated.push(p)
+      return
+    }
+    const monthYear = new Date(p.exif.captured_at).toLocaleString('default', { month: 'long', year: 'numeric' })
     if (!groups[monthYear]) groups[monthYear] = []
     groups[monthYear].push(p)
   })
+  const sections = Object.entries(groups)
+  if (undated.length > 0) sections.push(['Unknown date', undated])
+  const timeframes = ['all', ...years.map((y) => y.name).sort().reverse(), UNKNOWN_DATE]
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -43,14 +54,14 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
           <span>TIMELINE</span>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {['all', '2026', '2025', '2024'].map((yr) => (
+          {timeframes.map((yr) => (
             <button
               key={yr}
               onClick={() => setTimeframeFilter(yr)}
               className={`btn ${filterTimeframe === yr ? 'btn-primary' : 'btn-secondary'}`}
               style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: 'var(--radius-full)' }}
             >
-              {yr === 'all' ? 'All Years' : yr}
+              {yr === 'all' ? 'All Years' : yr === UNKNOWN_DATE ? 'Unknown date' : yr}
             </button>
           ))}
         </div>
@@ -58,7 +69,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
 
       {/* Grouped Sections */}
       <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-        {Object.entries(groups).map(([month, items]) => (
+        {sections.map(([month, items]) => (
           <div key={month} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{month}</h3>

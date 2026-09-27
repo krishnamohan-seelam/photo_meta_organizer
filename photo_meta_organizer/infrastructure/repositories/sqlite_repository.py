@@ -409,6 +409,9 @@ class SqliteRepository:
             "camera_model": "COALESCE(camera_model, '')",
             "file_name": "name",
         }.get(sort_by, "captured_at")
+        if column == "captured_at":
+            # Unknown capture dates (PMO-24) go last in either direction.
+            return f"captured_at IS NULL, captured_at {direction}"
         return f"{column} {direction}"
 
     def facets(self) -> Facets:

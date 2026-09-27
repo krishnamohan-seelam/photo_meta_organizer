@@ -327,7 +327,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
         """Extract metadata from an image file stream.
 
         Implements recovery strategies:
-        1. Try DateTimeOriginal, fallback to DateTimeDigitized, then file mtime
+        1. Try DateTimeOriginal, then DateTimeDigitized; otherwise captured_at is None
         2. All extraction failures are logged as warnings; returns best-effort data
         3. Camera profile is inferred via CameraClassifier domain service
 
@@ -369,14 +369,14 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
             else None
         )
 
-        # Captured datetime with fallback chain
+        # Capture date from EXIF only. Without one it stays unknown (None): the file
+        # mtime is a copy/download date, and it is stored separately in file_info
+        # (PMO-24, B-16).
         captured_at = mapper.parse_exif_datetime(
             mapper.get_tag_str(exif_tags, "EXIF DateTimeOriginal")
             or mapper.get_tag_str(exif_tags, "EXIF DateTimeDigitized")
             or ""
         )
-        if not captured_at:
-            captured_at = file_handle.modified_time or get_file_mtime(file_handle.original_path)
 
         # --- Camera profile inference (domain service) ---
         has_lens_model = "EXIF LensModel" in exif_tags

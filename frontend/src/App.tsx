@@ -20,6 +20,7 @@ import { LightboxModal } from './components/lightbox/LightboxModal'
 import { EmptyLibraryState, ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
 import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
 import type { PhotoMetadata } from './types/metadata'
+import { matchesTimeframe } from './utils/captureDate'
 
 const NO_PHOTOS: PhotoMetadata[] = []
 
@@ -67,9 +68,8 @@ export const App: React.FC = () => {
     if (filterCollection === 'Favorites' && !p.flagged) {
       return false
     }
-    if (filterTimeframe !== 'all') {
-      const yr = (p.exif.captured_at || p.added_at).substring(0, 4)
-      if (yr !== filterTimeframe) return false
+    if (!matchesTimeframe(p, filterTimeframe)) {
+      return false
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()

@@ -196,6 +196,13 @@ class SyncFolderRequest(BaseModel):
     rehash: bool = Field(
         default=False, description="Hash every file instead of trusting size+mtime (slow)"
     )
+    reextract: bool = Field(
+        default=False,
+        description=(
+            "Re-extract every file already in the library, keeping curation (slow). "
+            "Repairs records written by older versions"
+        ),
+    )
 
 
 class JobResponse(BaseModel):

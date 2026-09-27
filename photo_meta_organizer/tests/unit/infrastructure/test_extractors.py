@@ -173,3 +173,48 @@ class TestExifFieldMapper:
         """Missing tag returns None."""
         result = _ExifFieldMapper.get_tag_float({}, "EXIF FNumber")
         assert result is None
+
+
+@pytest.mark.unit
+class TestCapturedAtSemantics:
+    """PMO-24 (B-16): no EXIF date means an unknown capture date, not the file mtime."""
+
+    @staticmethod
+    def _extract(tmp_path, exif: bytes | None = None):
+        from io import BytesIO
+
+        from PIL import Image
+
+        from photo_meta_organizer.application.interfaces.image_retriever import (
+            RemoteFileHandle,
+        )
+        from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
+            DiskMetaDataExtractor,
+        )
+
+        buffer = BytesIO()
+        kwargs = {"exif": exif} if exif else {}
+        Image.new("RGB", (8, 6), "red").save(buffer, "JPEG", **kwargs)
+        path = tmp_path / "a.jpg"
+        path.write_bytes(buffer.getvalue())
+        handle = RemoteFileHandle(
+            original_path=str(path),
+            filename="a.jpg",
+            size_bytes=len(buffer.getvalue()),
+            modified_time=datetime(2026, 9, 1, 12, 30),
+        )
+        buffer.seek(0)
+        return DiskMetaDataExtractor().extract(handle, buffer)
+
+    def test_no_exif_date_leaves_captured_at_unknown(self, tmp_path) -> None:
+        metadata = self._extract(tmp_path)
+        assert metadata.exif.captured_at is None
+        assert metadata.file_info.modified_time == datetime(2026, 9, 1, 12, 30)
+
+    def test_exif_date_is_used(self, tmp_path) -> None:
+        from PIL import Image
+
+        exif = Image.Exif()
+        exif.get_ifd(0x8769)[0x9003] = "2021:05:04 10:11:12"  # DateTimeOriginal
+        metadata = self._extract(tmp_path, exif.tobytes())
+        assert metadata.exif.captured_at == datetime(2021, 5, 4, 10, 11, 12)

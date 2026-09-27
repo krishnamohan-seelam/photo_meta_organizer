@@ -119,3 +119,17 @@ def test_sync_errors_are_reported(client, library, monkeypatch):
     assert done["counts"]["failed"] == done["failed_count"] == 1
     assert "new.jpg" in done["errors"][0]
     assert "1 error(s)" in done["message"]
+
+
+def test_reextract_refreshes_every_record_and_keeps_ratings(client, library):
+    """PMO-24: `reextract` re-reads unchanged files, e.g. to drop mtime capture dates."""
+    kept = _hash_of(client, "p0.jpg")
+    assert client.patch(f"/api/photos/{kept}", json={"rating": 5}).status_code == 200
+
+    done = _sync(client, library, reextract=True)
+
+    assert done["status"] == "succeeded"
+    assert done["counts"]["modified"] == 3 and done["counts"]["unchanged"] == 0
+    photo = client.get(f"/api/photos/{kept}").json()
+    assert photo["rating"] == 5
+    assert photo["exif"]["captured_at"] is None  # the generated JPEGs carry no EXIF date

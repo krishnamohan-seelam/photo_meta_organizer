@@ -514,9 +514,13 @@ class TinyDBRepository:
             elif sort_by == "file_name":
                 return record.file_info.name or ""
             else:  # captured_at
-                dt = to_naive(record.exif.captured_at) if record.exif else None
-                return dt if dt is not None else datetime.min
+                return to_naive(record.exif.captured_at)
 
+        if sort_by not in ("size_bytes", "camera_model", "file_name"):
+            # Unknown capture dates (PMO-24) go last in either direction.
+            dated = [r for r in records if r.exif.captured_at is not None]
+            undated = [r for r in records if r.exif.captured_at is None]
+            return sorted(dated, key=get_sort_key, reverse=reverse) + undated
         return sorted(records, key=get_sort_key, reverse=reverse)
 
     def facets(self) -> Facets:

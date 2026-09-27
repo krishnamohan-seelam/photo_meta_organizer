@@ -173,6 +173,7 @@ export interface SyncOptions {
   index_new?: boolean
   dry_run?: boolean
   rehash?: boolean
+  reextract?: boolean
 }
 
 /** Start an incremental sync of a folder. Only photos under that folder are affected. */

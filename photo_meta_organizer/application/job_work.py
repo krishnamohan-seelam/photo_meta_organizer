@@ -47,6 +47,7 @@ def sync_work(
     index_new: bool,
     dry_run: bool,
     rehash: bool,
+    reextract: bool = False,
 ) -> Work:
     """Run an incremental sync of ``folder_path`` as a job, scoped to that folder."""
 
@@ -62,6 +63,7 @@ def sync_work(
             index_new=index_new,
             dry_run=dry_run,
             rehash=rehash,
+            reextract=reextract,
             scope_root=folder_path,
             progress=on_progress,
             should_cancel=ctx.cancel_requested,

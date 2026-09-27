@@ -549,6 +549,7 @@ def sync_directory(
         index_new=request.index_new,
         dry_run=request.dry_run,
         rehash=request.rehash,
+        reextract=request.reextract,
     )
     return _submit(jobs, "sync", folder_path, work)
 

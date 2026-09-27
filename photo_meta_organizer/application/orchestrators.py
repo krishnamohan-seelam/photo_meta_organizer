@@ -284,6 +284,9 @@ class SyncOrchestrator:
         same_content = self._repository.get_by_filehash(metadata.file_hash)
         sources = [r for r in (previous, same_content) if r is not None]
         metadata = carry_over_curation(metadata, *sources)
+        if previous is not None:
+            # A re-extracted photo was still added to the library when first indexed.
+            metadata = replace(metadata, added_at=previous.added_at)
 
         if fs.previous_hash:
             self._repository.replace(fs.previous_hash, metadata)

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { photosQuery } from './usePhotos'
 import type { PhotoMetadata } from '../types/metadata'
+import { captureYear } from '../utils/captureDate'
 
 export interface FacetCount {
   name: string
@@ -35,11 +36,9 @@ function computeFacets(photos: PhotoMetadata[]): Facets {
       tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
     }
 
-    const dateStr = photo.exif.captured_at || photo.added_at
-    if (dateStr) {
-      const year = dateStr.substring(0, 4)
-      yearCounts.set(year, (yearCounts.get(year) ?? 0) + 1)
-    }
+    // Capture year only, like the server's facets: an undated photo has no year (PMO-24).
+    const year = captureYear(photo)
+    if (year) yearCounts.set(year, (yearCounts.get(year) ?? 0) + 1)
   }
 
   return {

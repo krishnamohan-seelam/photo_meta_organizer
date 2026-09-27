@@ -108,6 +108,20 @@ class TestSaveMany:
 
 
 class TestQuery:
+    @pytest.mark.parametrize("order", ["asc", "desc"])
+    def test_unknown_capture_dates_sort_last(self, repository, order):
+        """PMO-24: a photo with no EXIF date goes after every dated one, either way."""
+        repository.save_many(
+            [
+                _photo("undated"),
+                _photo("old", captured_at=datetime(2020, 1, 1)),
+                _photo("new", captured_at=datetime(2024, 1, 1)),
+            ]
+        )
+        page = repository.query(SearchQuery(sort_by="captured_at", sort_order=order))
+        dated = ["old", "new"] if order == "asc" else ["new", "old"]
+        assert [m.file_hash for m in page.items] == [*dated, "undated"]
+
     def test_pages_and_counts(self, repository):
         repository.save_many([_photo(f"h{i}") for i in range(5)])
         page = repository.query(SearchQuery(page=1, page_size=2))
