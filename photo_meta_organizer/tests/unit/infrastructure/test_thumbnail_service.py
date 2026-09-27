@@ -1,5 +1,6 @@
 """PMO-25 (B-19): atomic cache writes, one generation per key, bounded cache size."""
 
+import io
 import os
 import threading
 import time
@@ -111,3 +112,14 @@ def test_stray_temp_files_are_removed_on_start(tmp_path):
     ThumbnailService(cache_dir=str(thumbs))
 
     assert list(thumbs.iterdir()) == []
+
+
+def test_heic_gets_a_thumbnail(tmp_path):
+    from tests.conftest import make_heic
+
+    heic = make_heic(tmp_path / "p.heic", size=(300, 200))
+    service = ThumbnailService(cache_dir=str(tmp_path / "thumbs"))
+    data = service.generate_thumbnail(heic, "h1", 100, 100)
+    assert data is not None
+    with Image.open(io.BytesIO(data)) as img:
+        assert img.format == "WEBP" and img.size == (100, 67)

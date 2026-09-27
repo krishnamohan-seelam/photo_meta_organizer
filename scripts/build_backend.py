@@ -55,6 +55,11 @@ def build_backend():
         "PIL",
         "--collect-all",
         "exifread",
+        # HEIC/HEIF and camera RAW decoders (PMO-23) ship native libraries.
+        "--collect-all",
+        "pillow_heif",
+        "--collect-all",
+        "rawpy",
         "--exclude-module",
         "photo_meta_organizer.tests",
         "--add-data",

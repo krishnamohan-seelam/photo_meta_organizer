@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
-import { getThumbnailUrl } from '../../api/client'
+import { getPreviewUrl, getThumbnailUrl } from '../../api/client'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { swapToPlaceholder } from '../../utils/placeholder'
 import { shouldIgnoreHotkey } from '../../utils/hotkeys'
@@ -167,7 +167,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
 
         {/* Center Image */}
         <img
-          src={getThumbnailUrl(currentPhoto.file_hash, 1200, 1200)}
+          src={getPreviewUrl(currentPhoto.file_hash)}
           alt={currentPhoto.file_info.name}
           style={{
             maxHeight: '70vh',

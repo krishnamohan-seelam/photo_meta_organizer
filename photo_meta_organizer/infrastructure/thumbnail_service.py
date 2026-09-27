@@ -22,7 +22,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image
+
+from photo_meta_organizer.infrastructure.image_decoding import open_image
 
 logger = logging.getLogger(__name__)
 
@@ -139,10 +141,8 @@ class ThumbnailService:
     def _render(self, source_path: str, width: int, height: int, quality: int) -> bytes | None:
         """Decode ``source_path`` and encode a WebP thumbnail (no caching)."""
         try:
-            with Image.open(source_path) as img:
-                # Correct EXIF orientation if present
-                img = ImageOps.exif_transpose(img)
-
+            # Any supported format (HEIC, RAW included), already upright.
+            with open_image(source_path, Path(source_path).name) as img:
                 # Convert to RGB if RGBA or P to avoid issues with WebP
                 if img.mode in ("RGBA", "LA", "P"):
                     img = img.convert("RGBA")

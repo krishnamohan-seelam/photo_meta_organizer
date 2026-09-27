@@ -15,6 +15,8 @@ dependencies = [
     "tabulate>=0.10",       # CLI search/stats tables
     "tqdm>=4.67",           # CLI progress bar
     "tinydb>=4.8",          # read-only: importing a legacy metadata.json (ADR-001)
+    "pillow-heif>=1.0",     # HEIC/HEIF decoding (PMO-23)
+    "rawpy>=0.25",          # camera RAW: embedded preview + dimensions (PMO-23)
 ]
 
 [project.optional-dependencies]

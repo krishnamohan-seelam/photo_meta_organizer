@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any, BinaryIO, Dict, Optional
 
 import exifread
-from PIL import Image
 
 from photo_meta_organizer.application.interfaces.image_extractor import (
     ImageMetadataExtractor,
@@ -33,7 +32,9 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
+from photo_meta_organizer.domain.formats import image_mime_type
 from photo_meta_organizer.domain.services import CameraClassifier
+from photo_meta_organizer.infrastructure.image_decoding import image_size
 
 logger = logging.getLogger(__name__)
 
@@ -431,11 +432,10 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
             raw_tags=raw_tags,
         )
 
-        # --- Dimensions via PIL ---
+        # --- Dimensions: Pillow, pillow-heif (HEIC) or LibRaw (RAW) ---
         try:
             stream.seek(0)
-            with Image.open(stream) as img:
-                width, height = img.size
+            width, height = image_size(stream, file_handle.filename)
             dimensions = ImageDimensions(width=width, height=height)
         except Exception as e:
             logger.warning(
@@ -449,7 +449,11 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
         # --- File info: size and mtime from the listing when it has them ---
         file_size = file_handle.size_bytes or get_file_size(file_handle.original_path)
         modified_time = file_handle.modified_time or get_file_mtime(file_handle.original_path)
-        mime_type = mimetypes.guess_type(file_handle.filename)[0] or "application/octet-stream"
+        mime_type = (
+            image_mime_type(file_handle.filename)
+            or mimetypes.guess_type(file_handle.filename)[0]
+            or "application/octet-stream"
+        )
         file_info = ImageFileInfo(
             name=file_handle.filename,
             path=file_handle.original_path,

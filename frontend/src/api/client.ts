@@ -125,8 +125,14 @@ export function getThumbnailUrl(fileHash: string, width: number = 320, height: n
   return `${BASE_URL}/photos/${fileHash}/thumbnail?w=${width}&h=${height}`
 }
 
+/** Original file bytes. A browser cannot display HEIC or RAW from this; use getPreviewUrl to show one. */
 export function getRawImageUrl(fileHash: string): string {
   return `${BASE_URL}/photos/${fileHash}/raw`
+}
+
+/** Large WebP (up to 2048 px) of any indexed format, HEIC and RAW included: for the viewer. */
+export function getPreviewUrl(fileHash: string): string {
+  return `${BASE_URL}/photos/${fileHash}/preview`
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'

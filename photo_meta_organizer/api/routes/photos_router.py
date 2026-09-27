@@ -4,6 +4,7 @@ Endpoints:
     GET   /api/photos                 - List all photos with optional filters/pagination
     GET   /api/photos/{file_hash}     - Get single photo metadata by SHA-256 hash
     GET   /api/photos/{file_hash}/thumbnail - Stream cached WebP thumbnail
+    GET   /api/photos/{file_hash}/preview   - Large WebP for the viewer (any format)
     GET   /api/photos/{file_hash}/raw - Stream full-resolution source image
     PATCH /api/photos/{file_hash}     - Update rating, flag, or labels for a photo
     POST  /api/photos/batch           - Atomic batch operations across photos
@@ -237,16 +238,48 @@ def get_photo_thumbnail(
     if metadata is None:
         raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
 
+    return _webp_response(thumbnails, metadata.file_info.path, file_hash, w, h)
+
+
+# Long edge of the viewer image: sharp on a large screen, far smaller than a RAW.
+PREVIEW_SIZE = 2048
+
+
+@photos_router.get(
+    "/{file_hash}/preview",
+    summary="Stream a large WebP preview for the viewer",
+)
+def get_photo_preview(
+    file_hash: str,
+    repository: ImageMetadataRepository = Depends(get_repository),
+    thumbnails: ThumbnailService = Depends(get_thumbnail_service),
+):
+    """A browser-renderable image of any indexed format (HEIC and RAW included, PMO-23).
+
+    Up to 2048 px on the long edge, upright, cached like thumbnails. ``/raw`` returns
+    the original bytes, which a browser cannot show for HEIC or RAW.
+    """
+    metadata = repository.get_by_filehash(file_hash)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
+    return _webp_response(
+        thumbnails, metadata.file_info.path, file_hash, PREVIEW_SIZE, PREVIEW_SIZE
+    )
+
+
+def _webp_response(
+    thumbnails: ThumbnailService, source_path: str, file_hash: str, width: int, height: int
+) -> Response:
     thumb_bytes = thumbnails.generate_thumbnail(
-        source_path=metadata.file_info.path,
+        source_path=source_path,
         file_hash=file_hash,
-        width=w,
-        height=h,
+        width=width,
+        height=height,
     )
     if not thumb_bytes:
         raise HTTPException(
             status_code=404,
-            detail="Thumbnail could not be generated (source file missing).",
+            detail="Image could not be generated (source file missing or not decodable).",
         )
 
     return Response(

@@ -477,3 +477,13 @@ def wait_for_job(client, job: dict, timeout: float = 10.0) -> dict:
         assert resp.status_code == 200, resp.text
         body = resp.json()
     return body
+
+
+def make_heic(path, size: tuple[int, int] = (64, 48)) -> str:
+    """Write a real HEIC file (pillow-heif's encoder) and return its path (PMO-23)."""
+    from PIL import Image
+
+    from photo_meta_organizer.infrastructure import image_decoding  # noqa: F401  registers HEIF
+
+    Image.new("RGB", size, (10, 120, 200)).save(path, format="HEIF")
+    return str(path)

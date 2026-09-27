@@ -218,3 +218,49 @@ class TestCapturedAtSemantics:
         exif.get_ifd(0x8769)[0x9003] = "2021:05:04 10:11:12"  # DateTimeOriginal
         metadata = self._extract(tmp_path, exif.tobytes())
         assert metadata.exif.captured_at == datetime(2021, 5, 4, 10, 11, 12)
+
+
+@pytest.mark.unit
+class TestHeifAndRawExtraction:
+    """PMO-23 (B-11): HEIC and RAW get real dimensions and a specific MIME type."""
+
+    @staticmethod
+    def _extract(path, size_bytes):
+        from photo_meta_organizer.application.interfaces.image_retriever import (
+            RemoteFileHandle,
+        )
+        from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
+            DiskMetaDataExtractor,
+        )
+
+        handle = RemoteFileHandle(
+            original_path=str(path), filename=path.name, size_bytes=size_bytes
+        )
+        with open(path, "rb") as stream:
+            return DiskMetaDataExtractor().extract(handle, stream)
+
+    def test_heic_dimensions_and_mime(self, tmp_path) -> None:
+        from tests.conftest import make_heic
+
+        path = tmp_path / "phone.HEIC"
+        make_heic(path, size=(80, 60))
+        metadata = self._extract(path, path.stat().st_size)
+        assert (metadata.dimensions.width, metadata.dimensions.height) == (80, 60)
+        assert metadata.file_info.mime_type == "image/heic"
+
+    def test_raw_dimensions_come_from_libraw(self, tmp_path, monkeypatch) -> None:
+        from contextlib import contextmanager
+        from types import SimpleNamespace
+
+        from photo_meta_organizer.infrastructure import image_decoding
+
+        @contextmanager
+        def imread(_source):
+            yield SimpleNamespace(sizes=SimpleNamespace(width=6000, height=4000, flip=0))
+
+        monkeypatch.setattr(image_decoding.rawpy, "imread", imread)
+        path = tmp_path / "DSC0001.ARW"
+        path.write_bytes(b"pretend raw")
+        metadata = self._extract(path, 11)
+        assert (metadata.dimensions.width, metadata.dimensions.height) == (6000, 4000)
+        assert metadata.file_info.mime_type == "image/x-sony-arw"
