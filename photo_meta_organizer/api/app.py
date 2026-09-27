@@ -34,6 +34,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from photo_meta_organizer import __version__
 from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticated
 from photo_meta_organizer.api.dependencies import Services
+from photo_meta_organizer.api.routes.export_router import export_router
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
     index_router,
@@ -162,6 +163,7 @@ def create_app(
     app.include_router(index_router)
     app.include_router(sync_router)
     app.include_router(jobs_router)
+    app.include_router(export_router)
 
     frontend_dist = Path(frontend_dist) if frontend_dist is not None else default_frontend_dist()
     assets_dir = frontend_dist / "assets"

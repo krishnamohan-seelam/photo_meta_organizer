@@ -253,3 +253,15 @@ class FacetsResponse(BaseModel):
     tags: list[FacetCountSchema] = Field(default_factory=list)
     years: list[FacetCountSchema] = Field(default_factory=list)
     gps_bounds: GpsBoundsSchema | None = None
+
+
+class ExportZipRequest(BaseModel):
+    """Photos to bundle as a ZIP of their original files (PMO-28)."""
+
+    photo_hashes: list[str] = Field(min_length=1, max_length=100_000)
+
+
+class ExportJsonRequest(BaseModel):
+    """Photos whose metadata to export; omitted or null means the whole library (PMO-28)."""
+
+    photo_hashes: list[str] | None = Field(default=None, max_length=100_000)

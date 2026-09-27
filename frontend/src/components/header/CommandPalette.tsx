@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { Search, Camera, Tag, MapPin, Sun, EyeOff, Download, CheckSquare, FolderPlus, RefreshCw } from 'lucide-react'
+import { useExport } from '../../hooks/useExport'
 
 interface Command {
   id: string
@@ -39,6 +40,8 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   useDialogFocus(dialogRef, inputRef)
+
+  const { exportJson } = useExport()
 
   const commands: Command[] = [
     {
@@ -123,10 +126,10 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     },
     {
       id: 'export',
-      title: 'Bundle & Export All Metadata JSON',
+      title: 'Export metadata of the whole library (JSON)',
       icon: <Download size={15} />,
       hotkey: 'Export',
-      action: () => showToast('Metadata export is not available yet', 'error'),
+      action: () => void exportJson(),
     },
   ]
 

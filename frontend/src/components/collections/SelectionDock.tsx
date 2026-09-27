@@ -1,10 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSelectionStore } from '../../stores/useSelectionStore'
-import { useUiStore } from '../../stores/useUiStore'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
+import { useExport } from '../../hooks/useExport'
 import { Tag, Flag, Download, X } from 'lucide-react'
 
 interface SelectionDockProps {
@@ -13,8 +13,8 @@ interface SelectionDockProps {
 
 export const SelectionDock: React.FC<SelectionDockProps> = ({ photos }) => {
   const { selectedHashes, clearSelection } = useSelectionStore(useShallow((s) => ({ selectedHashes: s.selectedHashes, clearSelection: s.clearSelection })))
-  const { showToast } = useUiStore(useShallow((s) => ({ showToast: s.showToast })))
   const { batchPhotos } = useCuration()
+  const { exportZip, zipProgress } = useExport()
   const [tagModalOpen, setTagModalOpen] = useState(false)
   const [newTag, setNewTag] = useState('')
 
@@ -46,8 +46,8 @@ export const SelectionDock: React.FC<SelectionDockProps> = ({ photos }) => {
       `Flagged ${selectedCount} photos as Picks`
     )
 
-  // ZIP export is not built yet (tracked as PMO-30). Say so instead of pretending a download happened.
-  const handleExportZip = () => showToast('ZIP export is not available yet', 'error')
+  const exporting = zipProgress !== null
+  const handleExportZip = () => void exportZip(Array.from(selectedHashes))
 
   return (
     <>
@@ -71,9 +71,25 @@ export const SelectionDock: React.FC<SelectionDockProps> = ({ photos }) => {
             <span>Flag All</span>
           </button>
 
-          <button className="btn btn-primary" onClick={handleExportZip} style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleExportZip}
+            disabled={exporting}
+            aria-busy={exporting}
+            style={{ padding: '4px 10px', fontSize: '0.75rem', position: 'relative', overflow: 'hidden' }}
+          >
+            {exporting && (
+              <span
+                role="progressbar"
+                aria-label="ZIP export"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(zipProgress * 100)}
+                style={{ position: 'absolute', inset: 0, width: `${zipProgress * 100}%`, background: 'rgba(255,255,255,0.25)' }}
+              />
+            )}
             <Download size={13} />
-            <span>Export ZIP</span>
+            <span>{exporting ? `Exporting ${Math.round(zipProgress * 100)}%` : 'Export ZIP'}</span>
           </button>
 
           <button className="btn btn-secondary" onClick={clearSelection} aria-label="Clear selection" title="Clear selection" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>

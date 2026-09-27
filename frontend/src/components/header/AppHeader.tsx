@@ -4,6 +4,8 @@ import { useUiStore } from '../../stores/useUiStore'
 import type { ViewMode } from '../../stores/useUiStore'
 import { useJobs } from '../../hooks/useJobs'
 import { JobProgress } from '../jobs/JobProgress'
+import { useExport } from '../../hooks/useExport'
+import { useSelectionStore } from '../../stores/useSelectionStore'
 import {
   Camera,
   Search,
@@ -25,7 +27,7 @@ import {
 export const AppHeader: React.FC = () => {
   const { activeJob } = useJobs()
   const setJobDialog = useUiStore((s) => s.setJobDialog)
-  const { theme, toggleTheme, activeView, setActiveView, lightsOut, toggleLightsOut, sidebarOpen, toggleSidebar, inspectorOpen, toggleInspector, setCommandPaletteOpen, showToast } = useUiStore(useShallow((s) => ({ theme: s.theme, toggleTheme: s.toggleTheme, activeView: s.activeView, setActiveView: s.setActiveView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, sidebarOpen: s.sidebarOpen, toggleSidebar: s.toggleSidebar, inspectorOpen: s.inspectorOpen, toggleInspector: s.toggleInspector, setCommandPaletteOpen: s.setCommandPaletteOpen, showToast: s.showToast })))
+  const { theme, toggleTheme, activeView, setActiveView, lightsOut, toggleLightsOut, sidebarOpen, toggleSidebar, inspectorOpen, toggleInspector, setCommandPaletteOpen } = useUiStore(useShallow((s) => ({ theme: s.theme, toggleTheme: s.toggleTheme, activeView: s.activeView, setActiveView: s.setActiveView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, sidebarOpen: s.sidebarOpen, toggleSidebar: s.toggleSidebar, inspectorOpen: s.inspectorOpen, toggleInspector: s.toggleInspector, setCommandPaletteOpen: s.setCommandPaletteOpen })))
 
   const views: { key: ViewMode; label: string; icon: React.ReactNode }[] = [
     { key: 'studio', label: 'Studio Grid', icon: <LayoutGrid size={15} /> },
@@ -35,10 +37,9 @@ export const AppHeader: React.FC = () => {
     { key: 'analytics', label: 'Analytics', icon: <BarChart3 size={15} /> },
   ]
 
-  const handleExportJson = () => {
-    // Not built yet (PMO-30): say so rather than announce an export that never happens.
-    showToast('Metadata export is not available yet', 'error')
-  }
+  const { exportJson, jsonBusy } = useExport()
+  // The selection when there is one, otherwise the whole library.
+  const handleExportJson = () => void exportJson(Array.from(useSelectionStore.getState().selectedHashes))
 
   return (
     <header className="app-header">
@@ -174,7 +175,7 @@ export const AppHeader: React.FC = () => {
           </>
         )}
 
-        <button className="btn btn-primary" onClick={handleExportJson} style={{ whiteSpace: 'nowrap' }}>
+        <button className="btn btn-primary" onClick={handleExportJson} disabled={jsonBusy} aria-busy={jsonBusy} title="Metadata of the selected photos, or of the whole library" style={{ whiteSpace: 'nowrap' }}>
           <Download size={15} />
           <span>Export JSON</span>
         </button>
