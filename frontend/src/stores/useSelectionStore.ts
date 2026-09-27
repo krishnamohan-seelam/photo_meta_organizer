@@ -1,35 +1,45 @@
 import { create } from 'zustand'
+import type { PhotoId } from '../types/metadata'
 
 interface SelectionState {
   selectedHashes: Set<string>
-  toggleSelect: (hash: string) => void
-  selectAll: (hashes: string[]) => void
+  /** Size of each selected photo, so the dock can total a selection whose photos are not all loaded. */
+  selectedSizes: Map<string, number>
+  toggleSelect: (hash: string, sizeBytes: number) => void
+  /** Replace the selection, e.g. with every match of the current search (`POST /api/search/ids`). */
+  selectAll: (photos: PhotoId[]) => void
   clearSelection: () => void
   isSelected: (hash: string) => boolean
 }
 
 export const useSelectionStore = create<SelectionState>((set, get) => ({
   selectedHashes: new Set<string>(),
+  selectedSizes: new Map<string, number>(),
 
-  toggleSelect: (hash: string) =>
+  toggleSelect: (hash, sizeBytes) =>
     set((state) => {
-      const next = new Set(state.selectedHashes)
-      if (next.has(hash)) {
-        next.delete(hash)
+      const hashes = new Set(state.selectedHashes)
+      const sizes = new Map(state.selectedSizes)
+      if (hashes.has(hash)) {
+        hashes.delete(hash)
+        sizes.delete(hash)
       } else {
-        next.add(hash)
+        hashes.add(hash)
+        sizes.set(hash, sizeBytes)
       }
-      return { selectedHashes: next }
+      return { selectedHashes: hashes, selectedSizes: sizes }
     }),
 
-  selectAll: (hashes: string[]) =>
+  selectAll: (photos) =>
     set({
-      selectedHashes: new Set(hashes),
+      selectedHashes: new Set(photos.map((p) => p.file_hash)),
+      selectedSizes: new Map(photos.map((p) => [p.file_hash, p.size_bytes])),
     }),
 
   clearSelection: () =>
     set({
       selectedHashes: new Set<string>(),
+      selectedSizes: new Map<string, number>(),
     }),
 
   isSelected: (hash: string) => get().selectedHashes.has(hash),

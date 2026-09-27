@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { SortField } from '../types/metadata'
 
 export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
 export type ToastKind = 'success' | 'error'
@@ -22,7 +23,9 @@ interface UiState {
   filterTags: string[]
   filterCollection: string
   filterTimeframe: string
-  filterCity: string
+  /** Server-side sort of the library (PMO-27). */
+  sortBy: SortField
+  sortOrder: 'asc' | 'desc'
   radiusKm: number
   toastMessage: string | null
   toastKind: ToastKind
@@ -43,7 +46,7 @@ interface UiState {
   toggleTagFilter: (tag: string) => void
   setCollectionFilter: (col: string) => void
   setTimeframeFilter: (year: string) => void
-  setCityFilter: (city: string) => void
+  setSort: (sortBy: SortField, sortOrder: 'asc' | 'desc') => void
   setRadiusKm: (r: number) => void
   resetFilters: () => void
   showToast: (msg: string, kind?: ToastKind) => void
@@ -73,7 +76,8 @@ export const useUiStore = create<UiState>((set) => ({
   filterTags: [],
   filterCollection: 'all',
   filterTimeframe: 'all',
-  filterCity: 'all',
+  sortBy: 'captured_at',
+  sortOrder: 'desc',
   radiusKm: 25,
   toastMessage: null,
   toastKind: 'success',
@@ -119,7 +123,7 @@ export const useUiStore = create<UiState>((set) => ({
 
   setCollectionFilter: (filterCollection) => set({ filterCollection }),
   setTimeframeFilter: (filterTimeframe) => set({ filterTimeframe }),
-  setCityFilter: (filterCity) => set({ filterCity }),
+  setSort: (sortBy, sortOrder) => set({ sortBy, sortOrder }),
   setRadiusKm: (radiusKm) => set({ radiusKm }),
 
   resetFilters: () =>
@@ -128,7 +132,6 @@ export const useUiStore = create<UiState>((set) => ({
       filterTags: [],
       filterCollection: 'all',
       filterTimeframe: 'all',
-      filterCity: 'all',
       searchQuery: '',
     }),
 

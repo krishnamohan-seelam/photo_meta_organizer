@@ -96,7 +96,7 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
           aria-checked={selected}
           aria-label={`Select ${name}`}
           className="btn-reset"
-          onClick={() => toggleSelect(photo.file_hash)}
+          onClick={() => toggleSelect(photo.file_hash, photo.file_info.size_bytes)}
           style={{
             position: 'absolute',
             top: '8px',

@@ -1,15 +1,26 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useShallow } from 'zustand/react/shallow'
-import type { PhotoMetadata } from '../../types/metadata'
+import type { SortField } from '../../types/metadata'
 import { PhotoCard } from './PhotoCard'
 import { useUiStore } from '../../stores/useUiStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
+import { isDemoMode, usePhotoSearch } from '../../hooks/usePhotos'
+import { errorMessage, searchPhotoIdsApi } from '../../api/client'
+import { demoSearchIds } from '../../demo/demoLibrary'
 import { SlidersHorizontal, CheckSquare } from 'lucide-react'
 
-interface PhotoGalleryProps {
-  photos: PhotoMetadata[]
-}
+/** Sort choices, all applied by the server (PMO-27). Unknown capture dates always sort last. */
+const SORTS: { value: string; label: string; field: SortField; order: 'asc' | 'desc' }[] = [
+  { value: 'captured_at:desc', label: 'Newest first', field: 'captured_at', order: 'desc' },
+  { value: 'captured_at:asc', label: 'Oldest first', field: 'captured_at', order: 'asc' },
+  { value: 'file_name:asc', label: 'File name', field: 'file_name', order: 'asc' },
+  { value: 'size_bytes:desc', label: 'Largest first', field: 'size_bytes', order: 'desc' },
+  { value: 'camera_model:asc', label: 'Camera model', field: 'camera_model', order: 'asc' },
+]
+
+// Start loading the next page when the viewport is this many rows from the end of what is loaded.
+const PREFETCH_ROWS = 4
 
 const GAP = 16
 const PADDING = 18
@@ -22,11 +33,13 @@ function columnCount(contentWidth: number, minItemWidth: number): number {
   return Math.max(1, Math.floor((contentWidth + GAP) / (minItemWidth + GAP)))
 }
 
-export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos }) => {
-  const { gridItemSize, setGridItemSize, showToast } = useUiStore(
-    useShallow((s) => ({ gridItemSize: s.gridItemSize, setGridItemSize: s.setGridItemSize, showToast: s.showToast })),
+export const PhotoGallery: React.FC = () => {
+  const { gridItemSize, setGridItemSize, showToast, sortBy, sortOrder, setSort } = useUiStore(
+    useShallow((s) => ({ gridItemSize: s.gridItemSize, setGridItemSize: s.setGridItemSize, showToast: s.showToast, sortBy: s.sortBy, sortOrder: s.sortOrder, setSort: s.setSort })),
   )
   const selectAll = useSelectionStore((s) => s.selectAll)
+  const { photos, totalCount, request, hasNextPage, isFetchingNextPage, fetchNextPage, isPlaceholderData } = usePhotoSearch()
+  const [selecting, setSelecting] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -60,10 +73,30 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos }) => {
     virtualizer.measure()
   }, [columns, gridItemSize, virtualizer])
 
-  const handleSelectAll = () => {
-    selectAll(photos.map((p) => p.file_hash))
-    showToast(`Selected all ${photos.length} photos`)
+  // Infinite scroll: fetch the next page before the user reaches the end of the loaded rows.
+  const virtualRows = virtualizer.getVirtualItems()
+  const lastVisibleRow = virtualRows.length > 0 ? virtualRows[virtualRows.length - 1].index : -1
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage && lastVisibleRow >= rowCount - PREFETCH_ROWS) {
+      void fetchNextPage()
+    }
+  }, [lastVisibleRow, rowCount, hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  // Every match of the current filters, including pages not loaded yet.
+  const handleSelectAll = async () => {
+    setSelecting(true)
+    try {
+      const ids = await (isDemoMode() ? demoSearchIds(request) : searchPhotoIdsApi(request))
+      selectAll(ids)
+      showToast(`Selected all ${ids.length} photos`)
+    } catch (err) {
+      showToast(errorMessage(err), 'error')
+    } finally {
+      setSelecting(false)
+    }
   }
+
+  const sortValue = `${sortBy}:${sortOrder}`
 
   return (
     <main
@@ -89,7 +122,9 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos }) => {
         }}
       >
         <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          Showing <span style={{ color: 'var(--text-primary)' }}>{photos.length}</span> photos
+          <span style={{ color: 'var(--text-primary)' }}>{totalCount}</span> photos
+          {photos.length < totalCount && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {photos.length} loaded</span>}
+          {isPlaceholderData && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }} role="status"> · updating…</span>}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -108,7 +143,25 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos }) => {
             />
           </div>
 
-          <button className="btn btn-secondary" onClick={handleSelectAll} style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            <span>Sort:</span>
+            <select
+              value={sortValue}
+              onChange={(e) => {
+                const choice = SORTS.find((s) => s.value === e.target.value)
+                if (choice) setSort(choice.field, choice.order)
+              }}
+              style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '3px 6px', fontSize: '0.78rem' }}
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button className="btn btn-secondary" onClick={() => void handleSelectAll()} disabled={selecting || totalCount === 0} style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
             <CheckSquare size={13} />
             <span>Select All</span>
           </button>
@@ -125,7 +178,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos }) => {
         ) : (
           <div style={{ padding: `${PADDING}px`, paddingBottom: `${PADDING - GAP}px` }}>
             <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-              {virtualizer.getVirtualItems().map((row) => {
+              {virtualRows.map((row) => {
                 const first = row.index * columns
                 const cards = photos.slice(first, first + columns)
                 return (
@@ -153,6 +206,11 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos }) => {
                 )
               })}
             </div>
+            {isFetchingNextPage && (
+              <div role="status" style={{ textAlign: 'center', padding: '12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Loading more photos…
+              </div>
+            )}
           </div>
         )}
       </div>

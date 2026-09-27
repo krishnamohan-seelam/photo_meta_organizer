@@ -8,17 +8,19 @@ import { swapToPlaceholder } from '../../utils/placeholder'
 import { shouldIgnoreHotkey } from '../../utils/hotkeys'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { filmstripWindow } from '../../utils/filmstrip'
+import { usePhotoSearch } from '../../hooks/usePhotos'
 import { X, ChevronLeft, ChevronRight, Flag } from 'lucide-react'
 
-interface LightboxModalProps {
-  photos: PhotoMetadata[]
-}
-
-export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
+export const LightboxModal: React.FC = () => {
   const { lightboxIndex, setLightboxIndex } = useUiStore(useShallow((s) => ({ lightboxIndex: s.lightboxIndex, setLightboxIndex: s.setLightboxIndex })))
-  const currentPhoto = lightboxIndex !== null && photos[lightboxIndex] ? photos[lightboxIndex] : null
-  if (lightboxIndex === null || !currentPhoto) return null
-  return <Lightbox photos={photos} index={lightboxIndex} currentPhoto={currentPhoto} setIndex={setLightboxIndex} />
+  const { photos, totalCount, hasNextPage, isFetchingNextPage, fetchNextPage } = usePhotoSearch()
+  if (lightboxIndex === null || photos.length === 0) return null
+  // Next on the last loaded photo asks for the index one past it: show the last one until that page arrives.
+  const index = Math.min(lightboxIndex, photos.length - 1)
+  const currentPhoto = photos[index]
+  // Past the last loaded photo: load the next page (and stay) rather than wrap to the first.
+  const loadMore = hasNextPage ? () => { if (!isFetchingNextPage) void fetchNextPage() } : null
+  return <Lightbox photos={photos} total={totalCount} index={index} currentPhoto={currentPhoto} setIndex={setLightboxIndex} loadMore={loadMore} />
 }
 
 /** Thumbnails in the filmstrip: a window around the current photo, never the whole library. */
@@ -26,17 +28,39 @@ const FILMSTRIP_SIZE = 13
 
 interface LightboxProps {
   photos: PhotoMetadata[]
+  /** All matches, loaded or not. */
+  total: number
   index: number
   currentPhoto: PhotoMetadata
   setIndex: (idx: number | null) => void
+  /** Loads the next page; null when every match is loaded. */
+  loadMore: (() => void) | null
 }
 
 /** Mounted only while open, so focus moves in on open and back to the card on close. */
-const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, currentPhoto, setIndex: setLightboxIndex }) => {
+const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex, currentPhoto, setIndex: setLightboxIndex, loadMore }) => {
   const { patchPhoto } = useCuration()
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   useDialogFocus(dialogRef, closeRef)
+
+  const showNext = () => {
+    if (lightboxIndex + 1 < photos.length) setLightboxIndex(lightboxIndex + 1)
+    else if (loadMore) {
+      // One past the loaded photos: the viewer moves there as soon as the next page arrives.
+      loadMore()
+      setLightboxIndex(photos.length)
+    } else setLightboxIndex(0)
+  }
+  const showPrevious = () => {
+    if (lightboxIndex > 0) setLightboxIndex(lightboxIndex - 1)
+    else if (!loadMore) setLightboxIndex(photos.length - 1) // wrap only when everything is loaded
+  }
+
+  // Keep a page ahead while stepping through, so Next rarely has to wait.
+  useEffect(() => {
+    if (loadMore && lightboxIndex >= photos.length - 5) loadMore()
+  }, [lightboxIndex, photos.length, loadMore])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -46,9 +70,9 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
       }
       if (shouldIgnoreHotkey(e)) return
       if (e.key === 'ArrowRight') {
-        setLightboxIndex((lightboxIndex + 1) % photos.length)
+        showNext()
       } else if (e.key === 'ArrowLeft') {
-        setLightboxIndex((lightboxIndex - 1 + photos.length) % photos.length)
+        showPrevious()
       } else if (e.key.toLowerCase() === 'p') {
         // Toggle Flag Pick: the cache updates at once and rolls back with an error toast if the save fails
         const nextFlag = !currentPhoto.flagged
@@ -61,7 +85,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [lightboxIndex, currentPhoto, photos, setLightboxIndex, patchPhoto])
+  })
 
   const exif = currentPhoto.exif
   const [stripStart, stripEnd] = filmstripWindow(lightboxIndex, photos.length, FILMSTRIP_SIZE)
@@ -71,7 +95,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`Photo viewer: ${currentPhoto.file_info.name}, ${lightboxIndex + 1} of ${photos.length}`}
+      aria-label={`Photo viewer: ${currentPhoto.file_info.name}, ${lightboxIndex + 1} of ${total}`}
       aria-keyshortcuts="ArrowLeft ArrowRight P 1 2 3 4 5 Escape"
       style={{
         position: 'fixed',
@@ -102,7 +126,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
           <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{currentPhoto.file_info.name}</span>
           <span className="badge badge-camera">{exif.camera_make} {exif.camera_model}</span>
           <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-            {lightboxIndex + 1} of {photos.length}
+            {lightboxIndex + 1} of {total}
           </span>
         </div>
 
@@ -143,7 +167,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
       >
         {/* Left Chevron */}
         <button
-          onClick={() => setLightboxIndex((lightboxIndex - 1 + photos.length) % photos.length)}
+          onClick={showPrevious}
           aria-label="Previous photo"
           style={{
             position: 'absolute',
@@ -181,7 +205,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
 
         {/* Right Chevron */}
         <button
-          onClick={() => setLightboxIndex((lightboxIndex + 1) % photos.length)}
+          onClick={showNext}
           aria-label="Next photo"
           style={{
             position: 'absolute',

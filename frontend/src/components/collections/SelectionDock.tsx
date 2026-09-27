@@ -1,18 +1,13 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSelectionStore } from '../../stores/useSelectionStore'
-import type { PhotoMetadata } from '../../types/metadata'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useExport } from '../../hooks/useExport'
 import { Tag, Flag, Download, X } from 'lucide-react'
 
-interface SelectionDockProps {
-  photos: PhotoMetadata[]
-}
-
-export const SelectionDock: React.FC<SelectionDockProps> = ({ photos }) => {
-  const { selectedHashes, clearSelection } = useSelectionStore(useShallow((s) => ({ selectedHashes: s.selectedHashes, clearSelection: s.clearSelection })))
+export const SelectionDock: React.FC = () => {
+  const { selectedHashes, selectedSizes, clearSelection } = useSelectionStore(useShallow((s) => ({ selectedHashes: s.selectedHashes, selectedSizes: s.selectedSizes, clearSelection: s.clearSelection })))
   const { batchPhotos } = useCuration()
   const { exportZip, zipProgress } = useExport()
   const [tagModalOpen, setTagModalOpen] = useState(false)
@@ -21,10 +16,9 @@ export const SelectionDock: React.FC<SelectionDockProps> = ({ photos }) => {
   const selectedCount = selectedHashes.size
   if (selectedCount === 0) return null
 
-  // Calculate cumulative size
-  const totalBytes = photos
-    .filter((p) => selectedHashes.has(p.file_hash))
-    .reduce((acc, p) => acc + p.file_info.size_bytes, 0)
+  // The selection may include photos that are not loaded (select all), so sizes come from the store.
+  let totalBytes = 0
+  for (const size of selectedSizes.values()) totalBytes += size
 
   const handleBatchTag = async () => {
     const tag = newTag.trim()

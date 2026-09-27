@@ -7,12 +7,11 @@ import { swapToPlaceholder } from '../../utils/placeholder'
 import { Calendar } from 'lucide-react'
 import { useFacets } from '../../hooks/useFacets'
 import { UNKNOWN_DATE } from '../../utils/captureDate'
+import { usePhotoSearch } from '../../hooks/usePhotos'
+import { LoadMore } from '../states/LoadMore'
 
-interface TimelineViewProps {
-  photos: PhotoMetadata[]
-}
-
-export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
+export const TimelineView: React.FC = () => {
+  const { photos, totalCount, hasNextPage, isFetchingNextPage, fetchNextPage } = usePhotoSearch()
   const { filterTimeframe, setTimeframeFilter, setLightboxIndex } = useUiStore(useShallow((s) => ({ filterTimeframe: s.filterTimeframe, setTimeframeFilter: s.setTimeframeFilter, setLightboxIndex: s.setLightboxIndex })))
 
   const { years } = useFacets()
@@ -138,6 +137,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ photos }) => {
             </div>
           </div>
         ))}
+        <LoadMore loaded={photos.length} total={totalCount} hasMore={Boolean(hasNextPage)} loading={isFetchingNextPage} onLoadMore={() => void fetchNextPage()} />
       </div>
     </div>
   )

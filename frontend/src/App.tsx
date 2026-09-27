@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { errorMessage } from './api/client'
-import { usePhotos } from './hooks/usePhotos'
+import { isDemoMode, usePhotoSearch } from './hooks/usePhotos'
+import { useFacetsQuery } from './hooks/useFacets'
 import { useJobCompletionNotices, useJobs } from './hooks/useJobs'
 import { useUiStore } from './stores/useUiStore'
 import { shouldIgnoreHotkey } from './utils/hotkeys'
@@ -19,17 +20,15 @@ import { DashboardView } from './components/dashboard/DashboardView'
 import { LightboxModal } from './components/lightbox/LightboxModal'
 import { EmptyLibraryState, ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
 import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
-import type { PhotoMetadata } from './types/metadata'
-import { matchesTimeframe } from './utils/captureDate'
-
-const NO_PHOTOS: PhotoMetadata[] = []
 
 export const App: React.FC = () => {
-  const { theme, activeView, lightsOut, toggleLightsOut, filterCameras, filterTags, filterCollection, filterTimeframe, searchQuery, inspectedHash, setInspectedHash, toastMessage, toastKind } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, filterCameras: s.filterCameras, filterTags: s.filterTags, filterCollection: s.filterCollection, filterTimeframe: s.filterTimeframe, searchQuery: s.searchQuery, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind })))
+  const { theme, activeView, lightsOut, toggleLightsOut, inspectedHash, setInspectedHash, toastMessage, toastKind } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind })))
 
-  // The library lives in the react-query cache: every view and every edit goes through it.
-  const { data, isPending, isError, error, refetch, isFetching } = usePhotos()
-  const photos = data ?? NO_PHOTOS
+  // The server filters, sorts and pages the library (PMO-27); views read the loaded pages from one cache entry.
+  const { data, photos, isPending, isError, error, refetch, isFetching } = usePhotoSearch()
+  // Whole-library totals tell an empty library apart from a filter that matches nothing.
+  const facets = useFacetsQuery()
+  const libraryIsEmpty = facets.data?.stats.total_count === 0 && !isDemoMode()
   const { activeJob } = useJobs()
   const setJobDialog = useUiStore((s) => s.setJobDialog)
   useJobCompletionNotices()
@@ -56,32 +55,6 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggleLightsOut])
 
-  // Filter photos based on store filter criteria. Memoised: with thousands of photos this must not
-  // re-run on unrelated store changes (toasts, slider drags, the lightbox opening).
-  const filteredPhotos = useMemo(() => photos.filter((p) => {
-    if (filterCameras.length > 0 && !filterCameras.includes(p.exif.camera_make || 'Unknown')) {
-      return false
-    }
-    if (filterTags.length > 0 && !filterTags.every((t) => p.labels.includes(t))) {
-      return false
-    }
-    if (filterCollection === 'Favorites' && !p.flagged) {
-      return false
-    }
-    if (!matchesTimeframe(p, filterTimeframe)) {
-      return false
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      const matchName = p.file_info.name.toLowerCase().includes(q)
-      const matchMake = (p.exif.camera_make || '').toLowerCase().includes(q)
-      const matchModel = (p.exif.camera_model || '').toLowerCase().includes(q)
-      const matchTag = p.labels.some((t) => t.toLowerCase().includes(q))
-      if (!matchName && !matchMake && !matchModel && !matchTag) return false
-    }
-    return true
-  }), [photos, filterCameras, filterTags, filterCollection, filterTimeframe, searchQuery])
-
   return (
     <div
       className={lightsOut ? 'lights-out' : ''}
@@ -107,33 +80,33 @@ export const App: React.FC = () => {
           <LoadingState />
         ) : !data ? (
           <ErrorState message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />
-        ) : photos.length === 0 ? (
+        ) : libraryIsEmpty ? (
           <EmptyLibraryState onScan={() => setJobDialog('index')} scanning={activeJob !== null} />
         ) : (
           <>
             {activeView === 'studio' && (
               <>
                 <FilterSidebar />
-                <PhotoGallery photos={filteredPhotos} />
+                <PhotoGallery />
                 <ExifInspector />
               </>
             )}
 
-            {activeView === 'timeline' && <TimelineView photos={filteredPhotos} />}
-            {activeView === 'map' && <MapExplorerView photos={filteredPhotos} />}
-            {activeView === 'kanban' && <KanbanBoardView photos={filteredPhotos} />}
-            {activeView === 'analytics' && <DashboardView photos={photos} />}
+            {activeView === 'timeline' && <TimelineView />}
+            {activeView === 'map' && <MapExplorerView />}
+            {activeView === 'kanban' && <KanbanBoardView />}
+            {activeView === 'analytics' && <DashboardView />}
           </>
         )}
       </div>
 
       {/* Floating Selection Dock */}
-      <SelectionDock photos={photos} />
+      <SelectionDock />
 
       {/* Modals & Overlays */}
       <CommandPalette />
       <FolderJobDialog />
-      <LightboxModal photos={filteredPhotos} />
+      <LightboxModal />
 
       {/* Toast notifications */}
       {toastMessage && (

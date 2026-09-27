@@ -65,17 +65,55 @@ export interface SearchRequest {
   date_end?: string
   camera_make?: string
   camera_model?: string
+  /** Any of these makes, matched exactly. */
+  camera_makes?: string[]
+  /** `false`: only photos without a capture date. */
+  has_capture_date?: boolean
+  has_location?: boolean
+  /** Members of this named collection. */
+  collection?: string
   location_lat?: number
   location_lon?: number
   radius_km?: number
+  /** AND: a photo must carry every tag (ADR D2). */
   tags?: string[]
-  city?: string
   rating?: number
   flagged?: boolean
-  sort_by?: string
+  sort_by?: SortField
   sort_order?: 'asc' | 'desc'
   page?: number
   page_size?: number
+}
+
+export type SortField = 'captured_at' | 'size_bytes' | 'camera_model' | 'file_name'
+
+/** One search match reduced to what a selection needs (`POST /api/search/ids`). */
+export interface PhotoId {
+  file_hash: string
+  size_bytes: number
+}
+
+export interface FacetCount {
+  name: string
+  count: number
+}
+
+export interface LibraryStats {
+  total_count: number
+  flagged_count: number
+  geotagged_count: number
+  undated_count: number
+  total_bytes: number
+  avg_megapixels: number
+}
+
+/** `GET /api/facets`: whole-library counts for filters and analytics. */
+export interface Facets {
+  cameras: FacetCount[]
+  tags: FacetCount[]
+  years: FacetCount[]
+  isos: FacetCount[]
+  stats: LibraryStats
 }
 
 export interface PatchPhotoRequest {

@@ -1,27 +1,30 @@
 import { useCallback } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import type { BatchPhotoRequest, PatchPhotoRequest, PhotoMetadata } from '../types/metadata'
 import { batchUpdatePhotosApi, errorMessage, patchPhotoApi } from '../api/client'
 import { applyBatchAction, applyPatch } from '../utils/photoPatch'
 import { useUiStore } from '../stores/useUiStore'
-import { isDemoMode, photosKey } from './usePhotos'
-
-type Photos = PhotoMetadata[] | undefined
+import { saveDemoPhoto } from '../demo/demoLibrary'
+import { findCachedPhotos, isDemoMode, patchPhotoCache, photosKey } from './usePhotos'
+import type { PhotoCacheData } from './usePhotos'
+import { facetsKey } from './useFacets'
 
 interface PatchVars {
   hash: string
   patch: PatchPhotoRequest
 }
 
-/** Swap in changed photos by hash, leaving every other record (and its object identity) alone. */
-function replaceMany(photos: Photos, changed: Map<string, PhotoMetadata>): Photos {
-  if (!photos || changed.size === 0) return photos
-  return photos.map((p) => changed.get(p.file_hash) ?? p)
+/** Swap `changed` into every cached photo query (search pages, map set, single records). */
+function writeToCache(qc: QueryClient, changed: Map<string, PhotoMetadata>): void {
+  if (changed.size === 0) return
+  qc.setQueriesData<PhotoCacheData>({ queryKey: photosKey }, (old) => patchPhotoCache(old, changed))
 }
 
 /**
- * Edit one photo. The cache is updated at once (optimistic), replaced by the server's record on success and
- * put back on failure, so the UI never shows a save that did not happen.
+ * Edit one photo. Every cached copy is updated at once (optimistic), replaced by the server's record
+ * on success and put back on failure, so the UI never shows a save that did not happen. A photo that
+ * no longer matches the filters stays in view until the next reload, rather than vanishing mid-edit.
  */
 export function useUpdatePhoto() {
   const qc = useQueryClient()
@@ -29,27 +32,27 @@ export function useUpdatePhoto() {
     mutationFn: async ({ hash, patch }: PatchVars): Promise<PhotoMetadata> => {
       if (isDemoMode()) {
         // Demo data lives only in memory: there is no backend to confirm with.
-        const current = qc.getQueryData<PhotoMetadata[]>(photosKey)?.find((p) => p.file_hash === hash)
+        const current = findCachedPhotos(qc, [hash]).get(hash)
         if (!current) throw new Error('Photo not found')
-        return applyPatch(current, patch)
+        const updated = applyPatch(current, patch)
+        saveDemoPhoto(updated)
+        return updated
       }
       return patchPhotoApi(hash, patch)
     },
     onMutate: async ({ hash, patch }) => {
       await qc.cancelQueries({ queryKey: photosKey })
-      const previous = qc.getQueryData<PhotoMetadata[]>(photosKey)?.find((p) => p.file_hash === hash)
-      if (previous) {
-        qc.setQueryData<Photos>(photosKey, (old) => replaceMany(old, new Map([[hash, applyPatch(previous, patch)]])))
-      }
+      const previous = findCachedPhotos(qc, [hash]).get(hash)
+      if (previous) writeToCache(qc, new Map([[hash, applyPatch(previous, patch)]]))
       return { previous }
     },
     onError: (_err, { hash }, ctx) => {
       // Roll back only this photo: other in-flight edits keep their optimistic state.
-      const previous = ctx?.previous
-      if (previous) qc.setQueryData<Photos>(photosKey, (old) => replaceMany(old, new Map([[hash, previous]])))
+      if (ctx?.previous) writeToCache(qc, new Map([[hash, ctx.previous]]))
     },
     onSuccess: (updated) => {
-      qc.setQueryData<Photos>(photosKey, (old) => replaceMany(old, new Map([[updated.file_hash, updated]])))
+      writeToCache(qc, new Map([[updated.file_hash, updated]]))
+      void qc.invalidateQueries({ queryKey: facetsKey })
     },
   })
 }
@@ -70,24 +73,24 @@ export function useBatchUpdatePhotos() {
     },
     onMutate: async ({ request }) => {
       await qc.cancelQueries({ queryKey: photosKey })
-      const previous = new Map<string, PhotoMetadata>()
-      if (request.action === 'delete') return { previous }
-      const wanted = new Set(request.photo_hashes)
+      if (request.action === 'delete') return { previous: new Map<string, PhotoMetadata>() }
+      // Selected photos that were never loaded (select all) are updated on the server only.
+      const previous = findCachedPhotos(qc, request.photo_hashes)
       const next = new Map<string, PhotoMetadata>()
-      for (const p of qc.getQueryData<PhotoMetadata[]>(photosKey) ?? []) {
-        if (!wanted.has(p.file_hash)) continue
-        previous.set(p.file_hash, p)
-        next.set(p.file_hash, applyBatchAction(p, request.action as NonDeleteAction, request.value))
+      for (const [hash, photo] of previous) {
+        next.set(hash, applyBatchAction(photo, request.action as NonDeleteAction, request.value))
       }
-      qc.setQueryData<Photos>(photosKey, (old) => replaceMany(old, next))
+      writeToCache(qc, next)
+      if (isDemoMode()) next.forEach(saveDemoPhoto)
       return { previous }
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx) qc.setQueryData<Photos>(photosKey, (old) => replaceMany(old, ctx.previous))
+      if (ctx) writeToCache(qc, ctx.previous)
     },
     onSuccess: (_res, { request }) => {
       // Deleting removes records the optimistic path did not touch: reload the list.
       if (request.action === 'delete') void qc.invalidateQueries({ queryKey: photosKey })
+      void qc.invalidateQueries({ queryKey: facetsKey })
     },
   })
 }

@@ -1,41 +1,24 @@
 import React from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useFacets } from '../../hooks/useFacets'
 import { HardDrive, MapPin, Camera, Zap } from 'lucide-react'
 
-interface DashboardViewProps {
-  photos: PhotoMetadata[]
-}
-
-export const DashboardView: React.FC<DashboardViewProps> = ({ photos }) => {
+export const DashboardView: React.FC = () => {
   const { toggleCameraFilter, setActiveView, showToast } = useUiStore(useShallow((s) => ({ toggleCameraFilter: s.toggleCameraFilter, setActiveView: s.setActiveView, showToast: s.showToast })))
 
-  // Compute analytics
-  const totalPhotos = photos.length
-  const totalBytes = photos.reduce((acc, p) => acc + p.file_info.size_bytes, 0)
-  const geotaggedCount = photos.filter((p) => p.exif.location && p.exif.location.latitude).length
-  const avgMp =
-    totalPhotos > 0
-      ? (
-          photos.reduce((acc, p) => acc + (p.dimensions.width * p.dimensions.height) / 1000000, 0) /
-          totalPhotos
-        ).toFixed(1)
-      : '0.0'
+  // Whole-library analytics from the server (PMO-27): the browser no longer holds every photo.
+  const { stats, cameras, isos } = useFacets()
+  const totalPhotos = stats.total_count
+  const totalBytes = stats.total_bytes
+  const geotaggedCount = stats.geotagged_count
+  const avgMp = stats.avg_megapixels.toFixed(1)
 
-  // Camera make counts
-  const cameraCounts: Record<string, number> = {}
-  photos.forEach((p) => {
-    const make = p.exif.camera_make || 'Unknown'
-    cameraCounts[make] = (cameraCounts[make] || 0) + 1
-  })
+  const cameraCounts: Record<string, number> = Object.fromEntries(cameras.map((c) => [c.name, c.count]))
 
-  // ISO speed counts
-  const isoCounts: Record<string, number> = {}
-  photos.forEach((p) => {
-    const iso = p.exif.iso ? `ISO ${p.exif.iso}` : 'Auto / Other'
-    isoCounts[iso] = (isoCounts[iso] || 0) + 1
-  })
+  const isoCounts: Record<string, number> = Object.fromEntries(isos.map((i) => [`ISO ${i.name}`, i.count]))
+  const withoutIso = totalPhotos - isos.reduce((sum, i) => sum + i.count, 0)
+  if (withoutIso > 0) isoCounts['Auto / Other'] = withoutIso
 
   return (
     <div style={{ flex: 1, padding: '28px', background: 'var(--bg-primary)', overflowY: 'auto' }}>

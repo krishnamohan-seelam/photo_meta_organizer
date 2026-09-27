@@ -3,27 +3,24 @@ import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
 import { useFacets } from '../../hooks/useFacets'
 import { useCollections } from '../../hooks/useCollections'
-import { usePhotos } from '../../hooks/usePhotos'
 import { DropdownFilterCard } from './DropdownFilterCard'
 import { Camera, Tag, Folder, Keyboard, RotateCcw } from 'lucide-react'
 
 export const FilterSidebar: React.FC = () => {
   const { sidebarOpen, filterCameras, toggleCameraFilter, filterTags, toggleTagFilter, filterCollection, setCollectionFilter, resetFilters } = useUiStore(useShallow((s) => ({ sidebarOpen: s.sidebarOpen, filterCameras: s.filterCameras, toggleCameraFilter: s.toggleCameraFilter, filterTags: s.filterTags, toggleTagFilter: s.toggleTagFilter, filterCollection: s.filterCollection, setCollectionFilter: s.setCollectionFilter, resetFilters: s.resetFilters })))
 
-  // Real counts (PMO-17): derived from the loaded library, not fixed demo numbers.
-  const { cameras, tags } = useFacets()
+  // Whole-library counts from the server (PMO-27).
+  const { cameras, tags, stats } = useFacets()
   const savedCollections = useCollections()
-  const { data: allPhotos } = usePhotos()
-  const totalCount = allPhotos?.length ?? 0
-  const flaggedCount = allPhotos?.filter((p) => p.flagged).length ?? 0
+  const totalCount = stats.total_count
+  const flaggedCount = stats.flagged_count
 
   if (!sidebarOpen) return null
 
   const collections = [
     { name: 'all', label: `📁 All Indexed Photos (${totalCount})` },
     { name: 'Favorites', label: `⭐ Flagged / Picks (${flaggedCount})` },
-    // Named collections filter by their hash set once PMO-27/28 wires that up;
-    // for now selecting one only highlights it, matching the 'all' behavior.
+    // A named collection filters the gallery to its members (server-side, PMO-27).
     ...savedCollections.map((c) => ({
       name: c.name,
       label: `🗂️ ${c.name} (${c.photo_hashes.length})`,

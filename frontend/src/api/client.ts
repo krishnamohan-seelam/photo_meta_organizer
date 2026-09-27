@@ -2,8 +2,10 @@ import type {
   BatchPhotoRequest,
   BatchPhotoResponse,
   Collection,
+  Facets,
   PaginatedPhotosResponse,
   PatchPhotoRequest,
+  PhotoId,
   PhotoMetadata,
   SearchRequest,
 } from '../types/metadata'
@@ -90,7 +92,16 @@ export function fetchPhotos(
 }
 
 export function searchPhotosApi(body: SearchRequest): Promise<PaginatedPhotosResponse> {
-  return request('/search', 'Search', jsonInit('POST', body))
+  return request('/search', 'Loading photos', jsonInit('POST', body))
+}
+
+/** Hash and size of every photo matching `body`, ignoring paging ("select all"). */
+export function searchPhotoIdsApi(body: SearchRequest): Promise<PhotoId[]> {
+  return request('/search/ids', 'Selecting photos', jsonInit('POST', body))
+}
+
+export function fetchFacetsApi(): Promise<Facets> {
+  return request('/facets', 'Loading library statistics')
 }
 
 export function getPhotoByHash(fileHash: string): Promise<PhotoMetadata> {

@@ -32,7 +32,7 @@ export const CommandPalette: React.FC = () => {
 }
 
 const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setCityFilter, showToast, setJobDialog } = useUiStore(useShallow((s) => ({ toggleTheme: s.toggleTheme, toggleLightsOut: s.toggleLightsOut, setActiveView: s.setActiveView, toggleCameraFilter: s.toggleCameraFilter, toggleTagFilter: s.toggleTagFilter, setCityFilter: s.setCityFilter, showToast: s.showToast, setJobDialog: s.setJobDialog })))
+  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, showToast, setJobDialog } = useUiStore(useShallow((s) => ({ toggleTheme: s.toggleTheme, toggleLightsOut: s.toggleLightsOut, setActiveView: s.setActiveView, toggleCameraFilter: s.toggleCameraFilter, toggleTagFilter: s.toggleTagFilter, showToast: s.showToast, setJobDialog: s.setJobDialog })))
 
   const [search, setSearch] = useState('')
   const [active, setActive] = useState(0)
@@ -112,16 +112,6 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         toggleTagFilter('travel')
         setActiveView('studio')
         showToast('Filtered by #travel tag')
-      },
-    },
-    {
-      id: 'city-tokyo',
-      title: 'Filter Location: Tokyo, Japan',
-      icon: <MapPin size={15} />,
-      action: () => {
-        setCityFilter('Tokyo')
-        setActiveView('studio')
-        showToast('Filtered by Tokyo')
       },
     },
     {

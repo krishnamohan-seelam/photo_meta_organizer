@@ -1,18 +1,22 @@
 import React from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { PhotoMetadata } from '../../types/metadata'
+import { useQuery } from '@tanstack/react-query'
 import { useUiStore } from '../../stores/useUiStore'
+import { photosKey, runSearch, useSearchRequest } from '../../hooks/usePhotos'
 import { MapPin, Sliders } from 'lucide-react'
 
-interface MapExplorerViewProps {
-  photos: PhotoMetadata[]
-}
+// Markers drawn for at most this many geotagged photos; the count shows the full total.
+const MAP_PHOTO_LIMIT = 500
 
-export const MapExplorerView: React.FC<MapExplorerViewProps> = ({ photos }) => {
+export const MapExplorerView: React.FC = () => {
   const { radiusKm, setRadiusKm, setInspectedHash, setLightboxIndex, showToast } = useUiStore(useShallow((s) => ({ radiusKm: s.radiusKm, setRadiusKm: s.setRadiusKm, setInspectedHash: s.setInspectedHash, setLightboxIndex: s.setLightboxIndex, showToast: s.showToast })))
 
-  // Find photos with GPS coordinates
-  const geoPhotos = photos.filter((p) => p.exif.location && p.exif.location.latitude)
+  // Geotagged photos matching the current filters, asked of the server (PMO-27).
+  const request = useSearchRequest()
+  const geoQuery = { ...request, has_location: true, page: 1, page_size: MAP_PHOTO_LIMIT }
+  const { data } = useQuery({ queryKey: [...photosKey, 'map', geoQuery], queryFn: () => runSearch(geoQuery) })
+  const geoPhotos = data?.items ?? []
+  const geoTotal = data?.total_count ?? 0
 
   const clusters = [
     { city: 'Tokyo, Japan', lat: 35.6762, lon: 139.6503, count: 12, top: '42%', left: '78%' },
@@ -63,7 +67,7 @@ export const MapExplorerView: React.FC<MapExplorerViewProps> = ({ photos }) => {
         </div>
 
         <div className="badge badge-camera">
-          {geoPhotos.length} geotagged photos
+          {geoTotal} geotagged photos
         </div>
       </div>
 

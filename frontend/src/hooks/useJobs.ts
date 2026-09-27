@@ -11,6 +11,7 @@ import {
 import type { Job, SyncOptions } from '../api/client'
 import { useUiStore } from '../stores/useUiStore'
 import { isDemoMode, photosKey } from './usePhotos'
+import { facetsKey } from './useFacets'
 
 /** Recent background jobs (index and sync), newest first. One cache entry shared by every component. */
 export const jobsKey = ['jobs'] as const
@@ -95,6 +96,7 @@ export function useJobCompletionNotices() {
         const { text, kind } = finishedNotice(job)
         showToast(text, kind)
         void qc.invalidateQueries({ queryKey: photosKey })
+        void qc.invalidateQueries({ queryKey: facetsKey })
       }
     }
   }, [jobs, qc, showToast])
