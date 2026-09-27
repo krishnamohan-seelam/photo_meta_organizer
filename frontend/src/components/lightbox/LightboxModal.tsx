@@ -7,6 +7,7 @@ import { useCuration } from '../../hooks/usePhotoMutations'
 import { swapToPlaceholder } from '../../utils/placeholder'
 import { shouldIgnoreHotkey } from '../../utils/hotkeys'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
+import { filmstripWindow } from '../../utils/filmstrip'
 import { X, ChevronLeft, ChevronRight, Flag } from 'lucide-react'
 
 interface LightboxModalProps {
@@ -19,6 +20,9 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ photos }) => {
   if (lightboxIndex === null || !currentPhoto) return null
   return <Lightbox photos={photos} index={lightboxIndex} currentPhoto={currentPhoto} setIndex={setLightboxIndex} />
 }
+
+/** Thumbnails in the filmstrip: a window around the current photo, never the whole library. */
+const FILMSTRIP_SIZE = 13
 
 interface LightboxProps {
   photos: PhotoMetadata[]
@@ -60,6 +64,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
   }, [lightboxIndex, currentPhoto, photos, setLightboxIndex, patchPhoto])
 
   const exif = currentPhoto.exif
+  const [stripStart, stripEnd] = filmstripWindow(lightboxIndex, photos.length, FILMSTRIP_SIZE)
 
   return (
     <div
@@ -233,39 +238,41 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, index: lightboxIndex, curre
           maxWidth: '800px',
           display: 'flex',
           gap: '8px',
-          overflowX: 'auto',
           padding: '6px',
           justifyContent: 'center',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {photos.map((p, idx) => (
-          <button
-            key={p.file_hash}
-            type="button"
-            className="btn-reset"
-            onClick={() => setLightboxIndex(idx)}
-            aria-label={`Show ${p.file_info.name}`}
-            aria-current={idx === lightboxIndex ? 'true' : undefined}
-            style={{ flex: '0 0 auto', borderRadius: '4px' }}
-          >
-            <img
-              src={getThumbnailUrl(p.file_hash, 100, 100)}
-              alt=""
-              style={{
-                width: '52px',
-                height: '52px',
-                borderRadius: '4px',
-                objectFit: 'cover',
-                display: 'block',
-                opacity: idx === lightboxIndex ? 1 : 0.4,
-                border: idx === lightboxIndex ? '2px solid var(--accent-primary)' : '1px solid transparent',
-                transition: 'all 0.15s ease',
-              }}
-              onError={swapToPlaceholder}
-            />
-          </button>
-        ))}
+        {photos.slice(stripStart, stripEnd).map((p, offset) => {
+          const idx = stripStart + offset
+          return (
+            <button
+              key={p.file_hash}
+              type="button"
+              className="btn-reset"
+              onClick={() => setLightboxIndex(idx)}
+              aria-label={`Show ${p.file_info.name}`}
+              aria-current={idx === lightboxIndex ? 'true' : undefined}
+              style={{ flex: '0 0 auto', borderRadius: '4px' }}
+            >
+              <img
+                src={getThumbnailUrl(p.file_hash, 100, 100)}
+                alt=""
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '4px',
+                  objectFit: 'cover',
+                  display: 'block',
+                  opacity: idx === lightboxIndex ? 1 : 0.4,
+                  border: idx === lightboxIndex ? '2px solid var(--accent-primary)' : '1px solid transparent',
+                  transition: 'all 0.15s ease',
+                }}
+                onError={swapToPlaceholder}
+              />
+            </button>
+          )
+        })}
       </div>
     </div>
   )
