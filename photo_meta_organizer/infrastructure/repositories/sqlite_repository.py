@@ -21,6 +21,7 @@ from photo_meta_organizer.application.interfaces.search_types import (
     FacetCount,
     Facets,
     GpsBounds,
+    LibraryStats,
     Page,
     SearchQuery,
 )
@@ -324,6 +325,22 @@ class SqliteRepository:
         if query.camera_model:
             clauses.append("camera_model LIKE ? ESCAPE '\\'")
             params.append(f"%{_escape_like(query.camera_model)}%")
+        if query.camera_makes:
+            placeholders = ", ".join("?" for _ in query.camera_makes)
+            clauses.append(f"camera_make IN ({placeholders})")
+            params.extend(query.camera_makes)
+        if query.has_capture_date is not None:
+            clauses.append(
+                "captured_at IS NOT NULL" if query.has_capture_date else "captured_at IS NULL"
+            )
+        if query.has_location is not None:
+            located = "gps_lat IS NOT NULL AND gps_lon IS NOT NULL"
+            clauses.append(located if query.has_location else f"NOT ({located})")
+        if query.collection is not None:
+            clauses.append(
+                "file_hash IN (SELECT file_hash FROM collection_photos WHERE collection = ?)"
+            )
+            params.append(query.collection)
         if query.rating is not None:
             clauses.append("rating = ?")
             params.append(query.rating)
@@ -409,10 +426,11 @@ class SqliteRepository:
             "camera_model": "COALESCE(camera_model, '')",
             "file_name": "name",
         }.get(sort_by, "captured_at")
+        # file_hash breaks ties, so paging through equal keys never repeats or skips a row.
         if column == "captured_at":
             # Unknown capture dates (PMO-24) go last in either direction.
-            return f"captured_at IS NULL, captured_at {direction}"
-        return f"{column} {direction}"
+            return f"captured_at IS NULL, captured_at {direction}, file_hash"
+        return f"{column} {direction}, file_hash"
 
     def facets(self) -> Facets:
         with self.lock:
@@ -432,6 +450,15 @@ class SqliteRepository:
                 "SELECT MIN(gps_lat), MAX(gps_lat), MIN(gps_lon), MAX(gps_lon) FROM photos "
                 "WHERE gps_lat IS NOT NULL"
             ).fetchone()
+            iso_rows = self.connection.execute(
+                "SELECT iso, COUNT(*) AS n FROM photos WHERE iso IS NOT NULL "
+                "GROUP BY iso ORDER BY iso"
+            ).fetchall()
+            totals = self.connection.execute(
+                "SELECT COUNT(*), SUM(flagged), "
+                "SUM(gps_lat IS NOT NULL AND gps_lon IS NOT NULL), SUM(captured_at IS NULL), "
+                "SUM(size_bytes), AVG(width * height / 1e6) FROM photos"
+            ).fetchone()
 
         gps_bounds = None
         if bounds_row and bounds_row[0] is not None:
@@ -447,6 +474,15 @@ class SqliteRepository:
             tags=[FacetCount(name=r["name"], count=r["n"]) for r in tag_rows],
             years=[FacetCount(name=r["year"], count=r["n"]) for r in year_rows],
             gps_bounds=gps_bounds,
+            isos=[FacetCount(name=str(r["iso"]), count=r["n"]) for r in iso_rows],
+            stats=LibraryStats(
+                total_count=totals[0],
+                flagged_count=totals[1] or 0,
+                geotagged_count=totals[2] or 0,
+                undated_count=totals[3] or 0,
+                total_bytes=totals[4] or 0,
+                avg_megapixels=totals[5] or 0.0,
+            ),
         )
 
     # =========================================================================

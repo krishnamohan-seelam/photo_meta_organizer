@@ -182,6 +182,59 @@ class TestQuery:
         assert [m.file_hash for m in page.items] == ["h2", "h1"]
 
 
+class TestServerSideFilters:
+    """PMO-27: the filters the UI needs once it stops filtering in the browser."""
+
+    @pytest.mark.parametrize("sort_by", ["captured_at", "size_bytes", "file_name"])
+    def test_paging_through_equal_sort_keys_is_stable(self, repository, sort_by):
+        """Infinite scroll asks for page after page: no photo may repeat or go missing."""
+        when = datetime(2024, 1, 1)
+        repository.save_many([_photo(f"h{i}", captured_at=when) for i in range(7)])
+        seen = [
+            m.file_hash
+            for page in range(1, 5)
+            for m in repository.query(SearchQuery(sort_by=sort_by, page=page, page_size=2))
+        ]
+        assert sorted(seen) == [f"h{i}" for i in range(7)]
+
+    def test_camera_makes_is_any_of_exact(self, repository):
+        repository.save_many(
+            [
+                _photo("h1", camera_make="Sony"),
+                _photo("h2", camera_make="Canon"),
+                _photo("h3", camera_make="SONY Corp"),
+                _photo("h4"),
+            ]
+        )
+        page = repository.query(SearchQuery(camera_makes=["Sony", "Canon"], sort_by="file_name"))
+        assert sorted(m.file_hash for m in page.items) == ["h1", "h2"]
+
+    def test_has_capture_date(self, repository):
+        repository.save_many([_photo("dated", captured_at=datetime(2024, 1, 1)), _photo("undated")])
+        assert [m.file_hash for m in repository.query(SearchQuery(has_capture_date=False))] == [
+            "undated"
+        ]
+        assert [m.file_hash for m in repository.query(SearchQuery(has_capture_date=True))] == [
+            "dated"
+        ]
+
+    def test_has_location(self, repository):
+        repository.save_many(
+            [_photo("geo", location=GpsCoordinates(latitude=1.0, longitude=2.0)), _photo("plain")]
+        )
+        assert [m.file_hash for m in repository.query(SearchQuery(has_location=True))] == ["geo"]
+        assert [m.file_hash for m in repository.query(SearchQuery(has_location=False))] == [
+            "plain"
+        ]
+
+    def test_collection_membership(self, repository, collection_repository):
+        repository.save_many([_photo("h1"), _photo("h2"), _photo("h3")])
+        collection_repository.save("Trip", ["h1", "h3"])
+        page = repository.query(SearchQuery(collection="Trip"))
+        assert sorted(m.file_hash for m in page.items) == ["h1", "h3"]
+        assert repository.query(SearchQuery(collection="Nope")).total_count == 0
+
+
 class TestFacets:
     def test_camera_and_tag_and_year_counts(self, repository):
         repository.save_many(
@@ -207,6 +260,39 @@ class TestFacets:
         assert camera_counts == {"Sony": 2, "Canon": 1}
         assert tag_counts == {"beach": 2, "sunset": 1, "portrait": 1}
         assert year_counts == {"2024": 2, "2025": 1}
+
+    def test_library_stats_and_iso_counts(self, repository):
+        from dataclasses import replace as dc_replace
+
+        def with_iso(photo, iso):
+            return dc_replace(photo, exif=dc_replace(photo.exif, iso=iso))
+
+        repository.save_many(
+            [
+                with_iso(_photo("h1", size_bytes=100, flagged=True), 100),
+                with_iso(
+                    _photo(
+                        "h2",
+                        size_bytes=300,
+                        location=GpsCoordinates(latitude=1.0, longitude=2.0),
+                        captured_at=datetime(2024, 1, 1),
+                    ),
+                    100,
+                ),
+                _photo("h3", size_bytes=600),
+            ]
+        )
+        facets = repository.facets()
+        stats = facets.stats
+        assert (stats.total_count, stats.flagged_count, stats.geotagged_count) == (3, 1, 1)
+        assert stats.undated_count == 2
+        assert stats.total_bytes == 1000
+        assert stats.avg_megapixels == pytest.approx(0.01)
+        assert {f.name: f.count for f in facets.isos} == {"100": 2}
+
+    def test_stats_of_an_empty_library(self, repository):
+        stats = repository.facets().stats
+        assert (stats.total_count, stats.total_bytes, stats.avg_megapixels) == (0, 0, 0.0)
 
     def test_gps_bounds(self, repository):
         repository.save_many(

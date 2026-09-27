@@ -90,14 +90,22 @@ class SearchRequest(BaseModel):
     date_end: datetime | None = None
     camera_make: str | None = None
     camera_model: str | None = None
+    camera_makes: list[str] | None = Field(
+        default=None, description="Any of these makes, matched exactly (camera checkboxes)"
+    )
+    has_capture_date: bool | None = Field(
+        default=None, description="false: only photos with an unknown capture date"
+    )
+    has_location: bool | None = Field(default=None, description="Only (un)geotagged photos")
+    collection: str | None = Field(default=None, description="Members of this collection")
     location_lat: float | None = None
     location_lon: float | None = None
     radius_km: float | None = None
     tags: list[str] | None = None
     rating: int | None = None
     flagged: bool | None = None
-    sort_by: str = "captured_at"
-    sort_order: str = "asc"
+    sort_by: Literal["captured_at", "size_bytes", "camera_model", "file_name"] = "captured_at"
+    sort_order: Literal["asc", "desc"] = "asc"
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=500)
 
@@ -246,6 +254,24 @@ class GpsBoundsSchema(BaseModel):
     max_lon: float
 
 
+class LibraryStatsSchema(BaseModel):
+    """Whole-library totals (PMO-27)."""
+
+    total_count: int
+    flagged_count: int
+    geotagged_count: int
+    undated_count: int
+    total_bytes: int
+    avg_megapixels: float
+
+
+class PhotoIdSchema(BaseModel):
+    """One search match, reduced to what a selection needs."""
+
+    file_hash: str
+    size_bytes: int
+
+
 class FacetsResponse(BaseModel):
     """Aggregate counts used to populate filter UIs (PMO-10)."""
 
@@ -253,6 +279,8 @@ class FacetsResponse(BaseModel):
     tags: list[FacetCountSchema] = Field(default_factory=list)
     years: list[FacetCountSchema] = Field(default_factory=list)
     gps_bounds: GpsBoundsSchema | None = None
+    isos: list[FacetCountSchema] = Field(default_factory=list)
+    stats: LibraryStatsSchema | None = None
 
 
 class ExportZipRequest(BaseModel):

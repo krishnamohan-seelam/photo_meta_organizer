@@ -10,6 +10,7 @@ Endpoints:
     POST  /api/photos/batch           - Atomic batch operations across photos
     GET   /api/collections            - List all curated collections
     POST  /api/collections            - Create or update a curated collection
+    POST  /api/search/ids             - Hash and size of every match (select all)
     POST  /api/search                 - Advanced search with SearchRequest body
     GET   /api/facets                 - Aggregate camera/tag/year counts and GPS bounds
     DELETE /api/photos/{file_hash}    - Remove photo from index
@@ -45,9 +46,11 @@ from photo_meta_organizer.api.schemas import (
     GpsBoundsSchema,
     GpsCoordinatesSchema,
     IndexFolderRequest,
+    LibraryStatsSchema,
     JobResponse,
     PaginatedPhotosResponse,
     PatchPhotoRequest,
+    PhotoIdSchema,
     PhotoMetadataResponse,
     SearchRequest,
     SyncFolderRequest,
@@ -444,6 +447,8 @@ def get_facets(
         tags=[FacetCountSchema(name=f.name, count=f.count) for f in facets.tags],
         years=[FacetCountSchema(name=f.name, count=f.count) for f in facets.years],
         gps_bounds=gps_bounds,
+        isos=[FacetCountSchema(name=f.name, count=f.count) for f in facets.isos],
+        stats=LibraryStatsSchema(**vars(facets.stats)),
     )
 
 
@@ -457,12 +462,46 @@ def search_photos(
     repository: ImageMetadataRepository = Depends(get_repository),
 ) -> PaginatedPhotosResponse:
     """Advanced multi-criteria photo search with filtering, sorting, and pagination."""
-    query = SearchPhotosQuery(
+    result = SearchPhotosUseCase(repository=repository).execute(_search_query(request))
+    return PaginatedPhotosResponse(
+        items=[_to_response(m) for m in result.items],
+        total_count=result.total_count,
+        page=result.page,
+        page_size=result.page_size,
+        total_pages=result.total_pages,
+    )
+
+
+@search_router.post(
+    "/search/ids",
+    response_model=list[PhotoIdSchema],
+    summary="Every photo matching a search (hash and size only)",
+)
+def search_photo_ids(
+    request: SearchRequest,
+    repository: ImageMetadataRepository = Depends(get_repository),
+) -> list[PhotoIdSchema]:
+    """All matches of the search, ignoring paging: "select all" across every page (PMO-27)."""
+    query = _search_query(request)
+    query.page, query.page_size = 1, max(1, repository.count())
+    result = SearchPhotosUseCase(repository=repository).execute(query)
+    return [
+        PhotoIdSchema(file_hash=m.file_hash, size_bytes=m.file_info.size_bytes)
+        for m in result.items
+    ]
+
+
+def _search_query(request: SearchRequest) -> SearchPhotosQuery:
+    return SearchPhotosQuery(
         search_term=request.search_term,
         date_start=request.date_start,
         date_end=request.date_end,
         camera_make=request.camera_make,
         camera_model=request.camera_model,
+        camera_makes=request.camera_makes,
+        has_capture_date=request.has_capture_date,
+        has_location=request.has_location,
+        collection=request.collection,
         location_lat=request.location_lat,
         location_lon=request.location_lon,
         radius_km=request.radius_km,
@@ -473,15 +512,6 @@ def search_photos(
         sort_order=request.sort_order,
         page=request.page,
         page_size=request.page_size,
-    )
-    use_case = SearchPhotosUseCase(repository=repository)
-    result = use_case.execute(query)
-    return PaginatedPhotosResponse(
-        items=[_to_response(m) for m in result.items],
-        total_count=result.total_count,
-        page=result.page,
-        page_size=result.page_size,
-        total_pages=result.total_pages,
     )
 
 

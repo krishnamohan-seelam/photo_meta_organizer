@@ -29,6 +29,7 @@ from photo_meta_organizer.application.interfaces.search_types import (
     FacetCount,
     Facets,
     GpsBounds,
+    LibraryStats,
     Page,
     SearchQuery,
 )
@@ -415,6 +416,9 @@ class TinyDBRepository:
         paging actually avoids that cost.
         """
         all_records = self.list_all()
+        if query.collection is not None:
+            members = self._collection_members(query.collection)
+            all_records = [r for r in all_records if r.file_hash in members]
         filtered = [record for record in all_records if self._matches_query(record, query)]
         sorted_records = self._sort_records(filtered, query.sort_by, query.sort_order)
 
@@ -456,6 +460,16 @@ class TinyDBRepository:
             model = exif.camera_model if exif else None
             if not model or query.camera_model.lower() not in model.lower():
                 return False
+        if query.camera_makes and exif.camera_make not in query.camera_makes:
+            return False
+        if query.has_capture_date is not None and (
+            (exif.captured_at is not None) != query.has_capture_date
+        ):
+            return False
+        if query.has_location is not None and (
+            (exif.location is not None) != query.has_location
+        ):
+            return False
 
         if (
             query.location_lat is not None
@@ -523,15 +537,30 @@ class TinyDBRepository:
             return sorted(dated, key=get_sort_key, reverse=reverse) + undated
         return sorted(records, key=get_sort_key, reverse=reverse)
 
+    def _collection_members(self, name: str) -> set[str]:
+        q = Query()
+        docs = self._db.table("collections").search(q.name == name)
+        return set(docs[0].get("photo_hashes", [])) if docs else set()
+
     def facets(self) -> Facets:
         """Aggregate counts for filter UIs, computed over every record."""
         cameras: dict[str, int] = {}
+        isos: dict[int, int] = {}
+        flagged = undated = total_bytes = 0
+        megapixels = 0.0
         tags: dict[str, int] = {}
         years: dict[str, int] = {}
         lats: list[float] = []
         lons: list[float] = []
 
-        for record in self.list_all():
+        records = self.list_all()
+        for record in records:
+            flagged += record.flagged
+            undated += record.exif.captured_at is None
+            total_bytes += record.file_info.size_bytes
+            megapixels += record.dimensions.width * record.dimensions.height / 1e6
+            if record.exif.iso is not None:
+                isos[record.exif.iso] = isos.get(record.exif.iso, 0) + 1
             if record.exif and record.exif.camera_make:
                 cameras[record.exif.camera_make] = cameras.get(record.exif.camera_make, 0) + 1
             for tag in record.labels:
@@ -555,6 +584,15 @@ class TinyDBRepository:
             tags=[FacetCount(name=k, count=v) for k, v in sorted(tags.items())],
             years=[FacetCount(name=k, count=v) for k, v in sorted(years.items())],
             gps_bounds=gps_bounds,
+            isos=[FacetCount(name=str(k), count=v) for k, v in sorted(isos.items())],
+            stats=LibraryStats(
+                total_count=len(records),
+                flagged_count=flagged,
+                geotagged_count=len(lats),
+                undated_count=undated,
+                total_bytes=total_bytes,
+                avg_megapixels=megapixels / len(records) if records else 0.0,
+            ),
         )
 
     # =========================================================================

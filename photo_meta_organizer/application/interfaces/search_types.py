@@ -20,6 +20,11 @@ class SearchQuery:
 
     ``tags`` is AND semantics (ADR D2): a record must carry every listed tag.
     ``date_start``/``date_end`` are normalised to naive local time (ADR D3).
+    ``camera_make`` is a case-insensitive substring (CLI search); ``camera_makes`` is
+    "any of these makes", matched exactly (the UI's camera checkboxes, PMO-27).
+    ``has_capture_date=False`` selects photos with an unknown date (PMO-24),
+    ``has_location`` geotagged (or not) photos, ``collection`` a named collection's
+    members.
     """
 
     search_term: Optional[str] = None
@@ -27,6 +32,10 @@ class SearchQuery:
     date_end: Optional[datetime] = None
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
+    camera_makes: Optional[List[str]] = None
+    has_capture_date: Optional[bool] = None
+    has_location: Optional[bool] = None
+    collection: Optional[str] = None
     location_lat: Optional[float] = None
     location_lon: Optional[float] = None
     radius_km: Optional[float] = None
@@ -79,6 +88,18 @@ class GpsBounds:
 
 
 @dataclass(frozen=True)
+class LibraryStats:
+    """Whole-library totals for the sidebar and the analytics view (PMO-27)."""
+
+    total_count: int = 0
+    flagged_count: int = 0
+    geotagged_count: int = 0
+    undated_count: int = 0
+    total_bytes: int = 0
+    avg_megapixels: float = 0.0
+
+
+@dataclass(frozen=True)
 class Facets:
     """Aggregate counts used to populate filter UIs."""
 
@@ -86,3 +107,5 @@ class Facets:
     tags: List[FacetCount] = field(default_factory=list)
     years: List[FacetCount] = field(default_factory=list)
     gps_bounds: Optional[GpsBounds] = None
+    isos: List[FacetCount] = field(default_factory=list)
+    stats: LibraryStats = field(default_factory=LibraryStats)
