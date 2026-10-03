@@ -1,12 +1,14 @@
 import { create } from 'zustand'
 import type { SortField } from '../types/metadata'
+import { loadTheme, saveTheme, type Theme } from '../utils/theme'
 
 export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
 export type ToastKind = 'success' | 'error'
 export type JobDialogKind = 'index' | 'sync'
 
 interface UiState {
-  theme: 'dark' | 'light'
+  /** Applied to the document by App (an effect), not by the store: updaters stay free of side effects. */
+  theme: Theme
   activeView: ViewMode
   lightsOut: boolean
   sidebarOpen: boolean
@@ -30,7 +32,7 @@ interface UiState {
   toastMessage: string | null
   toastKind: ToastKind
 
-  setTheme: (theme: 'dark' | 'light') => void
+  setTheme: (theme: Theme) => void
   toggleTheme: () => void
   setActiveView: (view: ViewMode) => void
   toggleLightsOut: () => void
@@ -53,15 +55,10 @@ interface UiState {
   hideToast: () => void
 }
 
-const savedTheme = (typeof window !== 'undefined' && localStorage.getItem('pmo_theme')) as
-  | 'dark'
-  | 'light'
-  | null
-
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-export const useUiStore = create<UiState>((set) => ({
-  theme: savedTheme || 'dark',
+export const useUiStore = create<UiState>((set, get) => ({
+  theme: loadTheme() ?? 'dark',
   activeView: 'studio',
   lightsOut: false,
   sidebarOpen: true,
@@ -83,18 +80,11 @@ export const useUiStore = create<UiState>((set) => ({
   toastKind: 'success',
 
   setTheme: (theme) => {
-    localStorage.setItem('pmo_theme', theme)
-    document.documentElement.setAttribute('data-theme', theme)
+    saveTheme(theme)
     set({ theme })
   },
 
-  toggleTheme: () =>
-    set((state) => {
-      const next = state.theme === 'dark' ? 'light' : 'dark'
-      localStorage.setItem('pmo_theme', next)
-      document.documentElement.setAttribute('data-theme', next)
-      return { theme: next }
-    }),
+  toggleTheme: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
 
   setActiveView: (activeView) => set({ activeView }),
   toggleLightsOut: () => set((state) => ({ lightsOut: !state.lightsOut })),
