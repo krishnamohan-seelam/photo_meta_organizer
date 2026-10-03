@@ -1,53 +1,35 @@
-"""Entry point for Photo Meta Organizer application.
+"""Command-line interface for Photo Meta Organizer.
 
-This module serves as both the CLI interface and the composition root
-for dependency injection. It is responsible for:
-
-1. Configuring logging (at startup, not import: infrastructure.logging_setup)
-2. Creating concrete implementations (factory functions)
-3. Parsing CLI arguments and dispatching commands
-4. Managing application lifecycle and error handling
-
-The factory functions (build_retriever, build_repository, build_extractor)
-are the composition root — the ONE place that imports concrete infrastructure
-classes and decides which implementation to use based on CLI args or config.
-
-When the project adds a REST API (Phase 3+), the composition root should
-be extracted to application/composition.py so both main.py and the API
-entry point can share it.
+Parses arguments, configures logging (at startup, not import: see
+``infrastructure.logging_setup``) and dispatches to the application use cases.
+Repositories and retrievers come from the shared composition root,
+``application.composition``, so the CLI, the REST API and the desktop backend build
+them the same way; parsing of search arguments lives in
+``application.search_criteria``.
 
 Example:
     $ python -m photo_meta_organizer.main --help
-    $ python -m photo_meta_organizer.main index --path /photos --db metadata.json
+    $ python -m photo_meta_organizer.main index --path /photos --db photos.db
 """
 
 
 import argparse
 import logging
 import sys
-from datetime import datetime
 
 from photo_meta_organizer import __version__
-from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
     ImageMetadataRepository,
     ImageRetriever,
 )
-from photo_meta_organizer.domain.datetimes import to_naive
+from photo_meta_organizer.application.settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# COMPOSITION ROOT — Factory Functions
-# ============================================================================
-# These factory functions are the composition root. They are the ONLY place
-# that imports concrete infrastructure classes. Backend selection is driven
-# by CLI args, enabling plug-and-play swapping:
-#
-#   Local disk + TinyDB:   python main.py index --path /photos --db meta.json
-#   S3 + MongoDB (Phase 4): python main.py index --storage s3 --bucket photos --db-type mongodb
+# FACTORIES — thin wrappers over application.composition
 # ============================================================================
 
 
@@ -159,22 +141,6 @@ def handle_index_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _parse_date_arg(date_str: str | None) -> datetime | None:
-    """Parse a date string into a naive local datetime (see domain/datetimes.py)."""
-    if not date_str:
-        return None
-    date_str = date_str.strip()
-    try:
-        if len(date_str) == 7:  # YYYY-MM
-            return datetime.strptime(date_str, "%Y-%m")
-        elif len(date_str) == 10:  # YYYY-MM-DD
-            return datetime.strptime(date_str, "%Y-%m-%d")
-        return to_naive(datetime.fromisoformat(date_str))
-    except ValueError:
-        logger.warning("Failed to parse date string: %s", date_str)
-        return None
-
-
 def handle_search_command(args: argparse.Namespace) -> int:
     """Handle 'search' command — query indexed photos.
 
@@ -186,54 +152,34 @@ def handle_search_command(args: argparse.Namespace) -> int:
     """
     from tabulate import tabulate
 
+    from photo_meta_organizer.application.search_criteria import (
+        date_bounds,
+        parse_location,
+        parse_tags,
+    )
     from photo_meta_organizer.application.use_cases import (
         SearchPhotosQuery,
         SearchPhotosUseCase,
     )
 
+    try:
+        date_start, date_end = date_bounds(
+            date=getattr(args, "date", None),
+            date_from=getattr(args, "date_from", None),
+            date_to=getattr(args, "date_to", None),
+        )
+        location = parse_location(
+            getattr(args, "location", None),
+            lat=getattr(args, "lat", None),
+            lon=getattr(args, "lon", None),
+            radius_km=getattr(args, "radius", None),
+        )
+        tags_list = parse_tags(getattr(args, "tags", None))
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
     repository = build_repository(args)
-
-    # Date parsing logic
-    date_start = _parse_date_arg(getattr(args, "date_from", None))
-    date_end = _parse_date_arg(getattr(args, "date_to", None))
-    single_date = getattr(args, "date", None)
-    if single_date and not date_start and not date_end:
-        if len(single_date.strip()) == 7:  # YYYY-MM
-            dt = _parse_date_arg(single_date)
-            if dt:
-                date_start = dt
-                # End of month
-                month = dt.month
-                year = dt.year + (1 if month == 12 else 0)
-                next_month = 1 if month == 12 else month + 1
-                date_end = datetime(year, next_month, 1)
-        else:
-            dt = _parse_date_arg(single_date)
-            if dt:
-                date_start = dt
-                date_end = datetime(dt.year, dt.month, dt.day, 23, 59, 59)
-
-    # Location radius parsing
-    loc_lat = getattr(args, "lat", None)
-    loc_lon = getattr(args, "lon", None)
-    radius_km = getattr(args, "radius", None)
-
-    loc_arg = getattr(args, "location", None)
-    if loc_arg and (loc_lat is None or loc_lon is None or radius_km is None):
-        parts = [p.strip() for p in loc_arg.split(",")]
-        if len(parts) >= 3:
-            try:
-                loc_lat, loc_lon, radius_km = (
-                    float(parts[0]),
-                    float(parts[1]),
-                    float(parts[2]),
-                )
-            except ValueError:
-                pass
-
-    # Tags parsing
-    tags_arg = getattr(args, "tags", None)
-    tags_list = [t.strip() for t in tags_arg.split(",")] if tags_arg else None
 
     # --camera used to set both camera_make and camera_model and rely on a
     # since-removed sentinel (PMO-09) that treated an equal make/model as "search
@@ -244,9 +190,9 @@ def handle_search_command(args: argparse.Namespace) -> int:
         date_start=date_start,
         date_end=date_end,
         search_term=getattr(args, "camera", None),
-        location_lat=loc_lat,
-        location_lon=loc_lon,
-        radius_km=radius_km,
+        location_lat=location.latitude if location else None,
+        location_lon=location.longitude if location else None,
+        radius_km=location.radius_km if location else None,
         tags=tags_list,
         sort_by=getattr(args, "sort", "captured_at"),
         sort_order=getattr(args, "order", "asc"),
@@ -540,7 +486,7 @@ def main() -> int:
     )
     index_parser.add_argument(
         "--path",
-        required=False,
+        required=True,
         help="Path to photos directory",
     )
     index_parser.add_argument(
@@ -562,9 +508,9 @@ def main() -> int:
         help="Search indexed photos (Phase 3)",
     )
     search_parser.add_argument("--db", default=None, help=DB_HELP)
-    search_parser.add_argument("--date", help="Date filter (YYYY-MM or YYYY-MM-DD)")
-    search_parser.add_argument("--date-from", help="Start date (YYYY-MM-DD)")
-    search_parser.add_argument("--date-to", help="End date (YYYY-MM-DD)")
+    search_parser.add_argument("--date", help="One month or day (YYYY-MM or YYYY-MM-DD)")
+    search_parser.add_argument("--date-from", help="Start date (YYYY-MM[-DD], inclusive)")
+    search_parser.add_argument("--date-to", help="End date (YYYY-MM[-DD], whole day inclusive)")
     search_parser.add_argument("--camera", help="Filter by camera make/model")
     search_parser.add_argument("--location", help="Filter by location (lat,lon,radius_km)")
     search_parser.add_argument("--lat", type=float, help="Latitude for radius search")
@@ -601,7 +547,7 @@ def main() -> int:
     )
     sync_parser.add_argument(
         "--path",
-        required=False,
+        required=True,
         help="Path to photos directory",
     )
     sync_parser.add_argument(

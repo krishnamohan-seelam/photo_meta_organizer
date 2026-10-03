@@ -121,11 +121,11 @@ class TestRepositoryIndexes:
 
 
 class TestCliDateParsing:
-    def test_parse_date_arg_returns_naive_datetimes(self):
-        from photo_meta_organizer.main import _parse_date_arg
+    def test_parse_date_returns_naive_datetimes(self):
+        from photo_meta_organizer.application.search_criteria import parse_date
 
         for text in ("2026-03", "2026-03-05", "2026-03-05T10:30:00"):
-            parsed = _parse_date_arg(text)
+            parsed = parse_date(text)
             assert parsed is not None and parsed.tzinfo is None, text
 
     def test_cli_date_search_works_on_naive_records(self, tmp_path, capsys):

@@ -7,9 +7,9 @@ Usage:
 
     # uvicorn factory: create_app() with no arguments reads the environment (PMO_DB, ...)
 
-    # Testing
+    # Testing: an in-memory SQLite database; pass cache_dir so thumbnails stay out of the CWD
     from fastapi.testclient import TestClient
-    app = create_app(db_path=":memory:")
+    app = create_app(db_path=":memory:", cache_dir=tmp_path / "thumbs")
     client = TestClient(app)
 
 Security model (local application):

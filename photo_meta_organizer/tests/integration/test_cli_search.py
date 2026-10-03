@@ -179,3 +179,49 @@ def test_cli_search_empty_results(temp_db_path, capsys):
         assert "No photos found matching" in captured.out
     finally:
         sys.argv = sys_argv_backup
+
+
+def _run(monkeypatch, *argv):
+    monkeypatch.setattr(sys, "argv", ["main.py", *argv])
+    return main()
+
+
+@pytest.mark.parametrize("command", ["index", "sync"])
+def test_path_is_required(command, tmp_path, monkeypatch, capsys):
+    """B-25: omitting --path used to fail later with a TypeError shown as 'Error:'."""
+    with pytest.raises(SystemExit) as exc:
+        _run(monkeypatch, command, "--db", str(tmp_path / "x.db"))
+    assert exc.value.code == 2
+    assert "--path" in capsys.readouterr().err
+    assert not (tmp_path / "x.db").exists()
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--date", "2024-13"], "Invalid date"),
+        (["--date-from", "2024-05-01", "--date-to", "2024-03-01"], "after"),
+        (["--location", "37.7,-122.4"], "Invalid location"),
+        (["--lat", "37.7", "--lon", "-122.4"], "--lat, --lon and --radius"),
+    ],
+)
+def test_bad_search_input_is_an_error_not_an_unfiltered_search(
+    temp_db_path, monkeypatch, capsys, args, message
+):
+    assert _run(monkeypatch, "search", "--db", temp_db_path, *args) == 2
+    captured = capsys.readouterr()
+    assert message in captured.err
+    assert "sony_beach.jpg" not in captured.out
+
+
+def test_date_to_includes_the_whole_day(temp_db_path, monkeypatch, capsys):
+    """The Canon photo was taken 2024-03-20 15:30; --date-to 2024-03-20 must include it."""
+    assert _run(monkeypatch, "search", "--db", temp_db_path, "--date-to", "2024-03-20") == 0
+    assert "canon_mountain.jpg" in capsys.readouterr().out
+
+
+def test_separate_lat_lon_radius(temp_db_path, monkeypatch, capsys):
+    argv = ["--lat", "37.7749", "--lon", "-122.4194", "--radius", "5"]
+    assert _run(monkeypatch, "search", "--db", temp_db_path, *argv) == 0
+    out = capsys.readouterr().out
+    assert "sony_beach.jpg" in out and "canon_mountain.jpg" not in out

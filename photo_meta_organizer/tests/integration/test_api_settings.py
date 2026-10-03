@@ -43,3 +43,35 @@ def test_cli_db_defaults_to_the_environment(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["prog", "stats"])
     assert main() == 0
     assert str(tmp_path / "env.db") in capsys.readouterr().out
+
+
+def test_in_memory_database_works_out_of_the_box(tmp_path, monkeypatch):
+    """B-25/PMO-34: create_app(":memory:") is the documented test setup; under TinyDB it
+    opened a file literally named ':memory:' (OSError on Windows)."""
+    from datetime import datetime
+
+    from photo_meta_organizer.domain.models import (
+        ImageDimensions,
+        ImageExifData,
+        ImageFileInfo,
+        ImageMetadata,
+    )
+
+    monkeypatch.chdir(tmp_path)
+    app = create_app(db_path=":memory:", cache_dir=tmp_path / "thumbs")
+    client = TestClient(app)
+    assert client.get("/health").json()["photo_count"] == 0
+
+    app.state.services.repository.save(
+        ImageMetadata(
+            file_hash="m" * 64,
+            file_info=ImageFileInfo(
+                name="a.jpg", path="/x/a.jpg", size_bytes=1, mime_type="image/jpeg"
+            ),
+            dimensions=ImageDimensions(width=1, height=1),
+            exif=ImageExifData(),
+            added_at=datetime(2026, 1, 1),
+        )
+    )
+    assert [p["file_hash"] for p in client.get("/api/photos").json()["items"]] == ["m" * 64]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["thumbs"]
