@@ -175,7 +175,7 @@ DOCS/*.md
 
 desktop/node_modules/
 
-CLAUDE.md
+# CLAUDE.md
 
 metadata.*
 
