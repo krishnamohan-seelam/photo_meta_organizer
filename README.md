@@ -4,12 +4,12 @@ Metadata indexing and organization system built specifically for large-scale pho
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![React 19](https://img.shields.io/badge/React-19.0-61dafb)
-![Tests](https://img.shields.io/badge/Tests-482%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/Coverage-92%25-green)
-![Throughput](https://img.shields.io/badge/Throughput-21%2C710%20imgs%2Fmin-blue)
+![Tests](https://img.shields.io/badge/Tests-619%20backend%20%2B%2055%20frontend-brightgreen)
+![Coverage](https://img.shields.io/badge/Coverage-93%25-green)
+![Throughput](https://img.shields.io/badge/Throughput-~31%2C000%20imgs%2Fmin-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-> **Status:** phases 0-4 are built; a hardening pass is well under way, with sync correctness, SQLite storage, async index/sync jobs, and accessibility done. A few UI features are still prototype-level, and some known gaps remain. Read [Known limitations](#known-limitations) before relying on it for a large library.
+> **Status:** phases 0-4 are built and the hardening pass is complete. A few UI features are still placeholders (the Map Explorer clusters and the EXIF histogram), and some known gaps remain. Read [Known limitations](#known-limitations) before relying on it for a large library.
 
 ---
 
@@ -19,29 +19,32 @@ Metadata indexing and organization system built specifically for large-scale pho
 - **React 19 Frontend Studio**: Web UI built with React 19, TypeScript, Vite, Zustand, and TanStack Virtual. See [frontend/README.md](frontend/README.md) for its structure and conventions.
   - **Light & Dark Themes** with tokenized CSS variables.
   - **Lights Out Dimmer (`L`)**: ambient mode dimming sidebars and controls to emphasize photo viewing.
-  - **Global Command Palette (`Ctrl + K`)**: fuzzy search across camera makes, tags, and actions.
-  - **Studio Grid View**: row-virtualized gallery (only the rows near the viewport are in the DOM; measured 8,704 → 525 DOM elements on a 700-photo library) with a live density slider (160px-320px), flag badges, and star ratings.
+  - **Command Palette (`Ctrl + K`)**: a fixed list of commands (Scan, Sync, theme, Lights Out, open Map or Analytics, export JSON), filtered as you type. *Its camera and tag shortcuts are hardcoded examples (Sony, Canon, #travel), not taken from your library.*
+  - **Studio Grid View**: row-virtualized gallery (only the rows near the viewport are in the DOM; measured 8,704 → 525 DOM elements on a 700-photo library) with a live density slider (160px-320px), flag badges, star ratings, and a server-side sort. The server filters, sorts and pages the library (200 photos a page), so the browser never loads the whole library.
   - **EXIF Inspector**: exposure triangle (Aperture, Shutter, ISO, Focal Length), technical telemetry, raw JSON copy. *The RGB/luminance histogram is a placeholder drawing, not computed from the image.*
-  - **Filter Accordions** for Camera Brands, Tags & Labels, and Collections, with real camera/tag/year counts derived from your loaded library and real named collections from the Collections API (tags are ANDed, not ORed).
-  - **Floating Selection Dock**: multi-select bar with cumulative size, batch tagging, and flag-all. *ZIP export is a placeholder — it shows an error toast, not a fake success.*
-  - **Map Explorer**: *placeholder view with fixed example clusters, not derived from your library's GPS data.*
-  - **Chronological Timeline Feed**: date-grouped photo stream with year scrubber.
-  - **Kanban Staging Board**: 3-stage view (`Inbox`, `Picks & Flagged`, `Export Ready`) derived from rating and flag.
+  - **Filter Accordions** for Camera Brands, Tags & Labels, and Collections, with whole-library counts from `GET /api/facets` and real named collections from the Collections API (tags are ANDed, not ORed). There is no free-text search box yet; `search_term` is reachable through the API and CLI.
+  - **Floating Selection Dock**: multi-select bar (Select All works across pages) with cumulative size, batch tagging, flag-all, and a streamed ZIP export of the original files with progress.
+  - **Map Explorer**: *placeholder view with fixed example clusters, not derived from your library's GPS data.* Only the "N geotagged photos" count is real.
+  - **Chronological Timeline Feed**: month-grouped photo stream with year buttons from the library's facets and an "Unknown date" group for photos without an EXIF date.
+  - **Kanban Staging Board** (the *Collections* tab): 3 stages derived from rating, flag and the `export` tag, one stage per photo (Export Ready: 5 stars or tagged `export`; Picks: flagged or 4 stars; Inbox: the rest), with forward and back actions on each card.
   - **Library Analytics Dashboard**: KPI metrics and SVG charts with click-to-filter drilldowns.
-  - **Fullscreen Lightbox**: image stage, filmstrip, and keyboard navigation (`Space`, `Esc`, `P`, `1-5`).
+  - **Fullscreen Lightbox**: a 2048 px preview (works for HEIC and RAW too), a filmstrip, and keyboard navigation (arrows, `Esc`, `P`, `1-5`).
 - **Windows Desktop Application (Electron shell)**: starts the Python FastAPI backend on a free port, opens the UI, and provides a native folder picker for indexing. The packaged app keeps its data under the per-user data directory and sets a per-launch API token cookie (see [Security model](#security-model)); the `electron-builder` + `PyInstaller` pipeline is verified on the unpacked app (see [Known limitations](#known-limitations) for the remaining code-signing caveat).
-- **WebP Thumbnail Cache & Streaming Service**: SHA-256 hash-addressed thumbnails with EXIF transpose correction, cached under `.cache/thumbnails/` (relative to the working directory).
+- **WebP Thumbnail Cache & Streaming Service**: SHA-256 hash-addressed thumbnails with EXIF transpose correction, cached under `.cache/thumbnails/` (or `PMO_CACHE_DIR`). Writes are atomic, each thumbnail renders once even under concurrent requests, and the cache is bounded by `PMO_THUMBNAIL_CACHE_MB` (default 1024) with least-recently-used eviction.
+- **HEIC/HEIF and camera RAW**: decoded with pillow-heif and rawpy (the RAW file's embedded preview) for dimensions, thumbnails and the lightbox preview.
+- **Export**: `POST /api/export/zip` streams a ZIP of the selected originals (skipped files are listed in an `export_report.txt` inside it); `POST /api/export/json` exports metadata for a selection or the whole library.
 - **Asynchronous Index & Sync Jobs**: `POST /api/index` and `POST /api/sync` return `202` plus a job id; `GET /api/jobs/{id}` reports progress and errors, and a job can be cancelled mid-run. The frontend shows a progress bar and an in-app folder dialog (`FolderJobDialog`) instead of `window.prompt`. Only image files are indexed, exactly as with the CLI.
 - **Curation & Batch REST API**: `PATCH /api/photos/{hash}` for rating, flag, and tags, and `POST /api/photos/batch` for `add_tag`, `remove_tag`, `set_rating`, `set_flag`, and `delete`. Input is validated (rating 1-5 or `null`, non-empty tags, real booleans); bad input returns `422` and nothing is written.
 - **Curated Collections API**: `GET/POST /api/collections` for named photo sets, consumed by the frontend's filter sidebar.
-- **Facets API**: `GET /api/facets` returns camera/tag/year counts and GPS bounds computed in the repository; the frontend currently derives the same facets client-side from the loaded library, not yet from this endpoint.
-- **CLI**: `index`, `sync`, `search`, `stats`, `prune` and `dedupe`, with tabular output via `tabulate`.
-- **Multi-Threaded Parallel Indexing**: `ThreadPoolExecutor` workers, a bounded queue, and a dedicated DB-writer thread (21,710 imgs/min in the Phase 2 benchmark on a small database; not re-measured since the SQLite migration).
+- **Search & Facets API**: `POST /api/search` filters, sorts and pages in SQL; `POST /api/search/ids` returns every match for Select All; `GET /api/facets` returns camera/tag/year/ISO counts, GPS bounds and library stats. The frontend uses all three.
+- **Generated API types**: the frontend's TypeScript types are generated from the API's OpenAPI schema, and a test on each side fails when they drift (see [Run Tests](#run-tests)).
+- **CLI**: `index`, `sync`, `search`, `stats`, `prune` and `dedupe`, with tabular output via `tabulate`. Search input it cannot read (a bad date or location) is an error, not a silently unfiltered search.
+- **Multi-Threaded Parallel Indexing**: `ThreadPoolExecutor` workers, a bounded queue, and a dedicated DB-writer thread. Measured after the SQLite migration (2026-10-03): 3,000 generated 640×480 JPEGs (16 MB, warm disk cache, 16-thread CPU) in 5.5-5.9 s with the default 4 workers, about **31,000 images/min** including process start-up. 8 workers was slower (6.6-6.9 s). Real camera files are larger and slower to hash and decode.
 - **Comprehensive EXIF Extraction**: three-tier model (Universal → Common → Camera-Specific) for DSLR, mirrorless, mobile, action cam, and film scanner profiles, with automatic DMS → decimal GPS conversion (WGS84).
 - **Content-Based Deduplication**: SHA-256 file hash as primary key.
 - **Ports & Adapters**: retriever, extractor, and repository interfaces are Protocols. A local-disk retriever and a SQLite repository (WAL mode, per ADR-001) are wired in, with a one-time importer from legacy TinyDB `metadata.json` libraries; an S3 retriever exists but is not wired into the CLI or API, and there is no MongoDB backend yet.
-- **Extension Filtering**: one shared list of image extensions (JPEG, PNG, TIFF, WebP, HEIC, RAW families, and more) used by both the CLI and the API.
-- **Incremental Synchronization**: `sync` classifies files as NEW / MODIFIED / DELETED / UNCHANGED by comparing size and modification time, replaces the record on a MODIFIED and carries over its rating/flag/labels, and can repair libraries synced before that fix with `dedupe`. See the limitations below for the one case it still misses.
+- **Extension Filtering**: one shared list of image extensions (JPEG, PNG, TIFF, WebP, HEIC/HEIF, and RAW formats such as CR2, CR3, NEF, ARW, RAF, ORF, RW2 and DNG) used by both the CLI and the API.
+- **Incremental Synchronization**: `sync` classifies files as NEW / MODIFIED / DELETED / UNCHANGED by comparing size and modification time, replaces the record on a MODIFIED and carries over its rating/flag/labels and collection membership, and can repair libraries synced before that fix with `dedupe`. It only touches records under the folder it scans. See the limitations below for the one case it still misses.
 - **Local-Only API Hardening**: no wildcard CORS, the `Host` header is validated to block DNS-rebinding, and the packaged desktop app requires a per-launch API token cookie (see [Security model](#security-model)).
 
 ---
@@ -154,7 +157,8 @@ An explicit flag or argument wins, then the environment, then the development de
 | `PMO_DATA_DIR` | Base directory for the three paths below | (unset) |
 | `PMO_DB` | SQLite database file | `<data dir>/photos.db`, else `photos.db` |
 | `PMO_CACHE_DIR` | Thumbnail cache | `<data dir>/thumbnails`, else `.cache/thumbnails` |
-| `PMO_LOG_DIR` | Backend log directory (desktop backend) | `<data dir>/logs`, else no log file |
+| `PMO_LOG_DIR` | Directory for a rotating log (CLI: `photo_meta_organizer.log`, also `--log-dir`; desktop backend: `backend.log`) | `<data dir>/logs`, else no log file |
+| `PMO_THUMBNAIL_CACHE_MB` | Size budget of the thumbnail cache | `1024` |
 | `PMO_ALLOWED_HOSTS` | Host names the API accepts | `localhost,127.0.0.1` |
 | `PMO_CORS_ORIGINS` | Origins granted CORS | the Vite dev origins |
 
@@ -183,14 +187,15 @@ python -m photo_meta_organizer.main index --path "C:\your\photos" --db photos.db
 # Index with a specific number of worker threads
 python -m photo_meta_organizer.main index --path "C:\your\photos" --db photos.db --workers 8
 
-# With verbose logging (global flag, placed before the command)
-python -m photo_meta_organizer.main --log-level DEBUG index --path /photos --db photos.db
+# With verbose logging (global flags, placed before the command). Log lines go to stderr;
+# --log-dir (or PMO_LOG_DIR) also writes a rotating photo_meta_organizer.log there.
+python -m photo_meta_organizer.main --log-level DEBUG --log-dir logs index --path /photos --db photos.db
 
 # View help
 python -m photo_meta_organizer.main --help
 ```
 
-Re-running `index` re-extracts every file and replaces each record, which resets its rating, flag, and labels. Use `sync` for routine updates.
+`--path` is required for `index` and `sync`. Re-running `index` re-extracts every file and replaces each record, which resets its rating, flag, and labels. Use `sync` for routine updates.
 
 ### Library Statistics & CLI Search
 
@@ -201,10 +206,14 @@ python -m photo_meta_organizer.main stats --db photos.db
 # Search by camera make or model (substring match)
 python -m photo_meta_organizer.main search --camera Sony --db photos.db
 
-# Search by date range (YYYY-MM, YYYY-MM-DD, or ISO datetimes)
+# Search by date range (YYYY-MM, YYYY-MM-DD, or ISO datetimes). A bare day or month as the end
+# covers the whole period: --date-to 2026-12-31 includes photos taken on the 31st.
 python -m photo_meta_organizer.main search --date-from 2026-01-01 --date-to 2026-12-31 --db photos.db
 
-# Search near a GPS coordinate within a 25 km radius
+# One month or one day
+python -m photo_meta_organizer.main search --date 2026-03 --db photos.db
+
+# Search near a GPS coordinate within a 25 km radius (all three flags, or --location lat,lon,km)
 python -m photo_meta_organizer.main search --lat 35.6586 --lon 139.7454 --radius 25 --db photos.db
 
 # Tags: a photo must have ALL listed tags
@@ -258,14 +267,20 @@ python -m photo_meta_organizer.main dedupe --db photos.db --apply
 python -m photo_meta_organizer.main sync --path "D:\photos" --db photos.db --rehash
 ```
 
+Records indexed before the capture-date fix may carry the file's modification time as their capture date. `--reextract` re-reads every file already in the database and keeps ratings, flags, labels and the date added (slow; back up `photos.db` first):
+
+```bash
+python -m photo_meta_organizer.main sync --path "D:\photos" --db photos.db --reextract
+```
+
 ### Run Tests
 
-Run tests from the **`photo_meta_organizer/`** directory. Three test files import `tests.conftest`, which fails at collection when pytest is started from the repository root.
+Run backend tests from the **`photo_meta_organizer/`** directory. Three test files import `tests.conftest`, which fails at collection when pytest is started from the repository root.
 
 ```bash
 cd photo_meta_organizer
 
-# All 311 unit and integration tests (pytest.ini also enables coverage)
+# All 619 unit and integration tests (pytest.ini also enables coverage, 93%)
 python -m pytest
 
 # Without coverage, one file, or one test
@@ -273,7 +288,14 @@ python -m pytest --no-cov tests/unit/domain/test_services.py
 python -m pytest --no-cov tests/unit/domain/test_services.py::TestName::test_name
 ```
 
-Frontend: `cd frontend && npm run build` (typechecks) and `npm run lint`. The frontend has no test suite yet.
+Frontend (from `frontend/`): `npm test` runs the Vitest + Testing Library suite (55 tests: API client errors, optimistic edits and rollback, loading/error/empty states, and the data-layer helpers), `npm run build` typechecks (tests included) and builds, and `npm run lint` runs oxlint.
+
+**After changing the API** (a route, or a schema in `api/schemas.py`), regenerate the frontend's types and commit both files; `test_openapi_contract.py` (pytest) and `schema.test.ts` (Vitest) fail until you do:
+
+```bash
+python -m scripts.export_openapi       # from the repo root: writes frontend/openapi.json
+npm --prefix frontend run gen:api      # writes frontend/src/api/schema.ts
+```
 
 ---
 
@@ -297,11 +319,13 @@ Design docs for individual phases and the SQLite ADR live in `design_docs/`, whi
 │  ├── interfaces/      Protocols (ImageRetriever,             │
 │  │                    ImageMetadataExtractor,                 │
 │  │                    ImageMetadataRepository)                │
-│  ├── composition.py   Shared retriever factory (images only) │
+│  ├── composition.py   Builds retrievers and repositories     │
+│  ├── settings.py      One Settings object for every entry    │
+│  ├── jobs.py          Background index/sync jobs             │
 │  ├── orchestrators.py ExtractorOrchestrator, SyncOrchestrator │
 │  └── use_cases/       IndexPhotos, ParallelIndexPhotos,      │
 │                       SearchPhotos, SynchronizeMetadata,      │
-│                       PruneNonImages                          │
+│                       PruneNonImages, DedupePaths             │
 └────────────────────────────┬─────────────────────────────────┘
                              ↓
 ┌──────────────────────────────────────────────────────────────┐
@@ -325,8 +349,11 @@ Concrete implementations live in `infrastructure/` (local-disk retriever, extens
 These are open, documented gaps. The full analysis and work plan are tracked in internal design docs (`design_docs/`, git-ignored, not part of this repository).
 
 - **Sync still trusts size + modification time, not content, for the common case.** An edit that preserves both is invisible to a normal `sync`; run `sync --rehash` to force a full hash check. (An edit that changes size or mtime *is* detected, and now correctly replaces the old record and carries over its rating/flag/labels — `dedupe` repairs libraries synced before that fix.)
-- **RAW and HEIC** files are accepted for indexing, but Pillow has no built-in decoder for them, so expect missing dimensions and thumbnails.
-- **UI prototype areas:** the Map Explorer clusters, the EXIF histogram, and ZIP export are placeholders (see [Features](#-features)); JSON export is not implemented server-side either. The frontend still loads the whole library at startup and filters it in the browser (server-driven paging is planned). The frontend has no automated test suite.
+- **RAW and HEIC were verified on a real Nikon NEF only.** HEIC tests use pillow-heif's own encoder; no real phone HEIC or Canon CR3 / Sony ARW file has been tried, and the packaged desktop build has not been checked with the new native libraries.
+- **Old capture dates.** Libraries indexed before the capture-date fix may show a file's modification time as its capture date. Run `sync --reextract` once to repair them.
+- **UI placeholders:** the Map Explorer clusters and the EXIF histogram are drawings, not your data, and the command palette's camera/tag shortcuts are fixed examples (see [Features](#-features)). There is no free-text search box in the UI.
+- **Kanban moves change ratings.** Stages are derived, not stored, so moving a card back from Export Ready drops the 5th star, and moving it back from Picks caps the rating at 3.
+- **Batch edits after Select All** update photos that are not loaded on the server only, and a photo edited out of the current filter stays visible until the next reload.
 - **Desktop packaging on Windows needs symlink permission once.** electron-builder unpacks its `winCodeSign` tool, which contains macOS symlinks; without Windows Developer Mode (or one run from an elevated shell) `npm run desktop:package` fails at that step. Do not work around it with `"signAndEditExecutable": false`: that also skips writing the app's name and version into the exe, which is left posing as `electron.exe`, and antivirus heuristics then flag it. Once `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0` exists, later builds need no special permission.
 - **The Windows build is unsigned**, so SmartScreen warns on first run and some antivirus products may still flag it until it is code-signed. On a freshly built copy, the first start can take several seconds while the antivirus scans the backend files.
 - **API token only in the desktop app.** The dev server and `uvicorn` runs rely on the CORS and Host checks unless `PMO_API_TOKEN` is set.
@@ -343,13 +370,13 @@ These are open, documented gaps. The full analysis and work plan are tracked in 
 | **Phase 2** | ✅ Complete | Parallel processing (ThreadPoolExecutor + Queue) |
 | **Phase 3** | ✅ Complete | Search & indexing + FastAPI REST API + CLI search & stats |
 | **Phase 4** | ✅ Complete | React 19 Studio UI, WebP thumbnail cache, curation API, Electron shell |
-| **Hardening** | 🚧 In progress | Correctness, security, scale (SQLite) and packaging fixes; most of the plan is done, remaining work below |
+| **Hardening** | ✅ Complete | Correctness, security, scale (SQLite), packaging, server-driven UI, generated API types and tests |
 | **Phase 5** | 🔲 Planned | AI Tagging, Neural Image Embeddings & Semantic Search |
 | **Phase 6** | 🔲 Planned | Cloud S3 / MinIO Blob Storage & Distributed MongoDB Scale-Out |
 
 *Numbering note:* an internal design doc calls the Electron desktop app "Phase 5"; in this table it is part of Phase 4 and "Phase 5" means AI tagging.
 
-**Hardening progress:** validated curation input, one datetime convention, images-only indexing in both the CLI and the API, the `prune` command, CORS and Host lock-down, and the virtualized gallery are done. Sync correctness (replace on modify, curation carry-over, mtime fingerprint, `dedupe`, `sync --rehash`), the frontend data layer (one react-query cache, honest loading/error/empty states, failed saves shown as failed), and the **SQLite migration** (repository port v2, legacy JSON importer, search/facets moved into the store) are done. Also done: real facets/collections and AND-semantics tag search in the sidebar, asynchronous index/sync jobs with progress and cancel, a single `Settings`/composition root, chunked content hashing, keyboard/screen-reader accessibility, and the per-launch desktop API token. Next: RAW/HEIC support, thumbnail-cache hardening, server-driven paging and ZIP/JSON export, a generated API client, and frontend tests.
+**Hardening:** validated curation input, one datetime convention, images-only indexing, `prune` and `dedupe`, CORS/Host lock-down and the per-launch desktop token; sync correctness (replace on modify, curation carry-over, mtime fingerprint, `--rehash`, `--reextract`, folder-scoped cleanup); the SQLite migration with search, paging and facets in the store; asynchronous index/sync jobs with progress and cancel; one `Settings` object and composition root; HEIC/RAW decoding; a bounded thumbnail cache; server-driven paging, filtering and sorting in the UI; ZIP and JSON export; accessibility and keyboard handling; logging and CLI fixes; API types generated from OpenAPI; and a frontend test suite. What is left is under [Known limitations](#known-limitations).
 
 ---
 
@@ -359,15 +386,15 @@ These are open, documented gaps. The full analysis and work plan are tracked in 
 |-------|-----------|
 | **Frontend Framework** | React 19 + TypeScript + Vite |
 | **State & Virtualization** | Zustand (selector subscriptions) + TanStack Virtual (gallery rows) |
-| **Styling & Icons** | Tokenized CSS variables (Light/Dark), mostly inline styles, Lucide Icons |
+| **Styling & Icons** | Tokenized CSS variables (Light/Dark), mostly inline styles (no Tailwind), Lucide Icons |
 | **Backend Runtime** | Python 3.11+ |
 | **REST API Server** | FastAPI + Uvicorn + Pydantic v2 |
-| **Image Processing** | Pillow (PIL) + WebP thumbnail cache |
+| **Image Processing** | Pillow, pillow-heif (HEIC/HEIF), rawpy (camera RAW) + WebP thumbnail cache |
 | **EXIF Extraction** | exifread (three-tier Universal/Common/Raw model) |
 | **Deduplication** | SHA-256 content-based file fingerprinting |
 | **Database** | SQLite (WAL mode, single writer connection, ADR-001); legacy TinyDB JSON libraries are imported once and never modified |
-| **Testing & Quality** | pytest + pytest-cov (482 tests, 92% coverage); oxlint + `tsc` for the frontend (no frontend test runner yet) |
-| **Type System** | mypy + TypeScript |
+| **Testing & Quality** | pytest + pytest-cov (619 tests, 93% coverage); Vitest + Testing Library (55 tests), oxlint and `tsc` for the frontend |
+| **Type System** | mypy + TypeScript (API types generated with openapi-typescript) |
 
 ---
 
