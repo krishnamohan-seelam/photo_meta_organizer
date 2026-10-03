@@ -17,9 +17,7 @@ With no path arguments it keeps the development layout: ``photos.db`` and
 
 import argparse
 import logging
-import logging.handlers
 import shutil
-import sys
 import tempfile
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -95,20 +93,11 @@ def adopt_legacy_database(target: Path, candidates: Iterable[Path]) -> Path | No
 
 def configure_logging(log_dir: Path | None) -> None:
     """INFO to stderr (Electron shows it) and, if ``log_dir`` is set, a rotating file."""
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
-    if log_dir is not None:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        handlers.append(
-            logging.handlers.RotatingFileHandler(
-                log_dir / "backend.log", maxBytes=5_000_000, backupCount=3, encoding="utf-8"
-            )
-        )
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=handlers,
-        force=True,
+    from photo_meta_organizer.infrastructure.logging_setup import (
+        configure_logging as _configure_logging,
     )
+
+    _configure_logging("INFO", log_dir, file_name="backend.log")
 
 
 def main(argv: Sequence[str] | None = None) -> None:

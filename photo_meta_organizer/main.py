@@ -3,7 +3,7 @@
 This module serves as both the CLI interface and the composition root
 for dependency injection. It is responsible for:
 
-1. Configuring logging
+1. Configuring logging (at startup, not import: infrastructure.logging_setup)
 2. Creating concrete implementations (factory functions)
 3. Parsing CLI arguments and dispatching commands
 4. Managing application lifecycle and error handling
@@ -26,7 +26,6 @@ import argparse
 import logging
 import sys
 from datetime import datetime
-from logging.config import dictConfig
 
 from photo_meta_organizer import __version__
 from photo_meta_organizer.application.settings import Settings
@@ -37,46 +36,6 @@ from photo_meta_organizer.application.interfaces import (
 )
 from photo_meta_organizer.domain.datetimes import to_naive
 
-# Configure logging at module level
-_LOGGING_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "standard": {
-            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        },
-        "detailed": {
-            "format": ("%(asctime)s [%(levelname)s] %(name)s.%(funcName)s:%(lineno)d: %(message)s"),
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "level": "DEBUG",
-            "formatter": "standard",
-            "stream": "ext://sys.stdout",
-        },
-        "file": {
-            "class": "logging.FileHandler",
-            "level": "DEBUG",
-            "formatter": "detailed",
-            "filename": "photo_meta_organizer.log",
-        },
-    },
-    "root": {
-        "level": "INFO",
-        "handlers": ["console", "file"],
-    },
-    "loggers": {
-        "photo_meta_organizer": {
-            "level": "DEBUG",
-            "handlers": ["console", "file"],
-            "propagate": True,
-        },
-    },
-}
-
-dictConfig(_LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
 
@@ -563,6 +522,14 @@ def main() -> int:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set logging level (default: INFO)",
     )
+    parser.add_argument(
+        "--log-dir",
+        default=None,
+        help=(
+            "Write a rotating photo_meta_organizer.log here "
+            "(default: $PMO_LOG_DIR, else no log file)"
+        ),
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -744,13 +711,15 @@ def main() -> int:
 
     try:
         args = parser.parse_args()
+        # Same precedence as the API and desktop backend: flag > environment > default.
+        settings = Settings.from_env(db_path=getattr(args, "db", None), log_dir=args.log_dir)
         if hasattr(args, "db"):
-            # Same precedence as the API and desktop backend: flag > environment > default.
-            args.db = str(Settings.from_env(db_path=args.db).db_path)
+            args.db = str(settings.db_path)
 
-        # Update log level based on argument
-        logging.getLogger().setLevel(args.log_level)
-        logger.info("Starting Photo Meta Organizer (log level: %s)", args.log_level)
+        from photo_meta_organizer.infrastructure.logging_setup import configure_logging
+
+        configure_logging(args.log_level, settings.log_dir)
+        logger.debug("Starting Photo Meta Organizer (log level: %s)", args.log_level)
 
         # If no command specified, print help
         if not hasattr(args, "func"):

@@ -10,6 +10,8 @@ The mock implementations serve educational purposes, demonstrating how
 concrete classes implement the protocols and compose via dependency injection.
 """
 
+import logging
+
 import pytest
 from contextlib import contextmanager
 from datetime import datetime
@@ -53,6 +55,23 @@ def pytest_configure(config):
 # ============================================================================
 # FACTORY FIXTURES - Lightweight Object Creation
 # ============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _isolate_logging_config():
+    """Undo any configure_logging() a test triggers (e.g. via main()), so a handler
+    bound to one test's captured stderr never outlives it."""
+    root = logging.getLogger()
+    package = logging.getLogger("photo_meta_organizer")
+    saved = (root.level, list(root.handlers), package.level, list(package.handlers))
+    yield
+    for handler in root.handlers:
+        if handler not in saved[1]:
+            handler.close()
+    root.setLevel(saved[0])
+    root.handlers[:] = saved[1]
+    package.setLevel(saved[2])
+    package.handlers[:] = saved[3]
 
 
 @pytest.fixture
