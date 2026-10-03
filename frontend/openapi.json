@@ -1,0 +1,2182 @@
+{
+  "components": {
+    "schemas": {
+      "BatchPhotoRequest": {
+        "description": "Request schema for atomic batch operations across photos.\n\n``value`` is validated against ``action``: tags need a non-empty string,\n``set_rating`` an int 1-5 (or null to clear), ``set_flag`` a real boolean,\nand ``delete`` takes no value.",
+        "properties": {
+          "action": {
+            "description": "Action to perform: add_tag, remove_tag, set_rating, set_flag, delete",
+            "enum": [
+              "add_tag",
+              "remove_tag",
+              "set_rating",
+              "set_flag",
+              "delete"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "photo_hashes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Photo Hashes",
+            "type": "array"
+          },
+          "value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "photo_hashes",
+          "action"
+        ],
+        "title": "BatchPhotoRequest",
+        "type": "object"
+      },
+      "BatchPhotoResponse": {
+        "description": "Response schema for batch operations.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "deleted_count": {
+            "default": 0,
+            "title": "Deleted Count",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "updated_count": {
+            "title": "Updated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated_count",
+          "deleted_count",
+          "action",
+          "message"
+        ],
+        "title": "BatchPhotoResponse",
+        "type": "object"
+      },
+      "CollectionCreateRequest": {
+        "description": "Request schema for creating or updating a collection.",
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "photo_hashes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Photo Hashes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CollectionCreateRequest",
+        "type": "object"
+      },
+      "CollectionResponse": {
+        "description": "Response schema for collection data.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "photo_hashes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Photo Hashes",
+            "type": "array"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "photo_hashes",
+          "updated_at"
+        ],
+        "title": "CollectionResponse",
+        "type": "object"
+      },
+      "DeleteResponse": {
+        "description": "Response for delete operations.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "file_hash": {
+            "title": "File Hash",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deleted",
+          "file_hash",
+          "message"
+        ],
+        "title": "DeleteResponse",
+        "type": "object"
+      },
+      "DimensionsSchema": {
+        "description": "Image dimensions schema.",
+        "properties": {
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "title": "DimensionsSchema",
+        "type": "object"
+      },
+      "ExifDataSchema": {
+        "description": "EXIF metadata schema for API responses.",
+        "properties": {
+          "camera_make": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Make"
+          },
+          "camera_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Model"
+          },
+          "camera_profile": {
+            "default": "unknown",
+            "title": "Camera Profile",
+            "type": "string"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "exposure_program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure Program"
+          },
+          "exposure_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure Time"
+          },
+          "f_stop": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F Stop"
+          },
+          "flash_fired": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flash Fired"
+          },
+          "focal_length": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focal Length"
+          },
+          "focal_length_35mm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focal Length 35Mm"
+          },
+          "iso": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GpsCoordinatesSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metering_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metering Mode"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          },
+          "raw_tags": {
+            "additionalProperties": true,
+            "title": "Raw Tags",
+            "type": "object"
+          },
+          "white_balance_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "White Balance Mode"
+          }
+        },
+        "required": [
+          "camera_make",
+          "camera_model",
+          "f_stop",
+          "exposure_time",
+          "iso",
+          "focal_length",
+          "captured_at",
+          "camera_profile",
+          "location",
+          "flash_fired",
+          "focal_length_35mm",
+          "white_balance_mode",
+          "exposure_program",
+          "metering_mode",
+          "orientation",
+          "raw_tags"
+        ],
+        "title": "ExifDataSchema",
+        "type": "object"
+      },
+      "ExportJsonRequest": {
+        "description": "Photos whose metadata to export; omitted or null means the whole library (PMO-28).",
+        "properties": {
+          "photo_hashes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Hashes"
+          }
+        },
+        "title": "ExportJsonRequest",
+        "type": "object"
+      },
+      "ExportZipRequest": {
+        "description": "Photos to bundle as a ZIP of their original files (PMO-28).",
+        "properties": {
+          "photo_hashes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100000,
+            "minItems": 1,
+            "title": "Photo Hashes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "photo_hashes"
+        ],
+        "title": "ExportZipRequest",
+        "type": "object"
+      },
+      "FacetCountSchema": {
+        "description": "One value of a facet and how many records carry it.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ],
+        "title": "FacetCountSchema",
+        "type": "object"
+      },
+      "FacetsResponse": {
+        "description": "Aggregate counts used to populate filter UIs (PMO-10).",
+        "properties": {
+          "cameras": {
+            "items": {
+              "$ref": "#/components/schemas/FacetCountSchema"
+            },
+            "title": "Cameras",
+            "type": "array"
+          },
+          "gps_bounds": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GpsBoundsSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isos": {
+            "items": {
+              "$ref": "#/components/schemas/FacetCountSchema"
+            },
+            "title": "Isos",
+            "type": "array"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/LibraryStatsSchema"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/FacetCountSchema"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "years": {
+            "items": {
+              "$ref": "#/components/schemas/FacetCountSchema"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cameras",
+          "tags",
+          "years",
+          "gps_bounds",
+          "isos",
+          "stats"
+        ],
+        "title": "FacetsResponse",
+        "type": "object"
+      },
+      "FileInfoSchema": {
+        "description": "File-level metadata schema for API responses.",
+        "properties": {
+          "mime_type": {
+            "title": "Mime Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "size_bytes",
+          "mime_type"
+        ],
+        "title": "FileInfoSchema",
+        "type": "object"
+      },
+      "GpsBoundsSchema": {
+        "description": "The bounding box of every geotagged record.",
+        "properties": {
+          "max_lat": {
+            "title": "Max Lat",
+            "type": "number"
+          },
+          "max_lon": {
+            "title": "Max Lon",
+            "type": "number"
+          },
+          "min_lat": {
+            "title": "Min Lat",
+            "type": "number"
+          },
+          "min_lon": {
+            "title": "Min Lon",
+            "type": "number"
+          }
+        },
+        "required": [
+          "min_lat",
+          "max_lat",
+          "min_lon",
+          "max_lon"
+        ],
+        "title": "GpsBoundsSchema",
+        "type": "object"
+      },
+      "GpsCoordinatesSchema": {
+        "description": "GPS coordinates for API responses.",
+        "properties": {
+          "altitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude"
+          },
+          "datum": {
+            "default": "WGS84",
+            "title": "Datum",
+            "type": "string"
+          },
+          "latitude": {
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "title": "Longitude",
+            "type": "number"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "altitude",
+          "datum"
+        ],
+        "title": "GpsCoordinatesSchema",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IndexFolderRequest": {
+        "description": "Request schema for indexing photos from a local directory.",
+        "properties": {
+          "folder_path": {
+            "description": "Absolute path to directory containing photos",
+            "title": "Folder Path",
+            "type": "string"
+          },
+          "num_workers": {
+            "default": 4,
+            "description": "Concurrent extraction threads",
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Num Workers",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "folder_path"
+        ],
+        "title": "IndexFolderRequest",
+        "type": "object"
+      },
+      "JobResponse": {
+        "description": "A background job (PMO-18): poll ``GET /api/jobs/{id}`` until ``status`` is final.\n\n``processed`` counts successes and failures; ``failed_count`` is the failures so\nfar. ``counts`` holds the kind-specific final numbers (index: ``total``,\n``indexed``, ``failed``; sync: ``new``, ``modified``, ``deleted``, ``unchanged``,\n``fingerprints_refreshed``, ``failed``). ``errors`` lists per-file messages, capped.",
+        "properties": {
+          "cancel_requested": {
+            "default": false,
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "failed_count": {
+            "default": 0,
+            "title": "Failed Count",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "folder_path": {
+            "title": "Folder Path",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "processed": {
+            "default": 0,
+            "title": "Processed",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "folder_path",
+          "total",
+          "processed",
+          "failed_count",
+          "counts",
+          "errors",
+          "message",
+          "cancel_requested",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "JobResponse",
+        "type": "object"
+      },
+      "LibraryStatsSchema": {
+        "description": "Whole-library totals (PMO-27).",
+        "properties": {
+          "avg_megapixels": {
+            "title": "Avg Megapixels",
+            "type": "number"
+          },
+          "flagged_count": {
+            "title": "Flagged Count",
+            "type": "integer"
+          },
+          "geotagged_count": {
+            "title": "Geotagged Count",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "undated_count": {
+            "title": "Undated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_count",
+          "flagged_count",
+          "geotagged_count",
+          "undated_count",
+          "total_bytes",
+          "avg_megapixels"
+        ],
+        "title": "LibraryStatsSchema",
+        "type": "object"
+      },
+      "PaginatedPhotosResponse": {
+        "description": "Paginated list of photo metadata.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoMetadataResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total_count",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "PaginatedPhotosResponse",
+        "type": "object"
+      },
+      "PatchPhotoRequest": {
+        "description": "Request schema for updating metadata of a single photo.",
+        "properties": {
+          "add_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Add Tags"
+          },
+          "flagged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flagged"
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "remove_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Tags"
+          }
+        },
+        "title": "PatchPhotoRequest",
+        "type": "object"
+      },
+      "PhotoIdSchema": {
+        "description": "One search match, reduced to what a selection needs.",
+        "properties": {
+          "file_hash": {
+            "title": "File Hash",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file_hash",
+          "size_bytes"
+        ],
+        "title": "PhotoIdSchema",
+        "type": "object"
+      },
+      "PhotoMetadataResponse": {
+        "description": "Full photo metadata response schema.",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "dimensions": {
+            "$ref": "#/components/schemas/DimensionsSchema"
+          },
+          "exif": {
+            "$ref": "#/components/schemas/ExifDataSchema"
+          },
+          "file_hash": {
+            "title": "File Hash",
+            "type": "string"
+          },
+          "file_info": {
+            "$ref": "#/components/schemas/FileInfoSchema"
+          },
+          "flagged": {
+            "default": false,
+            "title": "Flagged",
+            "type": "boolean"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          }
+        },
+        "required": [
+          "file_hash",
+          "file_info",
+          "dimensions",
+          "exif",
+          "labels",
+          "rating",
+          "flagged",
+          "added_at"
+        ],
+        "title": "PhotoMetadataResponse",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "description": "Advanced search request body schema.",
+        "properties": {
+          "camera_make": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Make"
+          },
+          "camera_makes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Any of these makes, matched exactly (camera checkboxes)",
+            "title": "Camera Makes"
+          },
+          "camera_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Model"
+          },
+          "collection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Members of this collection",
+            "title": "Collection"
+          },
+          "date_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date End"
+          },
+          "date_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Start"
+          },
+          "flagged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flagged"
+          },
+          "has_capture_date": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "false: only photos with an unknown capture date",
+            "title": "Has Capture Date"
+          },
+          "has_location": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only (un)geotagged photos",
+            "title": "Has Location"
+          },
+          "location_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Lat"
+          },
+          "location_lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Lon"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 50,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "radius_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radius Km"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "search_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Term"
+          },
+          "sort_by": {
+            "default": "captured_at",
+            "enum": [
+              "captured_at",
+              "size_bytes",
+              "camera_model",
+              "file_name"
+            ],
+            "title": "Sort By",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": "asc",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Sort Order",
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "SyncFolderRequest": {
+        "description": "Request schema for an incremental sync of one folder (PMO-19).\n\nOnly records under ``folder_path`` take part, so syncing one folder never\ntouches photos indexed from another.",
+        "properties": {
+          "cleanup_deleted": {
+            "default": false,
+            "description": "Remove records whose file is gone (off by default)",
+            "title": "Cleanup Deleted",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "Report what would change; write nothing",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "folder_path": {
+            "description": "Absolute path to the directory to re-scan",
+            "title": "Folder Path",
+            "type": "string"
+          },
+          "index_new": {
+            "default": true,
+            "description": "Index files not yet in the library",
+            "title": "Index New",
+            "type": "boolean"
+          },
+          "reextract": {
+            "default": false,
+            "description": "Re-extract every file already in the library, keeping curation (slow). Repairs records written by older versions",
+            "title": "Reextract",
+            "type": "boolean"
+          },
+          "rehash": {
+            "default": false,
+            "description": "Hash every file instead of trusting size+mtime (slow)",
+            "title": "Rehash",
+            "type": "boolean"
+          },
+          "reprocess_modified": {
+            "default": true,
+            "description": "Re-extract changed files",
+            "title": "Reprocess Modified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folder_path"
+        ],
+        "title": "SyncFolderRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "REST API for querying, searching, and managing photo metadata indexed by the Photo Meta Organizer.",
+    "title": "Photo Meta Organizer API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "Serve Phase 4 Production React Frontend application.",
+        "operationId": "serve_frontend__get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Serve Frontend",
+        "tags": [
+          "frontend"
+        ]
+      }
+    },
+    "/api/collections": {
+      "get": {
+        "description": "Retrieve all curated photo collections.",
+        "operationId": "list_collections_api_collections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionResponse"
+                  },
+                  "title": "Response List Collections Api Collections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List all collections",
+        "tags": [
+          "collections"
+        ]
+      },
+      "post": {
+        "description": "Create or update a named photo collection.",
+        "operationId": "create_collection_api_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create or update collection",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/export/json": {
+      "post": {
+        "description": "Metadata of the selected photos, or of the whole library when none are given.",
+        "operationId": "export_json_api_export_json_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportJsonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download photo metadata as JSON",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/zip": {
+      "post": {
+        "description": "Stream a ZIP of the original files; unknown or missing photos are reported.",
+        "operationId": "export_zip_api_export_zip_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportZipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the selected photos as a ZIP",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/facets": {
+      "get": {
+        "description": "Camera, tag, and year counts (plus GPS bounds) over the whole library.",
+        "operationId": "get_facets_api_facets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacetsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Aggregate counts for filter UIs",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/index": {
+      "post": {
+        "description": "Start a background index job and return it at once (202).\n\nPoll ``GET /api/jobs/{id}`` for progress and the final counts, including\nper-file errors. A second job on the same (or an overlapping) folder while\none is running is refused with 409.",
+        "operationId": "index_directory_api_index_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start indexing a local photo directory",
+        "tags": [
+          "indexing"
+        ]
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "description": "Recent background jobs, newest first (kept in memory; a restart forgets them).",
+        "operationId": "list_jobs_api_jobs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobResponse"
+                  },
+                  "title": "Response List Jobs Api Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List recent jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "description": "Progress and, once finished, the result of one job.",
+        "operationId": "get_job_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "Ask a running job to stop. It finishes the files in hand, then reports ``cancelled``.\n\nCancelling a job that already finished is a no-op that returns it unchanged.",
+        "operationId": "cancel_job_api_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/photos": {
+      "get": {
+        "description": "List all indexed photos with optional sorting and pagination.",
+        "operationId": "list_photos_api_photos_get",
+        "parameters": [
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Results per page",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Results per page",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Sort field: captured_at, size_bytes, camera_model, file_name",
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "default": "captured_at",
+              "description": "Sort field: captured_at, size_bytes, camera_model, file_name",
+              "title": "Sort By",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sort order: asc or desc",
+            "in": "query",
+            "name": "sort_order",
+            "required": false,
+            "schema": {
+              "default": "asc",
+              "description": "Sort order: asc or desc",
+              "title": "Sort Order",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedPhotosResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List all photos",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/photos/batch": {
+      "post": {
+        "description": "Apply one validated curation action to many photos.",
+        "operationId": "batch_update_photos_api_photos_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchPhotoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPhotoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Batch update photos",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/photos/{file_hash}": {
+      "delete": {
+        "description": "Remove a photo from the metadata index by its SHA-256 file hash.",
+        "operationId": "delete_photo_api_photos__file_hash__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete photo from index",
+        "tags": [
+          "photos"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a single photo's metadata by its SHA-256 file hash.",
+        "operationId": "get_photo_api_photos__file_hash__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoMetadataResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get photo by SHA-256 hash",
+        "tags": [
+          "photos"
+        ]
+      },
+      "patch": {
+        "description": "Update user ratings, flags, or tags for a single photo.",
+        "operationId": "patch_photo_api_photos__file_hash__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchPhotoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoMetadataResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update photo metadata",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/photos/{file_hash}/preview": {
+      "get": {
+        "description": "A browser-renderable image of any indexed format (HEIC and RAW included, PMO-23).\n\nUp to 2048 px on the long edge, upright, cached like thumbnails. ``/raw`` returns\nthe original bytes, which a browser cannot show for HEIC or RAW.",
+        "operationId": "get_photo_preview_api_photos__file_hash__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream a large WebP preview for the viewer",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/photos/{file_hash}/raw": {
+      "get": {
+        "description": "Stream the full-resolution original image from storage.",
+        "operationId": "get_photo_raw_api_photos__file_hash__raw_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream full-resolution image",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/photos/{file_hash}/thumbnail": {
+      "get": {
+        "description": "Stream an optimized WebP thumbnail for the specified photo.",
+        "operationId": "get_photo_thumbnail_api_photos__file_hash__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Thumbnail width in pixels",
+            "in": "query",
+            "name": "w",
+            "required": false,
+            "schema": {
+              "default": 320,
+              "description": "Thumbnail width in pixels",
+              "maximum": 1200,
+              "minimum": 64,
+              "title": "W",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Thumbnail height in pixels",
+            "in": "query",
+            "name": "h",
+            "required": false,
+            "schema": {
+              "default": 320,
+              "description": "Thumbnail height in pixels",
+              "maximum": 1200,
+              "minimum": 64,
+              "title": "H",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream WebP thumbnail",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/search": {
+      "post": {
+        "description": "Advanced multi-criteria photo search with filtering, sorting, and pagination.",
+        "operationId": "search_photos_api_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedPhotosResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Advanced photo search",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/search/ids": {
+      "post": {
+        "description": "All matches of the search, ignoring paging: \"select all\" across every page (PMO-27).",
+        "operationId": "search_photo_ids_api_search_ids_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PhotoIdSchema"
+                  },
+                  "title": "Response Search Photo Ids Api Search Ids Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Every photo matching a search (hash and size only)",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/sync": {
+      "post": {
+        "description": "Re-scan a folder and apply only what changed (NEW / MODIFIED / DELETED).\n\nReturns a job at once (202); its final ``counts`` report ``new``, ``modified``,\n``deleted`` and ``unchanged``. Deleted files are removed only with\n``cleanup_deleted``; ``dry_run`` reports the counts and writes nothing. Only\nrecords under ``folder_path`` are considered, so photos indexed from other\nfolders are never affected.",
+        "operationId": "sync_directory_api_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start an incremental sync of a local photo directory",
+        "tags": [
+          "indexing"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Health check endpoint (open even with a launch token; then the photo count\nis reported only to requests that carry the token cookie).",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Check",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}

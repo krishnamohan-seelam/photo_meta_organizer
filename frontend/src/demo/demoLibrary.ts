@@ -94,6 +94,7 @@ export async function demoFacets(): Promise<Facets> {
     tags: counts(photos.flatMap((p) => p.labels)),
     years: counts(photos.map((p) => p.exif.captured_at?.substring(0, 4))),
     isos: counts(photos.map((p) => (p.exif.iso ? String(p.exif.iso) : null))),
+    gps_bounds: null,
     stats: {
       total_count: total,
       flagged_count: photos.filter((p) => p.flagged).length,

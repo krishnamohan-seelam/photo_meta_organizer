@@ -3,11 +3,14 @@ import type {
   BatchPhotoResponse,
   Collection,
   Facets,
+  IndexFolderRequest,
+  Job,
   PaginatedPhotosResponse,
   PatchPhotoRequest,
   PhotoId,
   PhotoMetadata,
   SearchRequest,
+  SyncFolderRequest,
 } from '../types/metadata'
 
 const BASE_URL = '/api'
@@ -146,30 +149,6 @@ export function getPreviewUrl(fileHash: string): string {
   return `${BASE_URL}/photos/${fileHash}/preview`
 }
 
-export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
-
-/** A background job (`POST /api/index` returns one); poll `getJobApi` until `isJobFinished`. */
-export interface Job {
-  id: string
-  kind: 'index' | 'sync' | string
-  status: JobStatus
-  folder_path: string
-  /** Unknown until discovery finishes. */
-  total: number | null
-  /** Successes and failures so far. */
-  processed: number
-  failed_count: number
-  /** Final kind-specific numbers, e.g. `{total, indexed, failed}` for an index job. */
-  counts: Record<string, number>
-  /** Per-file error messages (capped by the server). */
-  errors: string[]
-  message: string
-  cancel_requested: boolean
-  created_at: string
-  started_at: string | null
-  finished_at: string | null
-}
-
 export function isJobFinished(job: Job): boolean {
   return job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled'
 }
@@ -179,23 +158,16 @@ export function startIndexJobApi(folderPath: string, numWorkers: number = 4): Pr
   return request(
     '/index',
     'Indexing the folder',
-    jsonInit('POST', { folder_path: folderPath, num_workers: numWorkers })
+    jsonInit('POST', { folder_path: folderPath, num_workers: numWorkers } satisfies IndexFolderRequest)
   )
 }
 
 /** Flags of an incremental sync; the server defaults match the CLI (cleanup off, new + modified on). */
-export interface SyncOptions {
-  cleanup_deleted?: boolean
-  reprocess_modified?: boolean
-  index_new?: boolean
-  dry_run?: boolean
-  rehash?: boolean
-  reextract?: boolean
-}
+export type SyncOptions = Omit<SyncFolderRequest, 'folder_path'>
 
 /** Start an incremental sync of a folder. Only photos under that folder are affected. */
 export function startSyncJobApi(folderPath: string, options: SyncOptions = {}): Promise<Job> {
-  return request('/sync', 'Syncing the folder', jsonInit('POST', { folder_path: folderPath, ...options }))
+  return request('/sync', 'Syncing the folder', jsonInit('POST', { folder_path: folderPath, ...options } satisfies SyncFolderRequest))
 }
 
 /** Recent jobs, newest first (the server keeps them in memory only). */

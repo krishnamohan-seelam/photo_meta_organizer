@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from photo_meta_organizer.domain.curation import (
     MAX_RATING,
@@ -13,7 +13,15 @@ from photo_meta_organizer.domain.curation import (
 )
 
 
-class GpsCoordinatesSchema(BaseModel):
+class ResponseModel(BaseModel):
+    """Base for what the API returns. A field with a default is still always present in a
+    response, so the OpenAPI schema marks it required and the generated TypeScript type
+    (PMO-30) does not make it optional."""
+
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
+
+class GpsCoordinatesSchema(ResponseModel):
     """GPS coordinates for API responses."""
 
     latitude: float
@@ -22,7 +30,7 @@ class GpsCoordinatesSchema(BaseModel):
     datum: str = "WGS84"
 
 
-class FileInfoSchema(BaseModel):
+class FileInfoSchema(ResponseModel):
     """File-level metadata schema for API responses."""
 
     name: str
@@ -31,14 +39,14 @@ class FileInfoSchema(BaseModel):
     mime_type: str
 
 
-class DimensionsSchema(BaseModel):
+class DimensionsSchema(ResponseModel):
     """Image dimensions schema."""
 
     width: int
     height: int
 
 
-class ExifDataSchema(BaseModel):
+class ExifDataSchema(ResponseModel):
     """EXIF metadata schema for API responses."""
 
     camera_make: str | None = None
@@ -59,7 +67,7 @@ class ExifDataSchema(BaseModel):
     raw_tags: dict[str, Any] = Field(default_factory=dict)
 
 
-class PhotoMetadataResponse(BaseModel):
+class PhotoMetadataResponse(ResponseModel):
     """Full photo metadata response schema."""
 
     file_hash: str
@@ -72,7 +80,7 @@ class PhotoMetadataResponse(BaseModel):
     added_at: datetime
 
 
-class PaginatedPhotosResponse(BaseModel):
+class PaginatedPhotosResponse(ResponseModel):
     """Paginated list of photo metadata."""
 
     items: list[PhotoMetadataResponse]
@@ -146,7 +154,7 @@ class BatchPhotoRequest(BaseModel):
         return self
 
 
-class BatchPhotoResponse(BaseModel):
+class BatchPhotoResponse(ResponseModel):
     """Response schema for batch operations."""
 
     updated_count: int
@@ -163,7 +171,7 @@ class CollectionCreateRequest(BaseModel):
     photo_hashes: list[str] = Field(default_factory=list)
 
 
-class CollectionResponse(BaseModel):
+class CollectionResponse(ResponseModel):
     """Response schema for collection data."""
 
     name: str
@@ -172,7 +180,7 @@ class CollectionResponse(BaseModel):
     updated_at: str
 
 
-class DeleteResponse(BaseModel):
+class DeleteResponse(ResponseModel):
     """Response for delete operations."""
 
     deleted: bool
@@ -213,7 +221,7 @@ class SyncFolderRequest(BaseModel):
     )
 
 
-class JobResponse(BaseModel):
+class JobResponse(ResponseModel):
     """A background job (PMO-18): poll ``GET /api/jobs/{id}`` until ``status`` is final.
 
     ``processed`` counts successes and failures; ``failed_count`` is the failures so
@@ -238,14 +246,14 @@ class JobResponse(BaseModel):
     finished_at: datetime | None = None
 
 
-class FacetCountSchema(BaseModel):
+class FacetCountSchema(ResponseModel):
     """One value of a facet and how many records carry it."""
 
     name: str
     count: int
 
 
-class GpsBoundsSchema(BaseModel):
+class GpsBoundsSchema(ResponseModel):
     """The bounding box of every geotagged record."""
 
     min_lat: float
@@ -254,7 +262,7 @@ class GpsBoundsSchema(BaseModel):
     max_lon: float
 
 
-class LibraryStatsSchema(BaseModel):
+class LibraryStatsSchema(ResponseModel):
     """Whole-library totals (PMO-27)."""
 
     total_count: int
@@ -265,14 +273,14 @@ class LibraryStatsSchema(BaseModel):
     avg_megapixels: float
 
 
-class PhotoIdSchema(BaseModel):
+class PhotoIdSchema(ResponseModel):
     """One search match, reduced to what a selection needs."""
 
     file_hash: str
     size_bytes: int
 
 
-class FacetsResponse(BaseModel):
+class FacetsResponse(ResponseModel):
     """Aggregate counts used to populate filter UIs (PMO-10)."""
 
     cameras: list[FacetCountSchema] = Field(default_factory=list)
@@ -280,7 +288,7 @@ class FacetsResponse(BaseModel):
     years: list[FacetCountSchema] = Field(default_factory=list)
     gps_bounds: GpsBoundsSchema | None = None
     isos: list[FacetCountSchema] = Field(default_factory=list)
-    stats: LibraryStatsSchema | None = None
+    stats: LibraryStatsSchema
 
 
 class ExportZipRequest(BaseModel):

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Loader2, X } from 'lucide-react'
-import type { Job } from '../../api/client'
+import type { Job } from '../../types/metadata'
 import { useJobActions } from '../../hooks/useJobs'
 
 function label(job: Job): string {

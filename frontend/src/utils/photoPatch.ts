@@ -21,8 +21,9 @@ export function applyPatch(photo: PhotoMetadata, patch: PatchPhotoRequest): Phot
   }
   return {
     ...photo,
+    // Like the server: an explicit null clears the rating but leaves the flag unchanged.
     ...(patch.rating !== undefined && { rating: patch.rating }),
-    ...(patch.flagged !== undefined && { flagged: patch.flagged }),
+    ...(patch.flagged != null && { flagged: patch.flagged }),
     labels,
   }
 }

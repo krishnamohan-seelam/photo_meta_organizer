@@ -8,7 +8,8 @@ import {
   startIndexJobApi,
   startSyncJobApi,
 } from '../api/client'
-import type { Job, SyncOptions } from '../api/client'
+import type { SyncOptions } from '../api/client'
+import type { Job } from '../types/metadata'
 import { useUiStore } from '../stores/useUiStore'
 import { isDemoMode, photosKey } from './usePhotos'
 import { facetsKey } from './useFacets'
