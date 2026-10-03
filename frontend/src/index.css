@@ -487,3 +487,123 @@ button:focus-visible,
   white-space: nowrap;
   border: 0;
 }
+
+/* Kanban (PMO-35): three derived stages, see utils/kanban.ts. */
+.kanban {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  overflow-y: auto;
+}
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 24px;
+}
+@media (max-width: 900px) {
+  .kanban-board {
+    grid-template-columns: 1fr;
+  }
+}
+.kanban-column {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.kanban-column-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-surface);
+}
+.kanban-column-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.kanban-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(148, 163, 184, 0.2);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.kanban-cards {
+  flex: 1;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.kanban-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.15s ease;
+}
+.kanban-card:hover {
+  background: var(--bg-card-hover);
+}
+.kanban-card-main {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+}
+.kanban-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.kanban-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.kanban-card-name {
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kanban-card-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.kanban-card-stars {
+  font-size: 0.72rem;
+  color: var(--accent-warning);
+  min-height: 1em;
+}
+.kanban-card-actions {
+  display: flex;
+  gap: 6px;
+}
+.kanban-action {
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  gap: 2px;
+}
+.kanban-action-forward {
+  margin-left: auto;
+}

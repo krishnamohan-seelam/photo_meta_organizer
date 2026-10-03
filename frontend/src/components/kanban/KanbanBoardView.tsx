@@ -1,185 +1,94 @@
 import React from 'react'
-import type { PhotoMetadata } from '../../types/metadata'
+import type { PatchPhotoRequest, PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { getThumbnailUrl } from '../../api/client'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { swapToPlaceholder } from '../../utils/placeholder'
 import { usePhotoSearch } from '../../hooks/usePhotos'
+import { demotion, groupByStage, promotion, type KanbanStage } from '../../utils/kanban'
 import { LoadMore } from '../states/LoadMore'
-import { Inbox, Star, CheckCircle } from 'lucide-react'
+import { Inbox, Star, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+
+const COLUMNS: { id: KanbanStage; title: string; icon: React.ReactNode; forward?: string; back?: string }[] = [
+  { id: 'inbox', title: 'Inbox / Unsorted', icon: <Inbox size={16} color="var(--text-muted)" />, forward: 'Picks' },
+  { id: 'picks', title: 'Picks & Flagged', icon: <Star size={16} color="var(--accent-warning)" />, forward: 'Export Ready', back: 'Inbox' },
+  { id: 'export', title: 'Export Ready', icon: <CheckCircle size={16} color="var(--accent-success)" />, back: 'Picks' },
+]
 
 export const KanbanBoardView: React.FC = () => {
-  // Columns are derived from the loaded pages (D4); more load from the footer.
+  // Stages are derived from the loaded pages (D4, utils/kanban.ts); more load from the footer.
   const { photos, totalCount, hasNextPage, isFetchingNextPage, fetchNextPage } = usePhotoSearch()
   const setInspectedHash = useUiStore((s) => s.setInspectedHash)
   const { patchPhoto } = useCuration()
+  const stages = groupByStage(photos)
 
-  // Columns:
-  // 1. Inbox (unrated or rating <= 2)
-  // 2. Picks & Flagged (flagged or rating >= 4)
-  // 3. Export Ready (rating === 5 or tagged 'export')
-  const inbox = photos.filter((p) => !p.flagged && (p.rating || 0) < 4)
-  const picks = photos.filter((p) => p.flagged || (p.rating || 0) === 4)
-  const exportQueue = photos.filter((p) => (p.rating || 0) === 5 || p.labels.includes('export'))
-
-  // The card moves only once the server has confirmed the save; a failure shows an error toast instead.
-  const handlePromoteToPick = (photo: PhotoMetadata) =>
-    patchPhoto(photo.file_hash, { flagged: true, rating: 4 }, `Moved ${photo.file_info.name} to Picks`)
-
-  const handlePromoteToExport = (photo: PhotoMetadata) =>
-    patchPhoto(photo.file_hash, { rating: 5, add_tags: ['export'] }, `Moved ${photo.file_info.name} to Export Ready`)
-
-  const columns = [
-    {
-      id: 'inbox',
-      title: 'Inbox / Unsorted',
-      icon: <Inbox size={16} color="var(--text-muted)" />,
-      count: inbox.length,
-      items: inbox,
-      actionText: 'Promote to Pick',
-      onAction: handlePromoteToPick,
-    },
-    {
-      id: 'picks',
-      title: 'Picks & Flagged',
-      icon: <Star size={16} color="var(--accent-warning)" />,
-      count: picks.length,
-      items: picks,
-      actionText: 'Ready for Export',
-      onAction: handlePromoteToExport,
-    },
-    {
-      id: 'export',
-      title: 'Export Ready',
-      icon: <CheckCircle size={16} color="var(--accent-success)" />,
-      count: exportQueue.length,
-      items: exportQueue,
-    },
-  ]
+  // Optimistic: the card moves at once and moves back, with an error toast, if the save fails.
+  const move = (photo: PhotoMetadata, patch: PatchPhotoRequest | null, to: string) => {
+    if (patch) patchPhoto(photo.file_hash, patch, `Moved ${photo.file_info.name} to ${to}`)
+  }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', overflowY: 'auto' }}>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '20px',
-          padding: '24px',
-        }}
-      >
-        {columns.map((col) => (
-          <div
-            key={col.id}
-            style={{
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-lg)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Column Header */}
-            <div
-              style={{
-                padding: '14px 18px',
-                borderBottom: '1px solid var(--border-color)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: 'var(--bg-surface)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.9rem' }}>
+    <div className="kanban">
+      <div className="kanban-board">
+        {COLUMNS.map((col) => (
+          <section key={col.id} className="kanban-column" aria-label={col.title}>
+            <header className="kanban-column-header">
+              <h2 className="kanban-column-title">
                 {col.icon}
                 <span>{col.title}</span>
-              </div>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  background: 'rgba(148, 163, 184, 0.2)',
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)',
-                }}
-              >
-                {col.count}
-              </span>
-            </div>
+              </h2>
+              <span className="kanban-count">{stages[col.id].length}</span>
+            </header>
 
-            {/* Cards List */}
-            <div
-              style={{
-                flex: 1,
-                padding: '14px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                overflowY: 'auto',
-              }}
-            >
-              {col.items.map((item) => (
-                <button
-                  type="button"
-                  className="btn-reset"
-                  aria-label={`Inspect ${item.file_info.name}`}
-                  key={item.file_hash}
-                  onClick={() => setInspectedHash(item.file_hash)}
-                  style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '10px',
-                    display: 'flex',
-                    gap: '12px',
-                    cursor: 'pointer',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                  }}
-                >
-                  <img
-                    src={getThumbnailUrl(item.file_hash)}
-                    alt={item.file_info.name}
-                    style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: 'var(--radius-sm)',
-                      objectFit: 'cover',
-                      flexShrink: 0,
-                    }}
-                    onError={swapToPlaceholder}
-                  />
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {item.file_info.name}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        {item.exif.camera_make} • {((item.file_info.size_bytes) / 1048576).toFixed(1)} MB
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--accent-warning)' }}>
-                        {item.rating ? '★'.repeat(item.rating) : ''}
+            <div className="kanban-cards">
+              {stages[col.id].map((item) => (
+                <div key={item.file_hash} className="kanban-card">
+                  <button
+                    type="button"
+                    className="btn-reset kanban-card-main"
+                    aria-label={`Inspect ${item.file_info.name}`}
+                    onClick={() => setInspectedHash(item.file_hash)}
+                  >
+                    <img
+                      src={getThumbnailUrl(item.file_hash)}
+                      alt=""
+                      className="kanban-thumb"
+                      onError={swapToPlaceholder}
+                    />
+                    <span className="kanban-card-text">
+                      <span className="kanban-card-name">{item.file_info.name}</span>
+                      <span className="kanban-card-meta">
+                        {item.exif.camera_make || 'Unknown camera'} • {(item.file_info.size_bytes / 1048576).toFixed(1)} MB
                       </span>
-                      {col.onAction && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            col.onAction!(item)
-                          }}
-                          className="btn btn-secondary"
-                          style={{ padding: '2px 8px', fontSize: '0.68rem' }}
-                        >
-                          {col.actionText}
-                        </button>
-                      )}
-                    </div>
+                      <span className="kanban-card-stars">{item.rating ? '★'.repeat(item.rating) : ''}</span>
+                    </span>
+                  </button>
+                  <div className="kanban-card-actions">
+                    {col.back && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary kanban-action"
+                        aria-label={`Move ${item.file_info.name} back to ${col.back}`}
+                        onClick={() => move(item, demotion(item), col.back!)}
+                      >
+                        <ChevronLeft size={12} /> {col.back}
+                      </button>
+                    )}
+                    {col.forward && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary kanban-action kanban-action-forward"
+                        aria-label={`Move ${item.file_info.name} to ${col.forward}`}
+                        onClick={() => move(item, promotion(item), col.forward!)}
+                      >
+                        {col.forward} <ChevronRight size={12} />
+                      </button>
+                    )}
                   </div>
-                </button>
+                </div>
               ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
       <LoadMore loaded={photos.length} total={totalCount} hasMore={Boolean(hasNextPage)} loading={isFetchingNextPage} onLoadMore={() => void fetchNextPage()} />
