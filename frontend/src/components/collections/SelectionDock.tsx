@@ -1,192 +1,218 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { ChevronUp, Download, Flag, FolderPlus, Plus, Star, Tag, X } from 'lucide-react'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useCuration } from '../../hooks/usePhotoMutations'
-import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useExport } from '../../hooks/useExport'
-import { Tag, Flag, Download, X } from 'lucide-react'
+import { useCollections, useSaveCollection } from '../../hooks/useCollections'
+import { formatBytes } from '../../utils/photoFormat'
+import { NameDialog } from './NameDialog'
 
+type Menu = 'rate' | 'collection' | 'export'
+type Dialog = 'tag' | 'collection'
+
+/** Close an open popover on Escape or a click outside it. */
+function useDismiss(ref: React.RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        close()
+      }
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [ref, open, close])
+}
+
+/**
+ * Actions on the selection (FR-1f.2). It slides up while something is selected and away when the
+ * selection is cleared; while hidden it is inert, so it is never reachable by Tab.
+ */
 export const SelectionDock: React.FC = () => {
   const { selectedHashes, selectedSizes, clearSelection } = useSelectionStore(useShallow((s) => ({ selectedHashes: s.selectedHashes, selectedSizes: s.selectedSizes, clearSelection: s.clearSelection })))
   const { batchPhotos } = useCuration()
-  const { exportZip, zipProgress } = useExport()
-  const [tagModalOpen, setTagModalOpen] = useState(false)
-  const [newTag, setNewTag] = useState('')
+  const { exportZip, zipProgress, exportJson, jsonBusy } = useExport()
+  const collections = useCollections()
+  const saveCollection = useSaveCollection()
+  const [menu, setMenu] = useState<Menu | null>(null)
+  const [dialog, setDialog] = useState<Dialog | null>(null)
+  const dockRef = useRef<HTMLDivElement>(null)
+  useDismiss(dockRef, menu !== null, () => setMenu(null))
 
-  const selectedCount = selectedHashes.size
-  if (selectedCount === 0) return null
-
+  const count = selectedHashes.size
+  const shown = count > 0
   // The selection may include photos that are not loaded (select all), so sizes come from the store.
   let totalBytes = 0
   for (const size of selectedSizes.values()) totalBytes += size
+  const hashes = () => Array.from(useSelectionStore.getState().selectedHashes)
+  const plural = `${count} photo${count === 1 ? '' : 's'}`
 
-  const handleBatchTag = async () => {
-    const tag = newTag.trim()
-    if (!tag) return
-    const saved = await batchPhotos(
-      { photo_hashes: Array.from(selectedHashes), action: 'add_tag', value: tag },
-      `Added tag #${tag} to ${selectedCount} photos`
-    )
-    // Keep the dialog (and what was typed) open on failure so the user can retry.
-    if (saved) {
-      setTagModalOpen(false)
-      setNewTag('')
-    }
+  const rate = (rating: number | null) => {
+    setMenu(null)
+    void batchPhotos({ photo_hashes: hashes(), action: 'set_rating', value: rating }, rating ? `Rated ${plural} ${rating} ★` : `Cleared the rating of ${plural}`)
   }
-
-  const handleBatchFlag = () =>
-    batchPhotos(
-      { photo_hashes: Array.from(selectedHashes), action: 'set_flag', value: true },
-      `Flagged ${selectedCount} photos as Picks`
-    )
-
+  const pickAll = () => void batchPhotos({ photo_hashes: hashes(), action: 'set_flag', value: true }, `Picked ${plural}`)
   const exporting = zipProgress !== null
-  const handleExportZip = () => void exportZip(Array.from(selectedHashes))
+
+  const toggle = (m: Menu) => setMenu((current) => (current === m ? null : m))
 
   return (
     <>
-      <div className="selection-dock show">
-        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>{selectedCount} selected</span>
-          <span style={{ color: 'var(--text-muted)' }}>•</span>
-          <span style={{ color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)' }}>
-            {(totalBytes / 1048576).toFixed(1)} MB
-          </span>
+      <div ref={dockRef} className={`selection-dock${shown ? ' show' : ''}`} role="toolbar" aria-label="Selection" aria-hidden={!shown} inert={!shown}>
+        <span className="dock-count" role="status">
+          {count} selected<small>{formatBytes(totalBytes)}</small>
+        </span>
+
+        <button type="button" className="btn btn-sm" onClick={pickAll}>
+          <Flag size={14} /> Pick
+        </button>
+
+        <div className="dock-menu">
+          <button type="button" className="btn btn-sm" aria-haspopup="true" aria-expanded={menu === 'rate'} onClick={() => toggle('rate')}>
+            <Star size={14} /> Rate
+          </button>
+          {menu === 'rate' && (
+            <div className="dock-popover" role="group" aria-label="Rate the selection">
+              <div className="stars">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} type="button" className="btn-reset on" aria-label={`${n} star${n > 1 ? 's' : ''}`} onClick={() => rate(n)}>
+                    <span className="num">{n}</span>
+                    <Star size={15} />
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="btn-reset menu-item" onClick={() => rate(null)}>
+                Clear rating
+              </button>
+            </div>
+          )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button className="btn btn-secondary" onClick={() => setTagModalOpen(true)} style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
-            <Tag size={13} />
-            <span>Add Tag</span>
+        <div className="dock-menu">
+          <button type="button" className="btn btn-sm" aria-haspopup="true" aria-expanded={menu === 'collection'} onClick={() => toggle('collection')}>
+            <FolderPlus size={14} /> Add to collection
           </button>
+          {menu === 'collection' && (
+            <div className="dock-popover" role="group" aria-label="Add to collection">
+              {collections.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  className="btn-reset menu-item"
+                  onClick={() => {
+                    setMenu(null)
+                    void saveCollection(c.name, hashes(), c)
+                  }}
+                >
+                  {c.name}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="btn-reset menu-item"
+                onClick={() => {
+                  setMenu(null)
+                  setDialog('collection')
+                }}
+              >
+                <Plus size={14} /> New collection…
+              </button>
+            </div>
+          )}
+        </div>
 
-          <button className="btn btn-secondary" onClick={handleBatchFlag} style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
-            <Flag size={13} />
-            <span>Flag All</span>
-          </button>
+        <button type="button" className="btn btn-sm" onClick={() => setDialog('tag')}>
+          <Tag size={14} /> Tag
+        </button>
 
+        <span className="dock-sep" aria-hidden="true" />
+
+        <div className="dock-menu">
           <button
-            className="btn btn-primary"
-            onClick={handleExportZip}
-            disabled={exporting}
-            aria-busy={exporting}
-            style={{ padding: '4px 10px', fontSize: '0.75rem', position: 'relative', overflow: 'hidden' }}
+            type="button"
+            className="btn btn-sm btn-primary dock-export"
+            aria-haspopup="true"
+            aria-expanded={menu === 'export'}
+            aria-busy={exporting || jsonBusy}
+            onClick={() => toggle('export')}
           >
             {exporting && (
               <span
+                className="export-progress"
                 role="progressbar"
                 aria-label="ZIP export"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(zipProgress * 100)}
-                style={{ position: 'absolute', inset: 0, width: `${zipProgress * 100}%`, background: 'rgba(255,255,255,0.25)' }}
+                style={{ width: `${zipProgress * 100}%` }}
               />
             )}
-            <Download size={13} />
-            <span>{exporting ? `Exporting ${Math.round(zipProgress * 100)}%` : 'Export ZIP'}</span>
+            <Download size={14} />
+            {exporting ? `Exporting ${Math.round(zipProgress * 100)}%` : 'Export'}
+            <ChevronUp size={13} />
           </button>
-
-          <button className="btn btn-secondary" onClick={clearSelection} aria-label="Clear selection" title="Clear selection" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
-            <X size={13} />
-          </button>
+          {menu === 'export' && (
+            <div className="dock-popover" role="group" aria-label="Export the selection">
+              <button
+                type="button"
+                className="btn-reset menu-item"
+                disabled={exporting}
+                onClick={() => {
+                  setMenu(null)
+                  void exportZip(hashes())
+                }}
+              >
+                Photos as ZIP
+              </button>
+              <button
+                type="button"
+                className="btn-reset menu-item"
+                disabled={jsonBusy}
+                onClick={() => {
+                  setMenu(null)
+                  void exportJson(hashes())
+                }}
+              >
+                Metadata as JSON
+              </button>
+            </div>
+          )}
         </div>
+
+        <button type="button" className="btn btn-sm icon-btn" onClick={clearSelection} aria-label="Clear selection" title="Clear selection (Esc)">
+          <X size={14} />
+        </button>
       </div>
 
-      {tagModalOpen && (
-        <BatchTagDialog
-          count={selectedCount}
-          value={newTag}
-          onChange={setNewTag}
-          onApply={handleBatchTag}
-          onClose={() => setTagModalOpen(false)}
+      {dialog === 'tag' && (
+        <NameDialog
+          title={`Add a tag to ${plural}`}
+          label="Tag"
+          placeholder="e.g. highlights"
+          submitLabel="Add tag"
+          onSubmit={(tag) => batchPhotos({ photo_hashes: hashes(), action: 'add_tag', value: tag }, `Added #${tag} to ${plural}`)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'collection' && (
+        <NameDialog
+          title={`New collection from ${plural}`}
+          label="Collection name"
+          placeholder="e.g. Japan 2026"
+          submitLabel="Create"
+          onSubmit={(name) => saveCollection(name, hashes(), collections.find((c) => c.name === name))}
+          onClose={() => setDialog(null)}
         />
       )}
     </>
-  )
-}
-
-interface BatchTagDialogProps {
-  count: number
-  value: string
-  onChange: (tag: string) => void
-  onApply: () => void
-  onClose: () => void
-}
-
-/** Add one tag to every selected photo. Mounted only while open (focus in, trapped, restored). */
-const BatchTagDialog: React.FC<BatchTagDialogProps> = ({ count, value, onChange, onApply, onClose }) => {
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const titleId = useId()
-  useDialogFocus(dialogRef, inputRef)
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        zIndex: 99999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onClick={onClose}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius-md)',
-          padding: '20px',
-          width: '320px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div id={titleId} style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-          Add Tag to {count} Photos
-        </div>
-        <input
-          ref={inputRef}
-          type="text"
-          aria-label="Tag"
-          placeholder="e.g. tokyo-curated, highlights"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && onApply()}
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '8px 10px',
-            color: 'var(--text-primary)',
-            outline: 'none',
-          }}
-        />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-          <button className="btn btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" onClick={onApply}>
-            Apply Tag
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }

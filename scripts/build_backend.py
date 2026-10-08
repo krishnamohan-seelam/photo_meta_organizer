@@ -18,6 +18,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 ENTRY_SCRIPT = ROOT_DIR / "scripts" / "desktop_backend.py"
 OUTPUT_DIR = ROOT_DIR / "desktop" / "backend_dist"
 FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
+CITIES_TABLE = ROOT_DIR / "photo_meta_organizer" / "infrastructure" / "geo" / "cities.tsv.gz"
 
 
 def build_backend():
@@ -64,6 +65,9 @@ def build_backend():
         "photo_meta_organizer.tests",
         "--add-data",
         f"{FRONTEND_DIST}{os.pathsep}frontend_dist",
+        # Offline place names for the Map view: data, so --collect-submodules skips it.
+        "--add-data",
+        f"{CITIES_TABLE}{os.pathsep}photo_meta_organizer/infrastructure/geo",
         str(ENTRY_SCRIPT),
     ]
 

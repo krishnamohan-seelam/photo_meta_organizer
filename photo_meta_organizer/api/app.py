@@ -34,6 +34,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from photo_meta_organizer import __version__
 from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticated
 from photo_meta_organizer.api.dependencies import Services
+from photo_meta_organizer.api.routes.config_router import config_router
 from photo_meta_organizer.api.routes.export_router import export_router
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
@@ -53,6 +54,7 @@ from photo_meta_organizer.application.settings import (  # noqa: F401 (re-export
     DEFAULT_CORS_ORIGINS,
     Settings,
 )
+from photo_meta_organizer.infrastructure.geo.offline_place_namer import OfflinePlaceNamer
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 
@@ -154,6 +156,7 @@ def create_app(
             str(settings.thumbnail_dir),
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
         ),
+        places=OfflinePlaceNamer(),
     )
 
     # Mount routers
@@ -164,6 +167,7 @@ def create_app(
     app.include_router(sync_router)
     app.include_router(jobs_router)
     app.include_router(export_router)
+    app.include_router(config_router)
 
     frontend_dist = Path(frontend_dist) if frontend_dist is not None else default_frontend_dist()
     assets_dir = frontend_dist / "assets"

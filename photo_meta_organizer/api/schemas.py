@@ -90,6 +90,15 @@ class PaginatedPhotosResponse(ResponseModel):
     total_pages: int
 
 
+class BoundingBoxSchema(BaseModel):
+    """A map area. ``west > east`` means it crosses the 180° meridian."""
+
+    south: float = Field(ge=-90, le=90)
+    west: float = Field(ge=-180, le=180)
+    north: float = Field(ge=-90, le=90)
+    east: float = Field(ge=-180, le=180)
+
+
 class SearchRequest(BaseModel):
     """Advanced search request body schema."""
 
@@ -105,6 +114,9 @@ class SearchRequest(BaseModel):
         default=None, description="false: only photos with an unknown capture date"
     )
     has_location: bool | None = Field(default=None, description="Only (un)geotagged photos")
+    within: BoundingBoxSchema | None = Field(
+        default=None, description="Only photos inside this map area"
+    )
     collection: str | None = Field(default=None, description="Members of this collection")
     location_lat: float | None = None
     location_lon: float | None = None
@@ -116,6 +128,13 @@ class SearchRequest(BaseModel):
     sort_order: Literal["asc", "desc"] = "asc"
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=500)
+
+
+class GeoClustersRequest(SearchRequest):
+    """Search filters plus the map viewport: clusters of the geotagged photos that match."""
+
+    bbox: BoundingBoxSchema | None = Field(default=None, description="Visible map area")
+    zoom: int = Field(default=2, ge=0, le=20, description="Web-Mercator zoom level")
 
 
 class PatchPhotoRequest(BaseModel):
@@ -251,6 +270,30 @@ class FacetCountSchema(ResponseModel):
 
     name: str
     count: int
+
+
+class AppConfigResponse(ResponseModel):
+    """Deployment settings the UI needs."""
+
+    map_tiles_url: str | None = Field(
+        description="Online tile template the user opted into, or null for the offline map"
+    )
+    map_tiles_attribution: str | None
+
+
+class GeoClusterSchema(ResponseModel):
+    """Geotagged photos in one map grid cell."""
+
+    latitude: float
+    longitude: float
+    count: int
+    representative_hash: str = Field(description="Most recently captured member (thumbnail)")
+    label: str | None = Field(default=None, description="Nearest place, e.g. 'Tokyo, Japan'")
+
+
+class GeoClustersResponse(ResponseModel):
+    clusters: list[GeoClusterSchema]
+    total_count: int = Field(description="Geotagged photos represented by the clusters")
 
 
 class GpsBoundsSchema(ResponseModel):

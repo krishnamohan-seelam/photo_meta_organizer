@@ -9,6 +9,7 @@ import { shouldIgnoreHotkey } from '../../utils/hotkeys'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { filmstripWindow } from '../../utils/filmstrip'
 import { usePhotoSearch } from '../../hooks/usePhotos'
+import { displayTitle, exposureLine } from '../../utils/photoFormat'
 import { X, ChevronLeft, ChevronRight, Flag } from 'lucide-react'
 
 export const LightboxModal: React.FC = () => {
@@ -62,6 +63,11 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
     if (loadMore && lightboxIndex >= photos.length - 5) loadMore()
   }, [lightboxIndex, photos.length, loadMore])
 
+  const togglePick = () => {
+    const next = !currentPhoto.flagged
+    void patchPhoto(currentPhoto.file_hash, { flagged: next }, next ? 'Picked' : 'Pick removed')
+  }
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -74,12 +80,11 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
       } else if (e.key === 'ArrowLeft') {
         showPrevious()
       } else if (e.key.toLowerCase() === 'p') {
-        // Toggle Flag Pick: the cache updates at once and rolls back with an error toast if the save fails
-        const nextFlag = !currentPhoto.flagged
-        void patchPhoto(currentPhoto.file_hash, { flagged: nextFlag }, nextFlag ? '🚩 Flagged as Pick' : 'Unflagged photo')
-      } else if (['1', '2', '3', '4', '5'].includes(e.key)) {
-        const rating = parseInt(e.key)
-        void patchPhoto(currentPhoto.file_hash, { rating }, `Rated ${rating} ★`)
+        // Toggle Pick: the cache updates at once and rolls back with an error toast if the save fails
+        togglePick()
+      } else if (/^[0-5]$/.test(e.key)) {
+        const rating = parseInt(e.key, 10)
+        void patchPhoto(currentPhoto.file_hash, { rating: rating === 0 ? null : rating }, rating === 0 ? 'Rating cleared' : `Rated ${rating} ★`)
       }
     }
 
@@ -89,6 +94,8 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
 
   const exif = currentPhoto.exif
   const [stripStart, stripEnd] = filmstripWindow(lightboxIndex, photos.length, FILMSTRIP_SIZE)
+  const camera = [exif.camera_make, exif.camera_model].filter(Boolean).join(' ')
+  const exposure = exposureLine(exif)
 
   return (
     <div
@@ -96,204 +103,59 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
       role="dialog"
       aria-modal="true"
       aria-label={`Photo viewer: ${currentPhoto.file_info.name}, ${lightboxIndex + 1} of ${total}`}
-      aria-keyshortcuts="ArrowLeft ArrowRight P 1 2 3 4 5 Escape"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(5, 7, 12, 0.96)',
-        backdropFilter: 'blur(16px)',
-        zIndex: 99999,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '20px',
-      }}
+      aria-keyshortcuts="ArrowLeft ArrowRight P 0 1 2 3 4 5 Escape"
+      className="lightbox"
       onClick={() => setLightboxIndex(null)}
     >
-      {/* Top HUD Bar */}
-      <div
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          color: '#fff',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{currentPhoto.file_info.name}</span>
-          <span className="badge badge-camera">{exif.camera_make} {exif.camera_model}</span>
-          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+      <div className="lb-top" onClick={(e) => e.stopPropagation()}>
+        <div className="lb-title">
+          <span className="lb-name">{displayTitle(currentPhoto.file_info.name)}</span>
+          <span className="lb-meta">{currentPhoto.file_info.name}</span>
+          {camera && <span className="lb-meta">{camera}</span>}
+          <span className="lb-meta num">
             {lightboxIndex + 1} of {total}
           </span>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              const next = !currentPhoto.flagged
-              void patchPhoto(currentPhoto.file_hash, { flagged: next }, next ? '🚩 Flagged as Pick' : 'Unflagged photo')
-            }}
-            aria-pressed={currentPhoto.flagged}
-            aria-keyshortcuts="P"
-            style={{ color: currentPhoto.flagged ? 'var(--accent-warning)' : '#fff' }}
-          >
-            <Flag size={15} fill={currentPhoto.flagged ? 'currentColor' : 'none'} />
-            <span>{currentPhoto.flagged ? 'Flagged (P)' : 'Pick (P)'}</span>
+        <div className="lb-actions">
+          <span className="lb-stars num" aria-label={currentPhoto.rating ? `${currentPhoto.rating} stars` : 'Not rated'}>
+            {currentPhoto.rating ? '★'.repeat(currentPhoto.rating) : ''}
+          </span>
+          <button type="button" className="btn-reset pick-btn lb-pick" onClick={togglePick} aria-pressed={currentPhoto.flagged} aria-keyshortcuts="P">
+            <Flag size={14} />
+            <span>{currentPhoto.flagged ? 'Picked' : 'Pick'}</span>
+            <span className="key-hint">P</span>
           </button>
-
-          <button ref={closeRef} className="btn btn-secondary" onClick={() => setLightboxIndex(null)} aria-label="Close viewer (Esc)">
+          <button ref={closeRef} type="button" className="btn-reset lb-icon" onClick={() => setLightboxIndex(null)} aria-label="Close viewer (Esc)">
             <X size={18} />
           </button>
         </div>
       </div>
 
-      {/* Main Image Stage & Nav Chevrons */}
-      <div
-        style={{
-          position: 'relative',
-          flex: 1,
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          padding: '20px 0',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Left Chevron */}
-        <button
-          onClick={showPrevious}
-          aria-label="Previous photo"
-          style={{
-            position: 'absolute',
-            left: '20px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '50%',
-            width: '44px',
-            height: '44px',
-            color: '#fff',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            transition: 'background 0.2s',
-          }}
-        >
+      <div className="lb-stage" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="btn-reset lb-nav lb-prev" onClick={showPrevious} aria-label="Previous photo">
           <ChevronLeft size={24} />
         </button>
-
-        {/* Center Image */}
-        <img
-          src={getPreviewUrl(currentPhoto.file_hash)}
-          alt={currentPhoto.file_info.name}
-          style={{
-            maxHeight: '70vh',
-            maxWidth: '85vw',
-            objectFit: 'contain',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
-          }}
-          onError={swapToPlaceholder}
-        />
-
-        {/* Right Chevron */}
-        <button
-          onClick={showNext}
-          aria-label="Next photo"
-          style={{
-            position: 'absolute',
-            right: '20px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '50%',
-            width: '44px',
-            height: '44px',
-            color: '#fff',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            transition: 'background 0.2s',
-          }}
-        >
+        <img src={getPreviewUrl(currentPhoto.file_hash)} alt={currentPhoto.file_info.name} onError={swapToPlaceholder} />
+        <button type="button" className="btn-reset lb-nav lb-next" onClick={showNext} aria-label="Next photo">
           <ChevronRight size={24} />
         </button>
-
-        {/* Overlay Telemetry HUD */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '30px',
-            background: 'rgba(15, 23, 42, 0.85)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: 'var(--radius-full)',
-            padding: '8px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            color: '#fff',
-            fontSize: '0.82rem',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          <span>{exif.f_stop ? `f/${exif.f_stop}` : 'f/—'}</span>
-          <span style={{ opacity: 0.4 }}>|</span>
-          <span>{exif.exposure_time || '—'}</span>
-          <span style={{ opacity: 0.4 }}>|</span>
-          <span>ISO {exif.iso || '—'}</span>
-          <span style={{ opacity: 0.4 }}>|</span>
-          <span>{exif.focal_length || '—'}</span>
-        </div>
       </div>
 
-      {/* Bottom Filmstrip */}
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '800px',
-          display: 'flex',
-          gap: '8px',
-          padding: '6px',
-          justifyContent: 'center',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      {exposure && <div className="lb-exposure num">{exposure}</div>}
+
+      <div className="lb-strip" onClick={(e) => e.stopPropagation()}>
         {photos.slice(stripStart, stripEnd).map((p, offset) => {
           const idx = stripStart + offset
           return (
             <button
               key={p.file_hash}
               type="button"
-              className="btn-reset"
+              className="btn-reset lb-thumb"
               onClick={() => setLightboxIndex(idx)}
               aria-label={`Show ${p.file_info.name}`}
               aria-current={idx === lightboxIndex ? 'true' : undefined}
-              style={{ flex: '0 0 auto', borderRadius: '4px' }}
             >
-              <img
-                src={getThumbnailUrl(p.file_hash, 100, 100)}
-                alt=""
-                style={{
-                  width: '52px',
-                  height: '52px',
-                  borderRadius: '4px',
-                  objectFit: 'cover',
-                  display: 'block',
-                  opacity: idx === lightboxIndex ? 1 : 0.4,
-                  border: idx === lightboxIndex ? '2px solid var(--accent-primary)' : '1px solid transparent',
-                  transition: 'all 0.15s ease',
-                }}
-                onError={swapToPlaceholder}
-              />
+              <img src={getThumbnailUrl(p.file_hash, 100, 100)} alt="" onError={swapToPlaceholder} />
             </button>
           )
         })}

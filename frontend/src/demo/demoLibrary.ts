@@ -1,5 +1,6 @@
-import type { Facets, FacetCount, PaginatedPhotosResponse, PhotoId, PhotoMetadata, SearchRequest } from '../types/metadata'
+import type { Facets, FacetCount, GeoClustersRequest, GeoClustersResponse, PaginatedPhotosResponse, PhotoId, PhotoMetadata, SearchRequest } from '../types/metadata'
 import { SAMPLE_PHOTOS } from './samplePhotos'
+import { boxContains, clusterPhotos } from '../utils/geo'
 
 // `?demo=1` runs without a backend: this module plays the server's part over the sample
 // library, with the same filter rules as the repository (tags AND, unknown dates last).
@@ -18,11 +19,16 @@ export function findDemoPhoto(hash: string): PhotoMetadata | undefined {
 function matches(p: PhotoMetadata, r: SearchRequest): boolean {
   const captured = p.exif.captured_at ?? null
   if (r.camera_makes && !r.camera_makes.includes(p.exif.camera_make ?? '')) return false
+  if (r.camera_model && !(p.exif.camera_model ?? '').toLowerCase().includes(r.camera_model.toLowerCase())) return false
   if (r.tags && !r.tags.every((t) => p.labels.includes(t))) return false
-  if (r.flagged !== undefined && p.flagged !== r.flagged) return false
+  if (r.flagged !== undefined && r.flagged !== null && p.flagged !== r.flagged) return false
+  if (r.rating !== undefined && r.rating !== null && p.rating !== r.rating) return false
   if (r.collection !== undefined) return false // the demo has no collections
   if (r.has_capture_date !== undefined && (captured !== null) !== r.has_capture_date) return false
   if (r.has_location !== undefined && Boolean(p.exif.location) !== r.has_location) return false
+  if (r.within && !(p.exif.location && boxContains(r.within, p.exif.location.latitude, p.exif.location.longitude))) {
+    return false
+  }
   if (r.date_start && (!captured || captured < r.date_start)) return false
   if (r.date_end && (!captured || captured > r.date_end)) return false
   if (r.search_term) {
@@ -77,6 +83,11 @@ export async function demoSearch(r: SearchRequest): Promise<PaginatedPhotosRespo
   }
 }
 
+export async function demoGeoClusters(r: GeoClustersRequest): Promise<GeoClustersResponse> {
+  const clusters = clusterPhotos(search(r), r.zoom ?? 2, r.bbox)
+  return { clusters, total_count: clusters.reduce((sum, c) => sum + c.count, 0) }
+}
+
 export async function demoSearchIds(r: SearchRequest): Promise<PhotoId[]> {
   return search(r).map((p) => ({ file_hash: p.file_hash, size_bytes: p.file_info.size_bytes }))
 }
@@ -87,6 +98,14 @@ function counts(values: (string | null | undefined)[]): FacetCount[] {
   return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => ({ name, count }))
 }
 
+function gpsBounds(all: PhotoMetadata[]): Facets['gps_bounds'] {
+  const points = all.flatMap((p) => (p.exif.location ? [p.exif.location] : []))
+  if (points.length === 0) return null
+  const lats = points.map((l) => l.latitude)
+  const lons = points.map((l) => l.longitude)
+  return { min_lat: Math.min(...lats), max_lat: Math.max(...lats), min_lon: Math.min(...lons), max_lon: Math.max(...lons) }
+}
+
 export async function demoFacets(): Promise<Facets> {
   const total = photos.length
   return {
@@ -94,7 +113,7 @@ export async function demoFacets(): Promise<Facets> {
     tags: counts(photos.flatMap((p) => p.labels)),
     years: counts(photos.map((p) => p.exif.captured_at?.substring(0, 4))),
     isos: counts(photos.map((p) => (p.exif.iso ? String(p.exif.iso) : null))),
-    gps_bounds: null,
+    gps_bounds: gpsBounds(photos),
     stats: {
       total_count: total,
       flagged_count: photos.filter((p) => p.flagged).length,

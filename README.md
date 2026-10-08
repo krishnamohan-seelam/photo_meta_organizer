@@ -4,38 +4,54 @@ Metadata indexing and organization system built specifically for large-scale pho
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![React 19](https://img.shields.io/badge/React-19.0-61dafb)
-![Tests](https://img.shields.io/badge/Tests-619%20backend%20%2B%2055%20frontend-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-671%20backend%20%2B%20239%20frontend-brightgreen)
 ![Coverage](https://img.shields.io/badge/Coverage-93%25-green)
 ![Throughput](https://img.shields.io/badge/Throughput-~31%2C000%20imgs%2Fmin-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-> **Status:** phases 0-4 are built and the hardening pass is complete. A few UI features are still placeholders (the Map Explorer clusters and the EXIF histogram), and some known gaps remain. Read [Known limitations](#known-limitations) before relying on it for a large library.
+> **Status:** phases 0-4 are built and the hardening pass is complete. Some known gaps remain. Read [Known limitations](#known-limitations) before relying on it for a large library.
 
 ---
 
 ## ✨ Features
 
 - **Interactive C4 Architecture Topology**: self-contained HTML architecture document following Simon Brown's C4 model (`DOCS/c4-architecture.html`, generated locally and git-ignored, not part of this repo) with interactive SVG pan/zoom and narrative tables across System Context (L1), Containers (L2), Components (L3), and Ingestion Flow (L4).
-- **React 19 Frontend Studio**: Web UI built with React 19, TypeScript, Vite, Zustand, and TanStack Virtual. See [frontend/README.md](frontend/README.md) for its structure and conventions.
-  - **Light & Dark Themes** with tokenized CSS variables.
-  - **Lights Out Dimmer (`L`)**: ambient mode dimming sidebars and controls to emphasize photo viewing.
-  - **Command Palette (`Ctrl + K`)**: a fixed list of commands (Scan, Sync, theme, Lights Out, open Map or Analytics, export JSON), filtered as you type. *Its camera and tag shortcuts are hardcoded examples (Sony, Canon, #travel), not taken from your library.*
-  - **Studio Grid View**: row-virtualized gallery (only the rows near the viewport are in the DOM; measured 8,704 → 525 DOM elements on a 700-photo library) with a live density slider (160px-320px), flag badges, star ratings, and a server-side sort. The server filters, sorts and pages the library (200 photos a page), so the browser never loads the whole library.
-  - **EXIF Inspector**: exposure triangle (Aperture, Shutter, ISO, Focal Length), technical telemetry, raw JSON copy. *The RGB/luminance histogram is a placeholder drawing, not computed from the image.*
-  - **Filter Accordions** for Camera Brands, Tags & Labels, and Collections, with whole-library counts from `GET /api/facets` and real named collections from the Collections API (tags are ANDed, not ORed). There is no free-text search box yet; `search_term` is reachable through the API and CLI.
-  - **Floating Selection Dock**: multi-select bar (Select All works across pages) with cumulative size, batch tagging, flag-all, and a streamed ZIP export of the original files with progress.
-  - **Map Explorer**: *placeholder view with fixed example clusters, not derived from your library's GPS data.* Only the "N geotagged photos" count is real.
-  - **Chronological Timeline Feed**: month-grouped photo stream with year buttons from the library's facets and an "Unknown date" group for photos without an EXIF date.
-  - **Kanban Staging Board** (the *Collections* tab): 3 stages derived from rating, flag and the `export` tag, one stage per photo (Export Ready: 5 stars or tagged `export`; Picks: flagged or 4 stars; Inbox: the rest), with forward and back actions on each card.
-  - **Library Analytics Dashboard**: KPI metrics and SVG charts with click-to-filter drilldowns.
-  - **Fullscreen Lightbox**: a 2048 px preview (works for HEIC and RAW too), a filmstrip, and keyboard navigation (arrows, `Esc`, `P`, `1-5`).
+- **React 19 Frontend Studio**: Web UI built with React 19, TypeScript, Vite, Zustand, and TanStack Virtual. See [frontend/README.md](frontend/README.md) for its structure and conventions, and [design_docs/front_enddesign.md](design_docs/front_enddesign.md) for the design it implements.
+  - **Neutral, photo-first chrome**: hue-free greys in dark and light themes with one amber accent for selection, picks, primary actions and focus. A nav rail switches views (`G` Library, `T` Timeline, `M` Map, `C` Collections, `A` Insights) and toggles the Library panel (`\`), Details panel (`I`), Lights Out (`L`) and the theme; `?` lists every shortcut.
+  - **Query bar**: filters as tokens with autocomplete from your library (makes, tags, years, collections, with counts). `/` focuses it. The syntax covers only what the search API can filter on:
+
+    | Token | Filters by |
+    | --- | --- |
+    | `make:sony` | Camera make (several `make:` tokens are ORed) |
+    | `model:"a7 iv"` | Camera model contains |
+    | `tag:night` | Tag (several `tag:` tokens are ANDed) |
+    | `in:"Japan 2026"` | Collection |
+    | `pick:yes` | Picks (flagged) |
+    | `rating:5` | Exact star rating 1-5 |
+    | `year:2026`, `year:unknown` | Capture year, or no EXIF date |
+    | `date:2026-05-14..2026-05-21`, `date:2026-05-14` | Capture date or inclusive range (replaces a year) |
+    | `geo:yes`, `geo:no` | Has GPS coordinates |
+    | `kyoto`, `"tokyo tower"` | Free text in file name, path, camera or tags |
+
+    Field names are case-insensitive and quotes keep spaces. Unknown fields (`iso:800`) and invalid values are shown struck through in red and never sent. The bar, the Library panel and the toolbar chips edit the same filters, so they always agree.
+  - **Library view, grid or table (`V`)**: justified rows that keep every photo's aspect ratio (EXIF-rotated portraits included; row height 140-340 px), or a dense sortable table (Name, Camera, Captured, Size sort on the server; Lens and Size columns drop out when space is short). Both are virtualized: with 20,000 photos the DOM holds at most 60 rows. The server filters, sorts and pages the library (200 photos a page), so the browser never loads the whole library.
+  - **Keyboard culling**: `←`/`→` (grid) or `J`/`K` (table, `Shift` extends the selection) move through photos, `1`-`5` rate, `0` clears, `P` picks, `X` selects, `Enter` opens the viewer and `Esc` clears the selection. Ctrl-click toggles a photo, Shift-click selects a range in the table.
+  - **Library panel**: All photos, Picks, exact star ratings, collections (create one from the selection), cameras with proportion bars, and tag pills, all with whole-library counts from `GET /api/facets`.
+  - **Details inspector**: preview, rating and Pick, an RGB **histogram computed from the photo's pixels** (hidden when they cannot be read), an exposure strip, camera/lens/date/location/file details, hash and raw-JSON copy, and tag editing.
+  - **Selection dock**: appears with a selection; shows its total size and offers Pick, batch Rate, Add to collection, Tag, and Export (a streamed ZIP of the originals with progress, or metadata JSON). Select All works across pages.
+  - **Command Palette (`Ctrl + K`)**: views, Import/Sync, theme, Lights Out, the shortcut list, export the library as JSON, and a filter for each camera make and tag in your library.
+  - **Timeline as chapters**: photos grouped into trip-like chapters (a new chapter after a gap you choose, 12 h to 7 days, default 36 h, or when the month changes) with a serif date-range title, a summary line, "Select chapter", and a mosaic where portraits, panoramas and each chapter's best photo get bigger tiles. Photos without an EXIF date form a final "Unknown date" chapter.
+  - **Map Explorer**: a real map of your geotagged photos. The server groups them into clusters sized for the zoom level (`POST /api/geo/clusters`), honouring the same filters as the Library, and labels each with its nearest place ("Tokyo, Japan", or just the country when zoomed out) from a bundled offline city table. Click a group to zoom in, a single photo to inspect it, **Fit to photos** to see everything, and **Show these in Library** to narrow the Library to the visible area (a removable "Map area" chip). The basemap is a bundled country outline, so the map works offline and sends your coordinates nowhere; online tiles are opt-in (see `PMO_MAP_TILES_URL`).
+  - **Kanban Staging Board** (the *Collections* view): 3 stages derived from rating, flag and the `export` tag, one stage per photo (Export Ready: 5 stars or tagged `export`; Picks: flagged or 4 stars; Inbox: the rest), with forward and back actions on each card.
+  - **Library Analytics Dashboard** (the *Insights* view): KPI metrics and charts with click-to-filter drilldowns.
+  - **Fullscreen Lightbox**: a 2048 px preview (works for HEIC and RAW too), a filmstrip, and keyboard navigation (arrows, `Esc`, `P`, `0`-`5`).
 - **Windows Desktop Application (Electron shell)**: starts the Python FastAPI backend on a free port, opens the UI, and provides a native folder picker for indexing. The packaged app keeps its data under the per-user data directory and sets a per-launch API token cookie (see [Security model](#security-model)); the `electron-builder` + `PyInstaller` pipeline is verified on the unpacked app (see [Known limitations](#known-limitations) for the remaining code-signing caveat).
 - **WebP Thumbnail Cache & Streaming Service**: SHA-256 hash-addressed thumbnails with EXIF transpose correction, cached under `.cache/thumbnails/` (or `PMO_CACHE_DIR`). Writes are atomic, each thumbnail renders once even under concurrent requests, and the cache is bounded by `PMO_THUMBNAIL_CACHE_MB` (default 1024) with least-recently-used eviction.
 - **HEIC/HEIF and camera RAW**: decoded with pillow-heif and rawpy (the RAW file's embedded preview) for dimensions, thumbnails and the lightbox preview.
 - **Export**: `POST /api/export/zip` streams a ZIP of the selected originals (skipped files are listed in an `export_report.txt` inside it); `POST /api/export/json` exports metadata for a selection or the whole library.
 - **Asynchronous Index & Sync Jobs**: `POST /api/index` and `POST /api/sync` return `202` plus a job id; `GET /api/jobs/{id}` reports progress and errors, and a job can be cancelled mid-run. The frontend shows a progress bar and an in-app folder dialog (`FolderJobDialog`) instead of `window.prompt`. Only image files are indexed, exactly as with the CLI.
 - **Curation & Batch REST API**: `PATCH /api/photos/{hash}` for rating, flag, and tags, and `POST /api/photos/batch` for `add_tag`, `remove_tag`, `set_rating`, `set_flag`, and `delete`. Input is validated (rating 1-5 or `null`, non-empty tags, real booleans); bad input returns `422` and nothing is written.
-- **Curated Collections API**: `GET/POST /api/collections` for named photo sets, consumed by the frontend's filter sidebar.
+- **Curated Collections API**: `GET/POST /api/collections` for named photo sets, used by the frontend's Library panel and selection dock.
 - **Search & Facets API**: `POST /api/search` filters, sorts and pages in SQL; `POST /api/search/ids` returns every match for Select All; `GET /api/facets` returns camera/tag/year/ISO counts, GPS bounds and library stats. The frontend uses all three.
 - **Generated API types**: the frontend's TypeScript types are generated from the API's OpenAPI schema, and a test on each side fails when they drift (see [Run Tests](#run-tests)).
 - **CLI**: `index`, `sync`, `search`, `stats`, `prune` and `dedupe`, with tabular output via `tabulate`. Search input it cannot read (a bad date or location) is an error, not a silently unfiltered search.
@@ -161,6 +177,8 @@ An explicit flag or argument wins, then the environment, then the development de
 | `PMO_THUMBNAIL_CACHE_MB` | Size budget of the thumbnail cache | `1024` |
 | `PMO_ALLOWED_HOSTS` | Host names the API accepts | `localhost,127.0.0.1` |
 | `PMO_CORS_ORIGINS` | Origins granted CORS | the Vite dev origins |
+| `PMO_MAP_TILES_URL` | Opt-in online map tiles, an `http(s)` template containing `{z}`, `{x}` and `{y}`. The browser then asks that server for tiles, which reveals the area you are viewing | (unset: offline outline) |
+| `PMO_MAP_TILES_ATTRIBUTION` | Credit line the map shows for that tile server | (unset) |
 
 Relative paths are relative to the working directory, so start the API from the repository root.
 
@@ -280,7 +298,7 @@ Run backend tests from the **`photo_meta_organizer/`** directory. Three test fil
 ```bash
 cd photo_meta_organizer
 
-# All 619 unit and integration tests (pytest.ini also enables coverage, 93%)
+# All 671 unit and integration tests (pytest.ini also enables coverage, 94%)
 python -m pytest
 
 # Without coverage, one file, or one test
@@ -288,7 +306,7 @@ python -m pytest --no-cov tests/unit/domain/test_services.py
 python -m pytest --no-cov tests/unit/domain/test_services.py::TestName::test_name
 ```
 
-Frontend (from `frontend/`): `npm test` runs the Vitest + Testing Library suite (55 tests: API client errors, optimistic edits and rollback, loading/error/empty states, and the data-layer helpers), `npm run build` typechecks (tests included) and builds, and `npm run lint` runs oxlint.
+Frontend (from `frontend/`): `npm test` runs the Vitest + Testing Library suite (239 tests: API client errors, optimistic edits and rollback, loading/error/empty states, the Map view and the data-layer helpers), `npm run build` typechecks (tests included) and builds, and `npm run lint` runs oxlint.
 
 **After changing the API** (a route, or a schema in `api/schemas.py`), regenerate the frontend's types and commit both files; `test_openapi_contract.py` (pytest) and `schema.test.ts` (Vitest) fail until you do:
 
@@ -351,7 +369,8 @@ These are open, documented gaps. The full analysis and work plan are tracked in 
 - **Sync still trusts size + modification time, not content, for the common case.** An edit that preserves both is invisible to a normal `sync`; run `sync --rehash` to force a full hash check. (An edit that changes size or mtime *is* detected, and now correctly replaces the old record and carries over its rating/flag/labels — `dedupe` repairs libraries synced before that fix.)
 - **RAW and HEIC were verified on a real Nikon NEF only.** HEIC tests use pillow-heif's own encoder; no real phone HEIC or Canon CR3 / Sony ARW file has been tried, and the packaged desktop build has not been checked with the new native libraries.
 - **Old capture dates.** Libraries indexed before the capture-date fix may show a file's modification time as its capture date. Run `sync --reextract` once to repair them.
-- **UI placeholders:** the Map Explorer clusters and the EXIF histogram are drawings, not your data, and the command palette's camera/tag shortcuts are fixed examples (see [Features](#-features)). There is no free-text search box in the UI.
+- The query bar can filter only on what the search API supports: no ISO, aperture, focal-length or lens filters, no rating ranges. The map area chosen with "Show these in Library" is a filter of its own (a chip), not a query-bar token.
+- **Map details:** place names come from cities of 15,000+ inhabitants ([GeoNames](https://www.geonames.org), CC BY 4.0), so a photo in a village is named after the nearest such city; the offline outline is Natural Earth's 1:50m countries, coarse at street zoom (use online tiles for detail). Clusters ignore the radius filter, and the packaged desktop build has not been checked with the new data file.
 - **Kanban moves change ratings.** Stages are derived, not stored, so moving a card back from Export Ready drops the 5th star, and moving it back from Picks caps the rating at 3.
 - **Batch edits after Select All** update photos that are not loaded on the server only, and a photo edited out of the current filter stays visible until the next reload.
 - **Desktop packaging on Windows needs symlink permission once.** electron-builder unpacks its `winCodeSign` tool, which contains macOS symlinks; without Windows Developer Mode (or one run from an elevated shell) `npm run desktop:package` fails at that step. Do not work around it with `"signAndEditExecutable": false`: that also skips writing the app's name and version into the exe, which is left posing as `electron.exe`, and antivirus heuristics then flag it. Once `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0` exists, later builds need no special permission.
@@ -384,7 +403,7 @@ These are open, documented gaps. The full analysis and work plan are tracked in 
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend Framework** | React 19 + TypeScript + Vite |
+| **Frontend Framework** | React 19 + TypeScript + Vite; Leaflet for the Map view (lazy-loaded) |
 | **State & Virtualization** | Zustand (selector subscriptions) + TanStack Virtual (gallery rows) |
 | **Styling & Icons** | Tokenized CSS variables (Light/Dark), mostly inline styles (no Tailwind), Lucide Icons |
 | **Backend Runtime** | Python 3.11+ |
@@ -393,7 +412,7 @@ These are open, documented gaps. The full analysis and work plan are tracked in 
 | **EXIF Extraction** | exifread (three-tier Universal/Common/Raw model) |
 | **Deduplication** | SHA-256 content-based file fingerprinting |
 | **Database** | SQLite (WAL mode, single writer connection, ADR-001); legacy TinyDB JSON libraries are imported once and never modified |
-| **Testing & Quality** | pytest + pytest-cov (619 tests, 93% coverage); Vitest + Testing Library (55 tests), oxlint and `tsc` for the frontend |
+| **Testing & Quality** | pytest + pytest-cov (671 tests, 94% coverage); Vitest + Testing Library (239 tests), oxlint and `tsc` for the frontend |
 | **Type System** | mypy + TypeScript (API types generated with openapi-typescript) |
 
 ---

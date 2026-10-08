@@ -14,6 +14,9 @@ Environment variables:
     PMO_LOG_DIR        log directory
     PMO_ALLOWED_HOSTS  comma-separated Host header names the API accepts
     PMO_CORS_ORIGINS   comma-separated origins granted CORS
+    PMO_MAP_TILES_URL  opt-in online map tiles, a template with {z}/{x}/{y}. Unset: the Map
+                       view draws the bundled world outline and contacts no one.
+    PMO_MAP_TILES_ATTRIBUTION  credit line shown on the map for that tile server
     PMO_API_TOKEN      per-launch token the desktop shell sets; when present the API
                        requires it as a cookie (api/auth.py). Never logged or repr'd.
 
@@ -48,6 +51,20 @@ def _env_int(env: Mapping[str, str], name: str) -> int | None:
     return int(value) if value else None
 
 
+def _tiles_url(value: str | None) -> str | None:
+    """An http(s) tile template, or ``None``; anything else is a configuration error."""
+    url = (value or "").strip()
+    if not url:
+        return None
+    if not url.startswith(("http://", "https://")) or not all(
+        part in url for part in ("{z}", "{x}", "{y}")
+    ):
+        raise ValueError(
+            "PMO_MAP_TILES_URL must be an http(s) URL containing {z}, {x} and {y}; got " + repr(url)
+        )
+    return url
+
+
 def _path(value: Any) -> Path | None:
     return None if value is None else Path(value)
 
@@ -61,6 +78,8 @@ class Settings:
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
     api_token: str | None = field(default=None, repr=False)
+    map_tiles_url: str | None = None
+    map_tiles_attribution: str | None = None
 
     @property
     def thumbnail_dir(self) -> Path:
@@ -80,6 +99,8 @@ class Settings:
         allowed_hosts: Iterable[str] | None = None,
         cors_origins: Iterable[str] | None = None,
         api_token: str | None = None,
+        map_tiles_url: str | None = None,
+        map_tiles_attribution: str | None = None,
     ) -> "Settings":
         """Build settings from explicit values, then ``env`` (default ``os.environ``).
 
@@ -96,9 +117,7 @@ class Settings:
         return cls(
             db_path=pick(db_path, "PMO_DB", base / "photos.db" if base else None)
             or Path("photos.db"),
-            cache_dir=pick(
-                cache_dir, "PMO_CACHE_DIR", base / "thumbnails" if base else None
-            ),
+            cache_dir=pick(cache_dir, "PMO_CACHE_DIR", base / "thumbnails" if base else None),
             log_dir=pick(log_dir, "PMO_LOG_DIR", base / "logs" if base else None),
             thumbnail_cache_mb=(
                 thumbnail_cache_mb
@@ -116,4 +135,8 @@ class Settings:
                 else _env_list(env, "PMO_CORS_ORIGINS") or DEFAULT_CORS_ORIGINS
             ),
             api_token=api_token or env.get("PMO_API_TOKEN", "").strip() or None,
+            map_tiles_url=_tiles_url(map_tiles_url or env.get("PMO_MAP_TILES_URL")),
+            map_tiles_attribution=(
+                map_tiles_attribution or env.get("PMO_MAP_TILES_ATTRIBUTION", "").strip() or None
+            ),
         )

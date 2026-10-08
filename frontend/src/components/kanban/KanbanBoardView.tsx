@@ -11,7 +11,7 @@ import { Inbox, Star, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-reac
 
 const COLUMNS: { id: KanbanStage; title: string; icon: React.ReactNode; forward?: string; back?: string }[] = [
   { id: 'inbox', title: 'Inbox / Unsorted', icon: <Inbox size={16} color="var(--text-muted)" />, forward: 'Picks' },
-  { id: 'picks', title: 'Picks & Flagged', icon: <Star size={16} color="var(--accent-warning)" />, forward: 'Export Ready', back: 'Inbox' },
+  { id: 'picks', title: 'Picks & Flagged', icon: <Star size={16} color="var(--accent-primary)" />, forward: 'Export Ready', back: 'Inbox' },
   { id: 'export', title: 'Export Ready', icon: <CheckCircle size={16} color="var(--accent-success)" />, back: 'Picks' },
 ]
 

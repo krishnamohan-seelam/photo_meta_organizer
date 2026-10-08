@@ -72,3 +72,34 @@ def test_thumbnail_cache_budget_from_env_and_default():
     assert Settings.from_env({}).thumbnail_cache_mb == 1024
     assert Settings.from_env({"PMO_THUMBNAIL_CACHE_MB": "50"}).thumbnail_cache_mb == 50
     assert Settings.from_env({}, thumbnail_cache_mb=7).thumbnail_cache_mb == 7
+
+
+class TestMapTiles:
+    """Online map tiles are opt-in: the map is the bundled world outline unless a URL is set."""
+
+    def test_off_by_default(self) -> None:
+        settings = Settings.from_env({})
+        assert settings.map_tiles_url is None
+        assert settings.map_tiles_attribution is None
+
+    def test_from_the_environment(self) -> None:
+        env = {
+            "PMO_MAP_TILES_URL": "https://tiles.example/{z}/{x}/{y}.png",
+            "PMO_MAP_TILES_ATTRIBUTION": "© Example",
+        }
+        settings = Settings.from_env(env)
+        assert settings.map_tiles_url == "https://tiles.example/{z}/{x}/{y}.png"
+        assert settings.map_tiles_attribution == "© Example"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://tiles.example/map.png",  # no {z}/{x}/{y}
+            "ftp://tiles.example/{z}/{x}/{y}.png",
+            "file:///tiles/{z}/{x}/{y}.png",
+            "javascript:alert({z}{x}{y})",
+        ],
+    )
+    def test_rejects_urls_that_are_not_http_tile_templates(self, url: str) -> None:
+        with pytest.raises(ValueError, match="PMO_MAP_TILES_URL"):
+            Settings.from_env({"PMO_MAP_TILES_URL": url})

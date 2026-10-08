@@ -8,7 +8,7 @@ backend to ``BACKENDS`` and these same test bodies must pass unchanged.
 from datetime import datetime
 
 import pytest
-from photo_meta_organizer.application.interfaces.search_types import SearchQuery
+from photo_meta_organizer.application.interfaces.search_types import BoundingBox, SearchQuery
 from photo_meta_organizer.domain.curation import AddTag, RemoveTag, SetFlag, SetLabels, SetRating
 from photo_meta_organizer.domain.models import (
     GpsCoordinates,
@@ -223,9 +223,7 @@ class TestServerSideFilters:
             [_photo("geo", location=GpsCoordinates(latitude=1.0, longitude=2.0)), _photo("plain")]
         )
         assert [m.file_hash for m in repository.query(SearchQuery(has_location=True))] == ["geo"]
-        assert [m.file_hash for m in repository.query(SearchQuery(has_location=False))] == [
-            "plain"
-        ]
+        assert [m.file_hash for m in repository.query(SearchQuery(has_location=False))] == ["plain"]
 
     def test_collection_membership(self, repository, collection_repository):
         repository.save_many([_photo("h1"), _photo("h2"), _photo("h3")])
@@ -233,6 +231,105 @@ class TestServerSideFilters:
         page = repository.query(SearchQuery(collection="Trip"))
         assert sorted(m.file_hash for m in page.items) == ["h1", "h3"]
         assert repository.query(SearchQuery(collection="Nope")).total_count == 0
+
+
+class TestWithinFilter:
+    def test_only_photos_inside_the_area(self, repository):
+        repository.save_many(
+            [
+                _photo("in", location=GpsCoordinates(latitude=10.0, longitude=10.0)),
+                _photo("out", location=GpsCoordinates(latitude=60.0, longitude=10.0)),
+                _photo("nogps"),
+            ]
+        )
+        box = BoundingBox(south=0, west=0, north=20, east=20)
+        assert [m.file_hash for m in repository.query(SearchQuery(within=box))] == ["in"]
+
+    def test_area_across_the_antimeridian(self, repository):
+        repository.save_many(
+            [
+                _photo("e", location=GpsCoordinates(latitude=0.0, longitude=179.0)),
+                _photo("w", location=GpsCoordinates(latitude=0.0, longitude=-179.0)),
+                _photo("mid", location=GpsCoordinates(latitude=0.0, longitude=0.0)),
+            ]
+        )
+        box = BoundingBox(south=-5, west=170, north=5, east=-170)
+        hashes = {m.file_hash for m in repository.query(SearchQuery(within=box))}
+        assert hashes == {"e", "w"}
+
+    def test_combines_with_other_filters(self, repository):
+        here = GpsCoordinates(latitude=1.0, longitude=1.0)
+        repository.save_many(
+            [
+                _photo("a", camera_make="Sony", location=here),
+                _photo("b", camera_make="Canon", location=here),
+            ]
+        )
+        box = BoundingBox(south=0, west=0, north=2, east=2)
+        query = SearchQuery(within=box, camera_make="Sony")
+        assert [m.file_hash for m in repository.query(query)] == ["a"]
+
+
+class TestGeoClusters:
+    def _geo(self, hash_, lat, lon, **kw):
+        return _photo(hash_, location=GpsCoordinates(latitude=lat, longitude=lon), **kw)
+
+    def test_nearby_photos_share_a_cluster_and_far_ones_do_not(self, repository):
+        repository.save_many(
+            [
+                self._geo("t1", 35.68, 139.65, captured_at=datetime(2026, 1, 1)),
+                self._geo("t2", 35.70, 139.70, captured_at=datetime(2026, 1, 3)),
+                self._geo("l1", 51.50, -0.12),
+                _photo("nogps"),
+            ]
+        )
+        clusters = repository.geo_clusters(SearchQuery(), None, 1.0)
+        by_count = sorted(clusters, key=lambda c: -c.count)
+        assert [c.count for c in by_count] == [2, 1]
+        assert by_count[0].latitude == pytest.approx(35.69)
+        assert by_count[0].longitude == pytest.approx(139.675)
+
+    def test_representative_is_the_most_recently_captured(self, repository):
+        repository.save_many(
+            [
+                self._geo("old", 10.0, 10.0, captured_at=datetime(2020, 1, 1)),
+                self._geo("new", 10.1, 10.1, captured_at=datetime(2026, 1, 1)),
+            ]
+        )
+        (cluster,) = repository.geo_clusters(SearchQuery(), None, 1.0)
+        assert cluster.representative_hash == "new"
+
+    def test_honours_search_filters(self, repository):
+        repository.save_many(
+            [
+                self._geo("a", 10.0, 10.0, camera_make="Sony"),
+                self._geo("b", 10.1, 10.1, camera_make="Canon"),
+            ]
+        )
+        (cluster,) = repository.geo_clusters(SearchQuery(camera_make="Sony"), None, 1.0)
+        assert cluster.count == 1 and cluster.representative_hash == "a"
+
+    def test_bounding_box_limits_the_result(self, repository):
+        repository.save_many([self._geo("in", 10.0, 10.0), self._geo("out", 60.0, 10.0)])
+        box = BoundingBox(south=0, west=0, north=20, east=20)
+        assert [
+            c.representative_hash for c in repository.geo_clusters(SearchQuery(), box, 1.0)
+        ] == ["in"]
+
+    def test_bounding_box_across_the_antimeridian(self, repository):
+        repository.save_many(
+            [
+                self._geo("east", 0.0, 179.5),
+                self._geo("west", 0.0, -179.5),
+                self._geo("mid", 0.0, 0.0),
+            ]
+        )
+        box = BoundingBox(south=-10, west=170, north=10, east=-170)
+        hashes = {c.representative_hash for c in repository.geo_clusters(SearchQuery(), box, 1.0)}
+        assert hashes == {"east", "west"}
+
+    def test_empty_library_has_no_clusters(self, repository):
+        assert repository.geo_clusters(SearchQuery(), None, 1.0) == []
 
 
 class TestFacets:

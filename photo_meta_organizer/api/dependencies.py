@@ -16,6 +16,7 @@ from photo_meta_organizer.application.interfaces.collection_repository import (
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
+from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
 from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
@@ -28,6 +29,7 @@ class Services:
     collections: CollectionRepository
     jobs: JobManager
     thumbnails: ThumbnailService
+    places: PlaceNamer
 
 
 def get_services(request: Request) -> Services:
@@ -51,3 +53,7 @@ def get_job_manager(request: Request) -> JobManager:
 
 def get_thumbnail_service(request: Request) -> ThumbnailService:
     return get_services(request).thumbnails
+
+
+def get_place_namer(request: Request) -> PlaceNamer:
+    return get_services(request).places

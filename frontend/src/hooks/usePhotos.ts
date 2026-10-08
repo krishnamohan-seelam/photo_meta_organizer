@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { InfiniteData, QueryClient } from '@tanstack/react-query'
-import { useShallow } from 'zustand/react/shallow'
 import type { PaginatedPhotosResponse, PhotoMetadata, SearchRequest } from '../types/metadata'
 import { getPhotoByHash, searchPhotosApi } from '../api/client'
 import { demoSearch, findDemoPhoto } from '../demo/demoLibrary'
 import { useUiStore } from '../stores/useUiStore'
 import { toSearchRequest } from '../utils/search'
+import { useLibraryFilters } from './useLibraryFilters'
 
 /**
  * Prefix of every photo query: the paged search, the map's geotagged set and single
@@ -34,17 +34,7 @@ export function runSearch(request: SearchRequest): Promise<PaginatedPhotosRespon
 
 /** The server query for the current filters and sort, stable while they do not change. */
 export function useSearchRequest(): SearchRequest {
-  const filters = useUiStore(
-    useShallow((s) => ({
-      searchQuery: s.searchQuery,
-      filterCameras: s.filterCameras,
-      filterTags: s.filterTags,
-      filterCollection: s.filterCollection,
-      filterTimeframe: s.filterTimeframe,
-      sortBy: s.sortBy,
-      sortOrder: s.sortOrder,
-    }))
-  )
+  const filters = useLibraryFilters()
   return useMemo(() => toSearchRequest(filters), [filters])
 }
 

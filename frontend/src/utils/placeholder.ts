@@ -6,12 +6,12 @@ export const PLACEHOLDER_SRC =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">' +
-      '<rect width="400" height="300" fill="#1e293b"/>' +
-      '<g fill="none" stroke="#64748b" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect width="400" height="300" fill="#202020"/>' +
+      '<g fill="none" stroke="#6f6f6f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="140" y="95" width="120" height="90" rx="10"/>' +
       '<circle cx="200" cy="140" r="24"/>' +
       '<path d="M170 95l8-14h44l8 14"/></g>' +
-      '<text x="200" y="228" fill="#64748b" font-family="sans-serif" font-size="18" text-anchor="middle">No preview</text>' +
+      '<text x="200" y="228" fill="#6f6f6f" font-family="sans-serif" font-size="18" text-anchor="middle">No preview</text>' +
       '</svg>'
   )
 

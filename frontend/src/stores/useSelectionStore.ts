@@ -8,6 +8,8 @@ interface SelectionState {
   toggleSelect: (hash: string, sizeBytes: number) => void
   /** Replace the selection, e.g. with every match of the current search (`POST /api/search/ids`). */
   selectAll: (photos: PhotoId[]) => void
+  /** Add photos to the selection, keeping what is already selected (range selection). */
+  addToSelection: (photos: PhotoId[]) => void
   clearSelection: () => void
   isSelected: (hash: string) => boolean
 }
@@ -34,6 +36,17 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
     set({
       selectedHashes: new Set(photos.map((p) => p.file_hash)),
       selectedSizes: new Map(photos.map((p) => [p.file_hash, p.size_bytes])),
+    }),
+
+  addToSelection: (photos) =>
+    set((state) => {
+      const hashes = new Set(state.selectedHashes)
+      const sizes = new Map(state.selectedSizes)
+      for (const p of photos) {
+        hashes.add(p.file_hash)
+        sizes.set(p.file_hash, p.size_bytes)
+      }
+      return { selectedHashes: hashes, selectedSizes: sizes }
     }),
 
   clearSelection: () =>

@@ -26,6 +26,8 @@ from typing import Any
 from tinydb import Query, TinyDB
 
 from photo_meta_organizer.application.interfaces.search_types import (
+    BoundingBox,
+    GeoCluster,
     FacetCount,
     Facets,
     GpsBounds,
@@ -470,6 +472,11 @@ class TinyDBRepository:
             (exif.location is not None) != query.has_location
         ):
             return False
+        if query.within is not None and (
+            exif.location is None
+            or not query.within.contains(exif.location.latitude, exif.location.longitude)
+        ):
+            return False
 
         if (
             query.location_lat is not None
@@ -541,6 +548,41 @@ class TinyDBRepository:
         q = Query()
         docs = self._db.table("collections").search(q.name == name)
         return set(docs[0].get("photo_hashes", [])) if docs else set()
+
+    def geo_clusters(
+        self, query: SearchQuery, bbox: BoundingBox | None, cell_degrees: float
+    ) -> list[GeoCluster]:
+        """Grid clusters, computed in Python (legacy backend; SQLite does this in SQL)."""
+        records = self.list_all()
+        if query.collection is not None:
+            members = self._collection_members(query.collection)
+            records = [r for r in records if r.file_hash in members]
+        cells: dict[tuple[int, int], list[ImageMetadata]] = {}
+        for record in records:
+            location = record.exif.location
+            if location is None or not self._matches_query(record, query):
+                continue
+            if bbox is not None and not bbox.contains(location.latitude, location.longitude):
+                continue
+            key = (
+                int((location.latitude + 90.0) / cell_degrees),
+                int((location.longitude + 180.0) / cell_degrees),
+            )
+            cells.setdefault(key, []).append(record)
+        clusters = []
+        for members_ in cells.values():
+            newest = max(members_, key=lambda m: (m.exif.captured_at or datetime.min, m.file_hash))
+            clusters.append(
+                GeoCluster(
+                    latitude=sum(m.exif.location.latitude for m in members_ if m.exif.location)
+                    / len(members_),
+                    longitude=sum(m.exif.location.longitude for m in members_ if m.exif.location)
+                    / len(members_),
+                    count=len(members_),
+                    representative_hash=newest.file_hash,
+                )
+            )
+        return sorted(clusters, key=lambda c: (-c.count, c.representative_hash))
 
     def facets(self) -> Facets:
         """Aggregate counts for filter UIs, computed over every record."""

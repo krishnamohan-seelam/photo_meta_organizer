@@ -1,20 +1,25 @@
 import React from 'react'
+import { Check, Flag } from 'lucide-react'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
-import { Flag, Check } from 'lucide-react'
+import { displayTitle, exposureLine } from '../../utils/photoFormat'
 
 interface PhotoCardProps {
   photo: PhotoMetadata
   /** Position of this photo in the list the lightbox pages through. */
   index: number
+  width: number
+  height: number
+  /** Edge of the square thumbnail requested from the server (it keeps the aspect ratio). */
+  thumbSize: number
 }
 
-// memo + narrow selectors: the grid can hold thousands of cards, and a card must re-render
+// memo + narrow selectors: the grid can hold thousands of tiles, and a tile must re-render
 // only when its own photo, selection state or inspected state changes, never on every store update.
-export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCardProps) {
+export const PhotoCard = React.memo(function PhotoCard({ photo, index, width, height, thumbSize }: PhotoCardProps) {
   const setInspectedHash = useUiStore((s) => s.setInspectedHash)
   const setLightboxIndex = useUiStore((s) => s.setLightboxIndex)
   const inspected = useUiStore((s) => s.inspectedHash === photo.file_hash)
@@ -22,179 +27,61 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index }: PhotoCa
   const toggleSelect = useSelectionStore((s) => s.toggleSelect)
 
   const name = photo.file_info.name
+  const title = displayTitle(name)
+  const exposure = exposureLine(photo.exif)
   const description = [
-    name,
+    title === name ? name : `${title}, ${name}`,
     photo.rating ? `${photo.rating} star${photo.rating > 1 ? 's' : ''}` : null,
-    photo.flagged ? 'flagged' : null,
+    photo.flagged ? 'picked' : null,
   ]
     .filter(Boolean)
     .join(', ')
 
   return (
-    <div
-      style={{
-        background: 'var(--bg-card)',
-        borderRadius: 'var(--radius-md)',
-        overflow: 'hidden',
-        border: `1px solid ${
-          inspected
-            ? 'var(--accent-secondary)'
-            : selected
-            ? 'var(--accent-primary)'
-            : 'var(--border-color)'
-        }`,
-        boxShadow: inspected || selected ? 'var(--shadow-glow)' : '0 1px 3px rgba(0,0,0,0.05)',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s',
-      }}
-      onMouseEnter={(e) => {
-        if (!inspected && !selected) {
-          e.currentTarget.style.borderColor = 'var(--accent-primary)'
-          e.currentTarget.style.transform = 'translateY(-2px)'
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!inspected && !selected) {
-          e.currentTarget.style.borderColor = 'var(--border-color)'
-          e.currentTarget.style.transform = 'translateY(0)'
-        }
-      }}
-    >
-      {/* The whole card is one button (click: inspect; double-click, or Enter on the inspected card: open). */}
+    <div className={`tile${selected ? ' sel' : ''}${inspected ? ' cur' : ''}`} style={{ width, height }}>
+      {/* The whole tile is one button: click inspects, Ctrl/⌘-click selects, double-click opens (FR-1c.8). */}
       <button
         type="button"
-        className="btn-reset card-hit"
+        className="btn-reset tile-hit"
         aria-label={description}
         aria-current={inspected ? 'true' : undefined}
-        title="Click to inspect · double-click or Enter to open"
-        onClick={() => setInspectedHash(photo.file_hash)}
-        onDoubleClick={() => setLightboxIndex(index)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && inspected) {
-            e.preventDefault()
-            setLightboxIndex(index)
-          }
+        title={`${name} · double-click or Enter to open`}
+        data-photo-index={index}
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey) toggleSelect(photo.file_hash, photo.file_info.size_bytes)
+          else setInspectedHash(photo.file_hash)
         }}
+        onDoubleClick={() => setLightboxIndex(index)}
       />
 
-      {/* Thumbnail Wrap */}
-      <div
-        style={{
-          position: 'relative',
-          aspectRatio: '4 / 3',
-          background: 'var(--box-bg)',
-          overflow: 'hidden',
-        }}
+      {/* Selection checkbox: a sibling of the tile button, never nested in it */}
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={selected}
+        aria-label={`Select ${name}`}
+        className="btn-reset tile-check"
+        onClick={() => toggleSelect(photo.file_hash, photo.file_info.size_bytes)}
       >
-        {/* Selection Checkbox: a sibling of the card button, never nested in it */}
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={selected}
-          aria-label={`Select ${name}`}
-          className="btn-reset"
-          onClick={() => toggleSelect(photo.file_hash, photo.file_info.size_bytes)}
-          style={{
-            position: 'absolute',
-            top: '8px',
-            left: '8px',
-            width: '22px',
-            height: '22px',
-            background: selected ? 'var(--accent-primary)' : 'rgba(15, 23, 42, 0.75)',
-            border: `1px solid ${selected ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.4)'}`,
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            zIndex: 10,
-            cursor: 'pointer',
-          }}
-        >
-          {selected && <Check size={14} strokeWidth={3} />}
-        </button>
+        <Check size={13} strokeWidth={3} />
+      </button>
 
-        {/* Flag Badge */}
-        {photo.flagged && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              background: 'var(--bg-card)',
-              backdropFilter: 'blur(4px)',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              fontSize: '0.72rem',
-              color: 'var(--accent-warning)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '2px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-              zIndex: 10,
-              pointerEvents: 'none',
-            }}
-            aria-hidden="true"
-          >
-            <Flag size={12} fill="var(--accent-warning)" />
-          </div>
-        )}
+      <img src={getThumbnailUrl(photo.file_hash, thumbSize, thumbSize)} alt="" loading="lazy" decoding="async" onError={swapToPlaceholder} />
 
-        <img
-          src={getThumbnailUrl(photo.file_hash)}
-          alt=""
-          loading="lazy"
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
-          onError={swapToPlaceholder}
-        />
-      </div>
+      {(photo.flagged || photo.rating) && (
+        <div className="tile-badges" aria-hidden="true">
+          {photo.flagged && (
+            <span className="tile-badge pick">
+              <Flag size={11} fill="currentColor" />
+            </span>
+          )}
+          {photo.rating ? <span className="tile-badge num">{photo.rating}★</span> : null}
+        </div>
+      )}
 
-      {/* Card Info */}
-      <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div
-          style={{
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            color: 'var(--text-primary)',
-          }}
-        >
-          {photo.file_info.name}
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '0.72rem',
-            color: 'var(--text-muted)',
-          }}
-        >
-          <span>{photo.exif.camera_make || 'Unknown'}</span>
-          <span>{photo.exif.f_stop ? `f/${photo.exif.f_stop}` : ''} {photo.exif.exposure_time || ''}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px' }}>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {photo.labels.slice(0, 2).map((tag) => (
-              <span key={tag} className="badge badge-tag" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>
-                #{tag}
-              </span>
-            ))}
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--accent-warning)' }}>
-            {photo.rating ? '★'.repeat(photo.rating) : ''}
-          </span>
-        </div>
+      <div className="tile-scrim" aria-hidden="true">
+        <div className="tile-title">{title}</div>
+        {exposure && <div className="tile-exposure">{exposure}</div>}
       </div>
     </div>
   )

@@ -18,8 +18,10 @@ from datetime import datetime
 from typing import Any
 
 from photo_meta_organizer.application.interfaces.search_types import (
+    BoundingBox,
     FacetCount,
     Facets,
+    GeoCluster,
     GpsBounds,
     LibraryStats,
     Page,
@@ -309,7 +311,9 @@ class SqliteRepository:
     # Search, paging and facets
     # =========================================================================
 
-    def query(self, query: SearchQuery) -> Page[ImageMetadata]:
+    @staticmethod
+    def _where(query: SearchQuery) -> tuple[str, list[Any]]:
+        """The ``WHERE`` clause (or ``""``) and its parameters for the SQL-expressible filters."""
         clauses: list[str] = []
         params: list[Any] = []
 
@@ -336,6 +340,10 @@ class SqliteRepository:
         if query.has_location is not None:
             located = "gps_lat IS NOT NULL AND gps_lon IS NOT NULL"
             clauses.append(located if query.has_location else f"NOT ({located})")
+        if query.within is not None:
+            clause, bbox_params = _bbox_sql(query.within)
+            clauses.append(clause)
+            params.extend(bbox_params)
         if query.collection is not None:
             clauses.append(
                 "file_hash IN (SELECT file_hash FROM collection_photos WHERE collection = ?)"
@@ -364,7 +372,10 @@ class SqliteRepository:
             )
             params.extend([term, term, term, term, term])
 
-        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        return (f"WHERE {' AND '.join(clauses)}" if clauses else ""), params
+
+    def query(self, query: SearchQuery) -> Page[ImageMetadata]:
+        where_sql, params = self._where(query)
         order_sql = self._order_by_sql(query.sort_by, query.sort_order)
 
         with self.lock:
@@ -431,6 +442,34 @@ class SqliteRepository:
             # Unknown capture dates (PMO-24) go last in either direction.
             return f"captured_at IS NULL, captured_at {direction}, file_hash"
         return f"{column} {direction}, file_hash"
+
+    def geo_clusters(
+        self, query: SearchQuery, bbox: BoundingBox | None, cell_degrees: float
+    ) -> list[GeoCluster]:
+        where_sql, params = self._where(query)
+        located = "gps_lat IS NOT NULL AND gps_lon IS NOT NULL"
+        where_sql = f"{where_sql} AND {located}" if where_sql else f"WHERE {located}"
+        if bbox is not None:
+            clause, bbox_params = _bbox_sql(bbox)
+            where_sql += f" AND {clause}"
+            params.extend(bbox_params)
+        # Shifted to be positive, so CAST truncation is floor. The bare file_hash comes from
+        # the row holding MAX(captured_at): the cluster's most recent photo.
+        sql = (
+            "SELECT AVG(gps_lat) AS lat, AVG(gps_lon) AS lon, COUNT(*) AS n, file_hash, "
+            "MAX(COALESCE(captured_at, '')) AS newest FROM photos "
+            f"{where_sql} "
+            "GROUP BY CAST((gps_lat + 90.0) / ? AS INTEGER), CAST((gps_lon + 180.0) / ? AS INTEGER) "
+            "ORDER BY n DESC, file_hash"
+        )
+        with self.lock:
+            rows = self.connection.execute(sql, [*params, cell_degrees, cell_degrees]).fetchall()
+        return [
+            GeoCluster(
+                latitude=r["lat"], longitude=r["lon"], count=r["n"], representative_hash=r["file_hash"]
+            )
+            for r in rows
+        ]
 
     def facets(self) -> Facets:
         with self.lock:
@@ -617,6 +656,18 @@ class SqliteRepository:
         else:
             command = SetFlag(value)
         return self.apply_batch(file_hashes, command)
+
+
+def _bbox_sql(bbox: BoundingBox) -> tuple[str, list[float]]:
+    """SQL condition and parameters selecting the rows inside a map area."""
+    if bbox.west <= bbox.east:
+        lon = "gps_lon BETWEEN ? AND ?"
+    else:  # the area crosses the antimeridian
+        lon = "(gps_lon >= ? OR gps_lon <= ?)"
+    return (
+        f"(gps_lat BETWEEN ? AND ? AND {lon})",
+        [bbox.south, bbox.north, bbox.west, bbox.east],
+    )
 
 
 def _escape_like(value: str) -> str:

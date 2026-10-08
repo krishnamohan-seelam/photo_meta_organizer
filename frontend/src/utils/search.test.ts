@@ -8,11 +8,21 @@ const base: LibraryFilters = {
   filterTags: [],
   filterCollection: 'all',
   filterTimeframe: 'all',
+  filterRating: null,
+  filterModel: '',
+  filterHasLocation: null,
+  filterDateRange: null,
   sortBy: 'captured_at',
   sortOrder: 'desc',
 }
 
 describe('toSearchRequest (PMO-27)', () => {
+  it('sends the map area as `within`', () => {
+    const area = { south: 30, west: 130, north: 40, east: 145 }
+    expect(toSearchRequest({ ...base, filterArea: area }).within).toEqual(area)
+    expect(toSearchRequest({ ...base, filterArea: null })).not.toHaveProperty('within')
+  })
+
   it('sends only the sort when nothing is filtered', () => {
     expect(toSearchRequest(base)).toEqual({ sort_by: 'captured_at', sort_order: 'desc' })
   })
@@ -41,5 +51,25 @@ describe('toSearchRequest (PMO-27)', () => {
   it('trims the search term and drops a blank one', () => {
     expect(toSearchRequest({ ...base, searchQuery: '  tokyo ' }).search_term).toBe('tokyo')
     expect(toSearchRequest({ ...base, searchQuery: '   ' })).not.toHaveProperty('search_term')
+  })
+
+  it('a rating filter asks for that exact rating (FR-1d.3)', () => {
+    expect(toSearchRequest({ ...base, filterRating: 4 }).rating).toBe(4)
+    expect(toSearchRequest({ ...base, filterRating: null })).not.toHaveProperty('rating')
+  })
+
+  it('model, location and a date range map to their request fields (FR-2a.2)', () => {
+    const request = toSearchRequest({
+      ...base,
+      filterModel: ' a7 iv ',
+      filterHasLocation: false,
+      filterDateRange: { start: '2026-05-14', end: '2026-05-21' },
+    })
+    expect(request).toMatchObject({
+      camera_model: 'a7 iv',
+      has_location: false,
+      date_start: '2026-05-14T00:00:00',
+      date_end: '2026-05-21T23:59:59.999999',
+    })
   })
 })

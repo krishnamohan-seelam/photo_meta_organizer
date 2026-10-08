@@ -36,3 +36,12 @@ export type Job = Schemas['JobResponse']
 export type JobStatus = Job['status']
 export type IndexFolderRequest = Schemas['IndexFolderRequest']
 export type SyncFolderRequest = Schemas['SyncFolderRequest']
+
+/** A map area; `west > east` means it crosses the date line. */
+export type BoundingBox = Schemas['BoundingBoxSchema']
+/** `POST /api/geo/clusters`: search filters plus the visible map area and zoom. */
+export type GeoClustersRequest = Schemas['GeoClustersRequest']
+export type GeoClustersResponse = Schemas['GeoClustersResponse']
+export type GeoCluster = Schemas['GeoClusterSchema']
+/** `GET /api/config`. */
+export type AppConfig = Schemas['AppConfigResponse']

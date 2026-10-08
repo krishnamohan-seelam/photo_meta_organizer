@@ -89,4 +89,34 @@ describe('useCuration (PMO-13/15)', () => {
     expect(cached().inPage.flagged).toBe(false)
     expect(useUiStore.getState().toastMessage).toMatch(/^Not saved: Cannot reach the backend/)
   })
+
+  it('batch rating updates every selected photo at once and rolls back all of them on failure (FR-1f.2)', async () => {
+    const { respond } = deferredFetch()
+    const other = 'e'.repeat(64)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    const page: PaginatedPhotosResponse = {
+      items: [makePhoto({ file_hash: HASH, rating: 1 }), makePhoto({ file_hash: other, rating: null })],
+      total_count: 2,
+      page: 1,
+      page_size: 200,
+      total_pages: 1,
+    }
+    qc.setQueryData(searchKey, page)
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    const { result } = renderHook(() => useCuration(), { wrapper })
+    const ratings = () => qc.getQueryData<PaginatedPhotosResponse>(searchKey)!.items.map((p) => p.rating)
+
+    let saved: Promise<boolean>
+    act(() => {
+      saved = result.current.batchPhotos({ photo_hashes: [HASH, other], action: 'set_rating', value: 4 }, 'Rated')
+    })
+    await waitFor(() => expect(ratings()).toEqual([4, 4]))
+
+    respond({ detail: 'database is locked' }, 500)
+    await act(async () => {
+      expect(await saved).toBe(false)
+    })
+    expect(ratings()).toEqual([1, null])
+    expect(useUiStore.getState().toastKind).toBe('error')
+  })
 })

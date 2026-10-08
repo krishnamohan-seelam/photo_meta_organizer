@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Darkroom Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* Prototype A · Darkroom — photo-first, neutral chrome.
+   Neutral greys carry no hue, so the UI never tints how a photo's colours are perceived. */
+:root {
+  --bg: #121212;
+  --panel: #181818;
+  --raised: #202020;
+  --hover: #2a2a2a;
+  --line: #2c2c2c;
+  --line-soft: #222;
+  --text: #ececec;
+  --text-2: #a3a3a3;
+  --text-3: #6f6f6f;
+  --accent: #f5b544;          /* one accent: picks, selection, primary action */
+  --accent-ink: #1a1203;
+  --accent-soft: rgba(245, 181, 68, 0.14);
+  --danger: #ef6a5b;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --font: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font: 13px/1.45 var(--font); overflow: hidden; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.app { display: grid; grid-template-columns: 56px auto 1fr auto; height: 100vh; }
+
+/* ---------- Nav rail: views + panel toggles, replaces 5 labelled header tabs */
+.rail { background: var(--panel); border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 4px; }
+.logo { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; margin-bottom: 14px; }
+.rail-btn { width: 40px; height: 40px; border-radius: var(--r-md); display: grid; place-items: center; color: var(--text-3); position: relative; transition: background .15s, color .15s; }
+.rail-btn:hover { background: var(--raised); color: var(--text); }
+.rail-btn[aria-pressed="true"] { color: var(--text); background: var(--raised); }
+.rail-btn[aria-pressed="true"]::before { content: ''; position: absolute; left: -8px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.rail-btn .tip { position: absolute; left: 50px; white-space: nowrap; background: #000; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 12px; opacity: 0; pointer-events: none; transform: translateX(-4px); transition: .15s var(--ease); z-index: 50; }
+.rail-btn .tip kbd { font-family: var(--mono); color: var(--text-3); margin-left: 6px; }
+.rail-btn:hover .tip, .rail-btn:focus-visible .tip { opacity: 1; transform: none; }
+.rail-spacer { flex: 1; }
+
+/* ---------- Library panel: flat sections, counts with proportion bars */
+.library { width: 236px; background: var(--panel); border-right: 1px solid var(--line-soft); overflow-y: auto; padding: 16px 10px 80px; transition: width .2s var(--ease), padding .2s; }
+.library.closed { width: 0; padding: 0; overflow: hidden; border: 0; }
+.lib-title { font-size: 15px; font-weight: 600; padding: 0 8px 12px; }
+.sec { margin-top: 18px; }
+.sec-h { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.sec-h button { font-size: 11px; color: var(--text-3); letter-spacing: 0; text-transform: none; font-weight: 500; }
+.sec-h button:hover { color: var(--text); }
+.row { width: 100%; display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-sm); color: var(--text-2); text-align: left; position: relative; overflow: hidden; }
+.row:hover { background: var(--raised); color: var(--text); }
+.row[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); }
+.row[aria-pressed="true"] .row-ic { color: var(--accent); }
+.row-ic { color: var(--text-3); display: grid; }
+.row .count { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.row .bar { position: absolute; left: 34px; right: 36px; bottom: 1px; height: 2px; border-radius: 2px; background: var(--line-soft); }
+.row .bar i { display: block; height: 100%; border-radius: 2px; background: var(--text-3); }
+.row[aria-pressed="true"] .bar i { background: var(--accent); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px; }
+.tag { padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-2); font-size: 12px; }
+.tag:hover { border-color: var(--text-3); color: var(--text); }
+.tag[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+/* ---------- Stage: slim top bar + contextual toolbar + gallery */
+.stage { display: flex; flex-direction: column; min-width: 0; }
+.topbar { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line-soft); }
+.search { flex: 1 1 520px; max-width: 560px; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: var(--r-md); background: var(--raised); border: 1px solid transparent; color: var(--text-3); transition: border-color .15s; }
+.search:focus-within { border-color: var(--text-3); }
+.search input { flex: 1; background: none; border: 0; outline: none; color: var(--text); }
+kbd.k { white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--text-3); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+.top-spacer { flex: 0 1 auto; margin-left: auto; }
+.job { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); padding: 6px 10px; border-radius: 999px; background: var(--raised); }
+.job .dot { width: 7px; height: 7px; border-radius: 50%; background: #5bc98a; }
+.job.busy .dot { background: var(--accent); animation: pulse 1s infinite; }
+.job .prog { width: 70px; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; display: none; }
+.job.busy .prog { display: block; }
+.job .prog i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+@keyframes pulse { 50% { opacity: .35; } }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-md); font-weight: 500; color: var(--text-2); }
+.btn:hover { background: var(--raised); color: var(--text); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn-primary:hover { background: #ffc35c; color: var(--accent-ink); }
+.icon-btn { width: 32px; padding: 0; justify-content: center; }
+
+.toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px 10px; flex-wrap: wrap; }
+.toolbar h1 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.toolbar .meta { color: var(--text-3); font-size: 12px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 10px; border-radius: 999px; background: var(--raised); color: var(--text); font-size: 12px; }
+.chip button { display: grid; color: var(--text-3); border-radius: 50%; padding: 2px; }
+.chip button:hover { color: var(--text); background: var(--hover); }
+.seg { display: flex; background: var(--raised); border-radius: var(--r-sm); padding: 2px; }
+.seg button { padding: 4px 10px; border-radius: 4px; font-size: 12px; color: var(--text-3); }
+.seg button[aria-pressed="true"] { background: var(--hover); color: var(--text); }
+.size { display: flex; align-items: center; gap: 6px; color: var(--text-3); }
+.size input { width: 90px; accent-color: var(--accent); }
+
+.gallery { flex: 1; overflow-y: auto; padding: 0 16px 96px; }
+.jrow { display: flex; gap: 4px; margin-bottom: 4px; }
+.tile { position: relative; overflow: hidden; border-radius: 3px; background: var(--raised); cursor: pointer; flex: none; }
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s var(--ease), filter .2s; }
+.tile:hover img { transform: scale(1.025); }
+.tile .scrim { position: absolute; inset: auto 0 0 0; padding: 26px 10px 8px; background: linear-gradient(transparent, rgba(0,0,0,.78)); color: #fff; opacity: 0; transition: opacity .18s; pointer-events: none; }
+.tile:hover .scrim, .tile:focus-visible .scrim { opacity: 1; }
+.scrim .t { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scrim .e { font-family: var(--mono); font-size: 10.5px; color: rgba(255,255,255,.72); margin-top: 1px; }
+.tile .check { position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.85); background: rgba(0,0,0,.25); display: grid; place-items: center; color: transparent; opacity: 0; transition: opacity .15s, background .15s; }
+.tile:hover .check, .tile.sel .check, body.selecting .tile .check { opacity: 1; }
+.tile.sel .check { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tile.sel { box-shadow: inset 0 0 0 3px var(--accent); }
+.tile.sel img { transform: scale(.94); border-radius: 2px; }
+.tile.cur { outline: 2px solid #fff; outline-offset: 2px; }
+.tile .badges { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
+.badge { height: 22px; min-width: 22px; padding: 0 6px; border-radius: 999px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); color: #fff; font-size: 11px; display: inline-flex; align-items: center; gap: 3px; }
+.badge.pick { background: var(--accent); color: var(--accent-ink); }
+.empty { padding: 80px 0; text-align: center; color: var(--text-3); }
+.empty b { display: block; color: var(--text); font-size: 15px; margin-bottom: 6px; }
+
+/* ---------- Inspector: preview first, real histogram, one-line exposure strip */
+.inspector { width: 320px; background: var(--panel); border-left: 1px solid var(--line-soft); overflow-y: auto; transition: width .2s var(--ease); }
+.inspector.closed { width: 0; overflow: hidden; border: 0; }
+.insp-in { width: 320px; padding: 14px 16px 90px; }
+.preview { position: relative; border-radius: var(--r-md); overflow: hidden; background: #0b0b0b; display: grid; place-items: center; aspect-ratio: 4 / 3; cursor: zoom-in; }
+.preview img { max-width: 100%; max-height: 100%; display: block; }
+.preview .open { position: absolute; right: 8px; bottom: 8px; opacity: 0; transition: opacity .15s; }
+.preview:hover .open { opacity: 1; }
+.i-title { margin-top: 14px; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.i-file { font-family: var(--mono); font-size: 11px; color: var(--text-3); margin-top: 2px; word-break: break-all; }
+.curate { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 8px; border-radius: var(--r-md); background: var(--raised); }
+.stars { display: flex; gap: 1px; }
+.stars button { padding: 3px; color: var(--text-3); display: grid; }
+.stars button.on { color: var(--accent); }
+.stars button.on svg { fill: currentColor; }
+.stars button:hover { color: var(--text); }
+.pick-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: var(--r-sm); color: var(--text-2); font-size: 12px; font-weight: 500; }
+.pick-btn:hover { background: var(--hover); }
+.pick-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.pick-btn[aria-pressed="true"] svg { fill: currentColor; }
+.hint { font-family: var(--mono); font-size: 10px; color: var(--text-3); opacity: .8; }
+.pick-btn[aria-pressed="true"] .hint { color: var(--accent-ink); }
+.i-sec { margin-top: 18px; }
+.i-sec h3 { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 8px; display: flex; justify-content: space-between; }
+.i-sec h3 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+canvas.histo { width: 100%; height: 72px; display: block; border-radius: var(--r-sm); background: #0b0b0b; }
+.expo { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.expo div { padding: 8px 6px; text-align: center; border-right: 1px solid var(--line); }
+.expo div:last-child { border: 0; }
+.expo b { display: block; font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
+.expo small { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+dl.kv { display: grid; grid-template-columns: 82px 1fr; gap: 7px 10px; font-size: 12.5px; }
+dl.kv dt { color: var(--text-3); }
+dl.kv dd { color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+dl.kv dd.hash { display: flex; gap: 6px; align-items: center; font-family: var(--mono); font-size: 11px; }
+dl.kv dd.hash button { color: var(--text-3); display: grid; }
+dl.kv dd.hash button:hover { color: var(--text); }
+.itags { display: flex; flex-wrap: wrap; gap: 6px; }
+.itags .tag.add { border-style: dashed; color: var(--text-3); display: inline-flex; align-items: center; gap: 3px; }
+
+/* ---------- Selection dock: contextual, appears only with a selection */
+.dock { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 130%); display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 14px; border-radius: 14px; background: #262626; border: 1px solid #333; box-shadow: 0 18px 50px rgba(0,0,0,.55); transition: transform .25s var(--ease); z-index: 30; }
+.dock.show { transform: translate(-50%, 0); }
+.dock .n { font-weight: 600; margin-right: 8px; white-space: nowrap; }
+.dock .n small { color: var(--text-3); font-weight: 400; margin-left: 4px; }
+.dock .sep { width: 1px; height: 20px; background: #3a3a3a; margin: 0 4px; }
+
+/* ---------- Lightbox */
+.lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.96); display: none; z-index: 60; }
+.lightbox.open { display: grid; grid-template-rows: 1fr auto; }
+.lb-stage { display: grid; place-items: center; padding: 40px 80px 10px; min-height: 0; }
+.lb-stage img { max-width: 100%; max-height: 100%; box-shadow: 0 20px 80px rgba(0,0,0,.6); }
+.lb-bar { display: flex; justify-content: center; gap: 18px; align-items: center; padding: 12px 0 18px; color: var(--text-2); font-size: 12px; }
+.lb-bar .num { color: var(--text); }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.08); display: grid; place-items: center; color: #fff; }
+.lb-nav:hover { background: rgba(255,255,255,.16); }
+.lb-close { position: absolute; top: 14px; right: 14px; }
+
+/* ---------- Lights out: dim everything except the photos */
+body.lights-out .rail, body.lights-out .library, body.lights-out .inspector, body.lights-out .topbar, body.lights-out .toolbar { opacity: .12; transition: opacity .3s; }
+body.lights-out .rail:hover, body.lights-out .library:hover, body.lights-out .inspector:hover, body.lights-out .topbar:hover { opacity: 1; }
+body.lights-out { background: #050505; }
+
+.toast { position: fixed; top: 64px; left: 50%; transform: translate(-50%, -12px); background: #2b2b2b; border: 1px solid #383838; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; opacity: 0; transition: .2s var(--ease); pointer-events: none; z-index: 70; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Prototype chrome: design notes */
+.notes-fab { position: fixed; left: 70px; bottom: 16px; z-index: 40; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: #fff; color: #111; font-weight: 600; font-size: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+.notes { visibility: hidden; position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: #fafafa; color: #1b1b1b; z-index: 80; transform: translateX(100%); transition: transform .3s var(--ease); overflow-y: auto; padding: 28px 28px 60px; box-shadow: -20px 0 60px rgba(0,0,0,.5); }
+.notes.open { transform: none; visibility: visible; }
+.notes h2 { font-size: 22px; letter-spacing: -.02em; }
+.notes .lede { color: #555; margin: 6px 0 18px; font-size: 13.5px; }
+.notes .close { position: absolute; top: 18px; right: 18px; color: #555; }
+.note { border-top: 1px solid #e5e5e5; padding: 14px 0; }
+.note h4 { font-size: 14px; margin-bottom: 6px; }
+.note .ba { display: grid; grid-template-columns: 56px 1fr; gap: 4px 10px; font-size: 12.5px; }
+.note .ba span { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding-top: 2px; }
+.note .ba .b { color: #b0412e; } .note .ba .a { color: #2d7a47; } .note .ba .w { color: #6b6b6b; }
+.note code { font-family: var(--mono); font-size: 11.5px; background: #ececec; padding: 1px 4px; border-radius: 3px; }
+.notes a { color: #1b1b1b; }
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 56px 0 1fr 0; }
+  .library, .inspector { position: fixed; top: 0; bottom: 0; z-index: 20; }
+  .library { left: 56px; } .inspector { right: 0; }
+  .toolbar .seg, .size { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" aria-label="Views">
+    <div class="logo" id="logo"></div>
+    <div id="views"></div>
+    <div class="rail-spacer"></div>
+    <button class="rail-btn" id="tglLib" aria-pressed="true"></button>
+    <button class="rail-btn" id="tglInsp" aria-pressed="true"></button>
+    <button class="rail-btn" id="tglDim" aria-pressed="false"></button>
+  </nav>
+
+  <aside class="library" id="library" aria-label="Library and filters"></aside>
+
+  <main class="stage">
+    <div class="topbar">
+      <label class="search" id="searchWrap"><span id="searchIc"></span><input id="q" placeholder="Search 18 photos: title, camera, place or tag" autocomplete="off" /><kbd class="k">Ctrl K</kbd></label>
+      <div class="top-spacer"></div>
+      <div class="job" id="job" role="status"><span class="dot"></span><span id="jobText">Library up to date</span><span class="prog"><i id="jobBar"></i></span></div>
+      <button class="btn icon-btn" id="syncBtn" title="Sync: re-check folders for new, edited and deleted photos"></button>
+      <button class="btn btn-primary" id="importBtn"></button>
+    </div>
+    <div class="toolbar">
+      <h1 id="viewTitle">All photos</h1>
+      <span class="meta num" id="count"></span>
+      <div class="chips" id="chips"></div>
+      <div style="flex:1"></div>
+      <div class="seg" id="sort" role="group" aria-label="Sort">
+        <button data-s="date" aria-pressed="true">Date</button><button data-s="rating" aria-pressed="false">Rating</button><button data-s="name" aria-pressed="false">Name</button>
+      </div>
+      <label class="size" title="Thumbnail size"><span id="sizeIc"></span><input type="range" id="size" min="140" max="340" value="210" /></label>
+    </div>
+    <div class="gallery" id="gallery" tabindex="-1"></div>
+  </main>
+
+  <aside class="inspector" id="inspector" aria-label="Photo details"><div class="insp-in" id="insp"></div></aside>
+</div>
+
+<div class="dock" id="dock" role="toolbar" aria-label="Selection actions"></div>
+
+<div class="lightbox" id="lb" aria-modal="true" role="dialog" aria-label="Photo viewer">
+  <div class="lb-stage"><img id="lbImg" alt="" /></div>
+  <div class="lb-bar" id="lbBar"></div>
+  <button class="lb-nav" id="lbPrev" style="left:20px" aria-label="Previous"></button>
+  <button class="lb-nav" id="lbNext" style="right:20px" aria-label="Next"></button>
+  <button class="btn icon-btn lb-close" id="lbClose" aria-label="Close"></button>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<button class="notes-fab" id="notesFab"></button>
+<aside class="notes" id="notes" aria-label="Design notes">
+  <button class="close btn icon-btn" id="notesClose" aria-label="Close notes"></button>
+  <h2>Prototype A · Darkroom</h2>
+  <p class="lede">Photo-first and quiet. The interface steps back so the pictures carry the colour. Built for culling and rating, with the keyboard first. <a href="index.html">← All prototypes</a></p>
+
+  <div class="note"><h4>1 · Colour system</h4><div class="ba">
+    <span class="b">Before</span><div>Blue-tinted slate surfaces (<code>#0b0f17</code>, <code>#1e293b</code>), a sky-blue accent and glow shadows on selected cards.</div>
+    <span class="a">After</span><div>Hue-free greys from <code>#121212</code> to <code>#2a2a2a</code>, plus one amber accent used only for picks, selection and the primary action.</div>
+    <span class="w">Why</span><div>Tinted chrome shifts how you perceive a photo's white balance (simultaneous contrast). Lightroom and Capture One use neutral grey for this reason. With one accent, amber always means "this is chosen".</div></div></div>
+
+  <div class="note"><h4>2 · App shell: header → nav rail</h4><div class="ba">
+    <span class="b">Before</span><div><code>AppHeader</code> holds about 13 controls: brand and "Phase 4 Pro" badge, five labelled view tabs, Light, Dim, two panel toggles, Scan, Sync and Export.</div>
+    <span class="a">After</span><div>A 56px icon rail with tooltips and shortcuts holds the views and panel toggles. The top bar keeps only search, a job-status pill, Sync and Import. Export moves to the selection dock, where it applies to something.</div>
+    <span class="w">Why</span><div>Fewer competing targets (Hick's law). The views live on one axis and actions on another. The rail also gives the desktop (Electron) build a native-app feel.</div></div></div>
+
+  <div class="note"><h4>3 · Gallery card → justified rows</h4><div class="ba">
+    <span class="b">Before</span><div><code>PhotoCard</code> is a bordered card cropped to 4:3, with a filename caption, a hover lift and a glow on selection.</div>
+    <span class="a">After</span><div>Borderless tiles in justified rows that keep each photo's aspect ratio. The title and exposure appear in a hover scrim. Selection shows an amber ring, an inset and a check, and a pick shows a badge.</div>
+    <span class="w">Why</span><div>Portraits are no longer cut off, and roughly 30% more photos fit on screen. The API already returns <code>dimensions</code>, so the row layout can be computed before any image loads, and it still works with the TanStack row virtualizer.</div></div></div>
+
+  <div class="note"><h4>4 · Filter sidebar → library panel</h4><div class="ba">
+    <span class="b">Before</span><div>Stacked accordion "dropdown cards", emoji labels (📁 ⭐ 🗂️) mixed with lucide icons, and a hotkeys card that takes permanent space.</div>
+    <span class="a">After</span><div>Flat sections with consistent icons. Each camera row has a thin bar showing its share of the library. Active filters reappear as removable chips next to the result count. Shortcuts move into tooltips.</div>
+    <span class="w">Why</span><div>You can see what is filtering the grid without opening the sidebar. The bars put the Analytics information where you make decisions.</div></div></div>
+
+  <div class="note"><h4>5 · EXIF inspector</h4><div class="ba">
+    <span class="b">Before</span><div>A histogram drawn from sine waves (it looks the same for every photo), 2×2 boxed exposure tiles with emoji, and rating in its own section.</div>
+    <span class="a">After</span><div>A preview at the top, and a histogram computed from the thumbnail's pixels (try different photos). A one-line monospace strip shows aperture, shutter, ISO and focal length. Rating and Pick share one row with key hints. Details are a definition list with copy-hash.</div>
+    <span class="w">Why</span><div>Honest data: a decorative histogram suggests information that isn't there. In the real app the thumbnail comes from the same origin, so canvas can read its pixels.</div></div></div>
+
+  <div class="note"><h4>6 · Selection dock and lightbox</h4><div class="ba">
+    <span class="b">Before</span><div>A dock that is always rendered, and Export JSON in the header acting on "the selection or everything".</div>
+    <span class="a">After</span><div>The dock slides up only when something is selected and shows the count and size, then Pick, Rate, Add to collection, Export and Clear. The lightbox is pure black with an exposure line and arrow-key paging.</div>
+    <span class="w">Why</span><div>Actions sit next to what they act on, and nothing is ambiguous about what will be exported.</div></div></div>
+
+  <div class="note"><h4>Try it</h4><div style="font-size:12.5px;color:#444;line-height:1.7">
+    <code>←</code>/<code>→</code> move · <code>1</code>–<code>5</code> rate · <code>0</code> clear rating · <code>P</code> pick · <code>X</code> select · <code>Enter</code> open · <code>L</code> lights out · <code>\</code> toggle library · <code>Ctrl K</code> search</div></div>
+
+  <div class="note"><h4>Adopting it in the React code</h4><div style="font-size:12.5px;color:#444;line-height:1.6">
+    New <code>NavRail.tsx</code>; slim down <code>AppHeader.tsx</code>. <code>PhotoGallery.tsx</code>: compute justified rows from <code>dimensions</code>, then virtualize rows. Restyle <code>PhotoCard.tsx</code> with CSS classes instead of inline <code>onMouseEnter</code> styles. <code>ExifInspector.tsx</code>: histogram from the thumbnail. Swap the tokens in <code>index.css</code>. Effort: medium. The data flow is unchanged.</div></div>
+</aside>
+
+<script src="shared/sample-library.js"></script>
+<script>
+(() => {
+  'use strict'
+  const { PHOTOS, COLLECTIONS, src, icon, fmtDate, esc, hash, countBy } = window.PMO
+  const $ = (id) => document.getElementById(id)
+
+  const state = {
+    view: 'studio', q: '', cameras: new Set(), tags: new Set(), coll: 'all',
+    sort: 'date', size: 210, cur: PHOTOS[0].id, sel: new Set(), lb: null,
+  }
+
+  // ---------- static chrome
+  $('logo').innerHTML = icon('aperture', 18, 2)
+  const VIEWS = [['studio', 'grid', 'Library', 'G'], ['timeline', 'calendar', 'Timeline', 'T'], ['map', 'map', 'Map', 'M'], ['kanban', 'kanban', 'Collections', 'C'], ['analytics', 'chart', 'Insights', 'A']]
+  $('views').innerHTML = VIEWS.map(([k, ic, label, key]) =>
+    `<button class="rail-btn" data-view="${k}" aria-pressed="${k === 'studio'}" aria-label="${label}">${icon(ic, 19)}<span class="tip">${label}<kbd>${key}</kbd></span></button>`).join('')
+  $('views').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-view]'); if (!b) return
+    document.querySelectorAll('[data-view]').forEach((x) => x.setAttribute('aria-pressed', x === b))
+    if (b.dataset.view !== 'studio') toast(`${b.getAttribute('aria-label')} keeps the same rail and neutral chrome (not mocked here)`)
+  })
+  $('tglLib').innerHTML = icon('panelLeft', 19) + '<span class="tip">Library panel<kbd>\\</kbd></span>'
+  $('tglInsp').innerHTML = icon('panelRight', 19) + '<span class="tip">Details panel<kbd>I</kbd></span>'
+  $('tglDim').innerHTML = icon('eyeOff', 19) + '<span class="tip">Lights out<kbd>L</kbd></span>'
+  $('searchIc').innerHTML = icon('search', 15)
+  $('syncBtn').innerHTML = icon('refresh', 16)
+  $('importBtn').innerHTML = icon('folderPlus', 15) + 'Import'
+  $('sizeIc').innerHTML = icon('image', 14)
+  $('lbPrev').innerHTML = icon('chevronLeft', 22)
+  $('lbNext').innerHTML = icon('chevronRight', 22)
+  $('lbClose').innerHTML = icon('x', 18)
+  $('notesFab').innerHTML = icon('info', 14, 2) + 'Design notes'
+  $('notesClose').innerHTML = icon('x', 18)
+  $('notesFab').onclick = () => $('notes').classList.add('open')
+  $('notesClose').onclick = () => $('notes').classList.remove('open')
+
+  const togglePanel = (btn, panel) => { const open = panel.classList.toggle('closed'); btn.setAttribute('aria-pressed', !open); requestAnimationFrame(() => setTimeout(renderGallery, 210)) }
+  $('tglLib').onclick = () => togglePanel($('tglLib'), $('library'))
+  $('tglInsp').onclick = () => togglePanel($('tglInsp'), $('inspector'))
+  $('tglDim').onclick = toggleDim
+  function toggleDim() { const on = document.body.classList.toggle('lights-out'); $('tglDim').setAttribute('aria-pressed', on) }
+
+  // ---------- data
+  function filtered() {
+    const q = state.q.trim().toLowerCase()
+    let list = PHOTOS.filter((p) => {
+      if (state.cameras.size && !state.cameras.has(p.camera)) return false
+      for (const t of state.tags) if (!p.tags.includes(t)) return false          // AND semantics, as in the API
+      if (state.coll === 'picks' && !p.flag) return false
+      if (state.coll === 'top' && p.rating < 4) return false
+      const c = COLLECTIONS.find((x) => x.name === state.coll)
+      if (c && !c.ids.includes(p.id)) return false
+      if (q && ![p.title, p.name, p.camera, p.lens, p.place, p.country, ...p.tags].join(' ').toLowerCase().includes(q)) return false
+      return true
+    })
+    const by = { date: (a, b) => b.date.localeCompare(a.date), rating: (a, b) => b.rating - a.rating || b.date.localeCompare(a.date), name: (a, b) => a.title.localeCompare(b.title) }
+    return list.sort(by[state.sort])
+  }
+
+  // ---------- library panel
+  function renderLibrary() {
+    const total = PHOTOS.length
+    const row = (ic, label, count, pressed, attrs, bar) => `<button class="row" ${attrs} aria-pressed="${pressed}"><span class="row-ic">${icon(ic, 15)}</span><span>${esc(label)}</span><span class="count">${count}</span>${bar != null ? `<span class="bar"><i style="width:${bar}%"></i></span>` : ''}</button>`
+    let h = `<div class="lib-title">Library</div>`
+    h += row('image', 'All photos', total, state.coll === 'all', 'data-coll="all"')
+    h += row('flag', 'Picks', PHOTOS.filter((p) => p.flag).length, state.coll === 'picks', 'data-coll="picks"')
+    h += row('star', 'Rated 4★ and up', PHOTOS.filter((p) => p.rating >= 4).length, state.coll === 'top', 'data-coll="top"')
+    h += `<div class="sec"><div class="sec-h">Collections <button title="New collection">${icon('plus', 13)}</button></div>`
+    h += COLLECTIONS.map((c) => row('folder', c.name, c.ids.length, state.coll === c.name, `data-coll="${esc(c.name)}"`)).join('') + '</div>'
+    const cams = countBy(PHOTOS, (p) => p.camera)
+    const max = cams[0][1]
+    h += `<div class="sec"><div class="sec-h">Cameras ${state.cameras.size ? '<button data-clear="cameras">Clear</button>' : ''}</div>`
+    h += cams.map(([c, n]) => row('camera', c, n, state.cameras.has(c), `data-cam="${esc(c)}"`, (n / max) * 100)).join('') + '</div>'
+    h += `<div class="sec"><div class="sec-h">Tags ${state.tags.size ? '<button data-clear="tags">Clear</button>' : ''}</div><div class="tags">`
+    h += countBy(PHOTOS, (p) => p.tags).map(([t, n]) => `<button class="tag" data-tag="${esc(t)}" aria-pressed="${state.tags.has(t)}" title="${n} photos">${esc(t)}</button>`).join('') + '</div></div>'
+    $('library').innerHTML = h
+  }
+  $('library').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    if (b.dataset.coll) state.coll = b.dataset.coll
+    else if (b.dataset.cam) toggleSet(state.cameras, b.dataset.cam)
+    else if (b.dataset.tag) toggleSet(state.tags, b.dataset.tag)
+    else if (b.dataset.clear) state[b.dataset.clear].clear()
+    else if (b.title === 'New collection') return toast('New collection from the current selection')
+    renderAll()
+  })
+  const toggleSet = (s, v) => (s.has(v) ? s.delete(v) : s.add(v))
+
+  // ---------- toolbar
+  function renderToolbar(list) {
+    const c = COLLECTIONS.find((x) => x.name === state.coll)
+    $('viewTitle').textContent = c ? c.name : { all: 'All photos', picks: 'Picks', top: 'Rated 4★ and up' }[state.coll]
+    $('count').textContent = `${list.length} of ${PHOTOS.length}`
+    const chips = [...[...state.cameras].map((v) => ['cameras', v, v]), ...[...state.tags].map((v) => ['tags', v, '#' + v])]
+    if (state.q) chips.push(['q', state.q, `“${state.q}”`])
+    $('chips').innerHTML = chips.map(([k, v, label]) => `<span class="chip">${esc(label)}<button data-k="${k}" data-v="${esc(v)}" aria-label="Remove ${esc(label)}">${icon('x', 12)}</button></span>`).join('')
+  }
+  $('chips').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    if (b.dataset.k === 'q') { state.q = ''; $('q').value = '' } else state[b.dataset.k].delete(b.dataset.v)
+    renderAll()
+  })
+  $('sort').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    state.sort = b.dataset.s
+    $('sort').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b))
+    renderAll()
+  })
+  $('size').addEventListener('input', (e) => { state.size = +e.target.value; renderGallery() })
+  $('q').addEventListener('input', (e) => { state.q = e.target.value; renderAll() })
+
+  // ---------- gallery: justified rows (aspect ratio preserved, nothing cropped)
+  function renderGallery() {
+    const list = filtered()
+    const g = $('gallery')
+    const W = g.clientWidth - 32
+    if (!list.length) { g.innerHTML = `<div class="empty"><b>No photos match</b>Remove a filter chip above, or clear the search.</div>`; return }
+    const gap = 4, T = state.size
+    const rows = []
+    let row = [], sum = 0
+    for (const p of list) {
+      row.push(p); sum += p.w / p.h
+      if (sum * T + gap * (row.length - 1) >= W) { rows.push({ row, h: (W - gap * (row.length - 1)) / sum }); row = []; sum = 0 }
+    }
+    if (row.length) rows.push({ row, h: Math.min(T, (W - gap * (row.length - 1)) / sum) })
+    g.innerHTML = rows.map(({ row: r, h }) => `<div class="jrow">${r.map((p) => tile(p, h)).join('')}</div>`).join('')
+    document.body.classList.toggle('selecting', state.sel.size > 0)
+  }
+  function tile(p, h) {
+    const w = Math.floor((p.w / p.h) * h)
+    const cls = ['tile', state.sel.has(p.id) && 'sel', state.cur === p.id && 'cur'].filter(Boolean).join(' ')
+    const badges = (p.flag ? `<span class="badge pick">${icon('flag', 11, 2.2)}</span>` : '') + (p.rating ? `<span class="badge">${p.rating}${icon('star', 10, 2.2)}</span>` : '')
+    return `<div class="${cls}" data-id="${p.id}" style="width:${w}px;height:${Math.floor(h)}px" tabindex="0" role="button" aria-label="${esc(p.title)}, ${p.rating} stars${p.flag ? ', pick' : ''}">
+      <img src="${src(p)}" alt="" loading="lazy" draggable="false" />
+      <span class="check" data-act="select" role="checkbox" aria-checked="${state.sel.has(p.id)}" aria-label="Select">${icon('check', 13, 3)}</span>
+      <span class="badges">${badges}</span>
+      <span class="scrim"><div class="t">${esc(p.title)}</div><div class="e">${p.fl}mm · ƒ/${p.f} · ${p.ss} · ISO ${p.iso}</div></span></div>`
+  }
+  $('gallery').addEventListener('click', (e) => {
+    const t = e.target.closest('.tile'); if (!t) return
+    if (e.target.closest('[data-act="select"]') || e.ctrlKey || e.metaKey) return toggleSelect(t.dataset.id)
+    state.cur = t.dataset.id; renderGallery(); renderInspector()
+  })
+  $('gallery').addEventListener('dblclick', (e) => { const t = e.target.closest('.tile'); if (t) openLb(t.dataset.id) })
+  new ResizeObserver(() => renderGallery()).observe($('gallery'))
+
+  function toggleSelect(id) { toggleSet(state.sel, id); renderGallery(); renderDock() }
+
+  // ---------- inspector
+  function renderInspector() {
+    const p = PHOTOS.find((x) => x.id === state.cur)
+    if (!p) { $('insp').innerHTML = '<div class="empty">Select a photo</div>'; return }
+    const h = hash(p)
+    $('insp').innerHTML = `
+      <div class="preview" id="pv" title="Open (Enter)"><img src="${src(p)}" alt="${esc(p.title)}" /><button class="btn icon-btn open" aria-label="Open full screen" style="background:rgba(0,0,0,.55);color:#fff">${icon('maximize', 15)}</button></div>
+      <div class="i-title">${esc(p.title)}</div>
+      <div class="i-file">${esc(p.name)}</div>
+      <div class="curate">
+        <div class="stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((s) => `<button role="radio" data-rate="${s}" aria-checked="${p.rating === s}" class="${s <= p.rating ? 'on' : ''}" aria-label="${s} stars" title="${s} (key ${s})">${icon('star', 17)}</button>`).join('')}</div>
+        <button class="pick-btn" id="pickBtn" aria-pressed="${p.flag}">${icon('flag', 14)} ${p.flag ? 'Picked' : 'Pick'} <span class="hint">P</span></button>
+      </div>
+      <div class="i-sec"><h3>Histogram <span>from pixels</span></h3><canvas class="histo" id="histo"></canvas></div>
+      <div class="i-sec"><h3>Exposure</h3><div class="expo">
+        <div><b>ƒ/${p.f}</b><small>Aperture</small></div><div><b>${p.ss}</b><small>Shutter</small></div><div><b>${p.iso}</b><small>ISO</small></div><div><b>${p.fl}</b><small>mm</small></div></div></div>
+      <div class="i-sec"><h3>Details</h3><dl class="kv">
+        <dt>Camera</dt><dd>${esc(p.camera)}</dd><dt>Lens</dt><dd title="${esc(p.lens)}">${esc(p.lens)}</dd>
+        <dt>Captured</dt><dd class="num" style="font-size:12px">${fmtDate(p.date)}</dd>
+        <dt>Place</dt><dd>${esc([p.place, p.country].filter(Boolean).join(', '))}${p.lat != null ? ` <span class="num" style="color:var(--text-3);font-size:11px">${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}</span>` : ''}</dd>
+        <dt>File</dt><dd>${p.fmt} · ${p.mb.toFixed(1)} MB</dd>
+        <dt>Hash</dt><dd class="hash"><span>${h.slice(0, 8)}…${h.slice(-6)}</span><button id="copyHash" aria-label="Copy SHA-256">${icon('copy', 13)}</button></dd></dl></div>
+      <div class="i-sec"><h3>Tags</h3><div class="itags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}<button class="tag add">${icon('plus', 11)}Add</button></div></div>`
+    $('pv').onclick = () => openLb(p.id)
+    $('pickBtn').onclick = () => setPick(p)
+    $('insp').querySelector('.stars').onclick = (e) => { const b = e.target.closest('[data-rate]'); if (b) setRating(p, +b.dataset.rate) }
+    $('copyHash').onclick = () => { navigator.clipboard?.writeText(h).catch(() => {}); toast('SHA-256 copied') }
+    drawHistogram(p)
+  }
+
+  // Real luminance + RGB histogram from the image pixels (the current app draws decorative sine waves).
+  function drawHistogram(p) {
+    const cv = $('histo'); const ctx = cv.getContext('2d')
+    const W = (cv.width = cv.offsetWidth * 2), H = (cv.height = cv.offsetHeight * 2)
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const off = document.createElement('canvas'); off.width = 160; off.height = Math.round(160 * p.h / p.w)
+        const o = off.getContext('2d'); o.drawImage(img, 0, 0, off.width, off.height)
+        const d = o.getImageData(0, 0, off.width, off.height).data
+        const bins = [new Array(64).fill(0), new Array(64).fill(0), new Array(64).fill(0)]
+        for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c++) bins[c][d[i + c] >> 2]++
+        const max = Math.max(...bins.flat().slice().sort((a, b) => b - a).slice(3, 4), 1)
+        ctx.clearRect(0, 0, W, H); ctx.globalCompositeOperation = 'lighter'
+        ;['rgba(239,83,80,.75)', 'rgba(102,187,106,.75)', 'rgba(66,165,245,.8)'].forEach((col, c) => {
+          ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, H)
+          bins[c].forEach((v, i) => ctx.lineTo((i / 63) * W, H - Math.min(1, v / max) * (H - 6)))
+          ctx.lineTo(W, H); ctx.fill()
+        })
+        ctx.globalCompositeOperation = 'source-over'
+      } catch { ctx.fillStyle = '#6f6f6f'; ctx.font = '22px Inter'; ctx.fillText('Histogram unavailable in this browser', 16, H / 2) }
+    }
+    img.src = src(p)
+  }
+
+  function setRating(p, r) { p.rating = p.rating === r ? 0 : r; toast(p.rating ? `Rated ${p.rating}★` : 'Rating cleared'); renderGallery(); renderInspector() }
+  function setPick(p) { p.flag = !p.flag; toast(p.flag ? 'Marked as pick' : 'Pick removed'); renderLibrary(); renderGallery(); renderInspector() }
+
+  // ---------- selection dock
+  function renderDock() {
+    const n = state.sel.size
+    $('dock').classList.toggle('show', n > 0)
+    if (!n) return
+    const mb = PHOTOS.filter((p) => state.sel.has(p.id)).reduce((a, p) => a + p.mb, 0)
+    $('dock').innerHTML = `<span class="n">${n} selected<small class="num">${mb.toFixed(1)} MB</small></span>
+      <button class="btn" data-d="pick">${icon('flag', 15)}Pick</button>
+      <button class="btn" data-d="rate">${icon('star', 15)}Rate</button>
+      <button class="btn" data-d="coll">${icon('folderPlus', 15)}Add to collection</button>
+      <span class="sep"></span>
+      <button class="btn btn-primary" data-d="export">${icon('download', 15)}Export</button>
+      <button class="btn icon-btn" data-d="clear" aria-label="Clear selection">${icon('x', 16)}</button>`
+  }
+  $('dock').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-d]'); if (!b) return
+    const d = b.dataset.d
+    if (d === 'clear') state.sel.clear()
+    else if (d === 'pick') { PHOTOS.forEach((p) => state.sel.has(p.id) && (p.flag = true)); toast(`${state.sel.size} photos marked as picks`); renderLibrary(); renderInspector() }
+    else toast({ rate: 'Press 1–5 to rate every selected photo', coll: 'Choose a collection…', export: 'Export ZIP or JSON of the selection' }[d])
+    renderGallery(); renderDock()
+  })
+
+  // ---------- lightbox
+  function openLb(id) { state.lb = id; $('lb').classList.add('open'); renderLb() }
+  function renderLb() {
+    const p = PHOTOS.find((x) => x.id === state.lb)
+    $('lbImg').src = src(p); $('lbImg').alt = p.title
+    const list = filtered(); const i = list.findIndex((x) => x.id === p.id)
+    $('lbBar').innerHTML = `<span style="color:var(--text);font-weight:600">${esc(p.title)}</span><span class="num">${p.fl}mm · ƒ/${p.f} · ${p.ss} · ISO ${p.iso}</span><span>${esc(p.camera)}</span><span class="num">${i + 1} / ${list.length}</span>`
+  }
+  function stepLb(d) { const list = filtered(); const i = list.findIndex((x) => x.id === state.lb); state.lb = list[(i + d + list.length) % list.length].id; state.cur = state.lb; renderLb() }
+  const closeLb = () => { $('lb').classList.remove('open'); state.lb = null; renderGallery(); renderInspector() }
+  $('lbPrev').onclick = () => stepLb(-1)
+  $('lbNext').onclick = () => stepLb(1)
+  $('lbClose').onclick = closeLb
+
+  // ---------- keyboard: culling without the mouse
+  document.addEventListener('keydown', (e) => {
+    const typing = e.target.matches('input, textarea')
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('q').focus(); return }
+    if (e.key === 'Escape') { if (state.lb) closeLb(); else if ($('notes').classList.contains('open')) $('notes').classList.remove('open'); else if (typing) e.target.blur(); else { state.sel.clear(); renderGallery(); renderDock() } return }
+    if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+    if (state.lb) { if (e.key === 'ArrowRight') stepLb(1); if (e.key === 'ArrowLeft') stepLb(-1); return }
+    const list = filtered(); const i = list.findIndex((x) => x.id === state.cur)
+    const p = list[i]
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); const n = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1)))]; if (n) { state.cur = n.id; renderGallery(); renderInspector(); document.querySelector(`.tile[data-id="${n.id}"]`)?.scrollIntoView({ block: 'nearest' }) } }
+    else if (/^[0-5]$/.test(e.key) && p) { p.rating = +e.key; toast(p.rating ? `Rated ${p.rating}★` : 'Rating cleared'); renderGallery(); renderInspector() }
+    else if (e.key.toLowerCase() === 'p' && p) setPick(p)
+    else if (e.key.toLowerCase() === 'x' && p) toggleSelect(p.id)
+    else if (e.key === 'Enter' && p) openLb(p.id)
+    else if (e.key.toLowerCase() === 'l') toggleDim()
+    else if (e.key === '\\') togglePanel($('tglLib'), $('library'))
+    else if (e.key.toLowerCase() === 'i') togglePanel($('tglInsp'), $('inspector'))
+    else { const v = VIEWS.find((x) => x[3].toLowerCase() === e.key.toLowerCase()); if (v) document.querySelector(`[data-view="${v[0]}"]`).click() }
+  })
+
+  // ---------- simulated job (the header progress becomes a quiet status pill)
+  function runJob(label) {
+    const job = $('job'); job.classList.add('busy'); let n = 0
+    const t = setInterval(() => {
+      n += 9; $('jobBar').style.width = Math.min(n, 100) + '%'; $('jobText').textContent = `${label} ${Math.min(n, 100)}%`
+      if (n >= 100) { clearInterval(t); job.classList.remove('busy'); $('jobText').textContent = 'Library up to date'; toast(`${label} finished · 0 new, 0 changed`) }
+    }, 220)
+  }
+  $('syncBtn').onclick = () => runJob('Syncing')
+  $('importBtn').onclick = () => runJob('Indexing')
+
+  let tt
+  function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1900) }
+
+  function renderAll() { const list = filtered(); renderLibrary(); renderToolbar(list); renderGallery(); renderDock() }
+  renderAll(); renderInspector()
+})()
+</script>
+</body>
+</html>

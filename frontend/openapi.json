@@ -1,6 +1,40 @@
 {
   "components": {
     "schemas": {
+      "AppConfigResponse": {
+        "description": "Deployment settings the UI needs.",
+        "properties": {
+          "map_tiles_attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Tiles Attribution"
+          },
+          "map_tiles_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Online tile template the user opted into, or null for the offline map",
+            "title": "Map Tiles Url"
+          }
+        },
+        "required": [
+          "map_tiles_url",
+          "map_tiles_attribution"
+        ],
+        "title": "AppConfigResponse",
+        "type": "object"
+      },
       "BatchPhotoRequest": {
         "description": "Request schema for atomic batch operations across photos.\n\n``value`` is validated against ``action``: tags need a non-empty string,\n``set_rating`` an int 1-5 (or null to clear), ``set_flag`` a real boolean,\nand ``delete`` takes no value.",
         "properties": {
@@ -69,6 +103,43 @@
           "message"
         ],
         "title": "BatchPhotoResponse",
+        "type": "object"
+      },
+      "BoundingBoxSchema": {
+        "description": "A map area. ``west > east`` means it crosses the 180° meridian.",
+        "properties": {
+          "east": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "East",
+            "type": "number"
+          },
+          "north": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "North",
+            "type": "number"
+          },
+          "south": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "South",
+            "type": "number"
+          },
+          "west": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "West",
+            "type": "number"
+          }
+        },
+        "required": [
+          "south",
+          "west",
+          "north",
+          "east"
+        ],
+        "title": "BoundingBoxSchema",
         "type": "object"
       },
       "CollectionCreateRequest": {
@@ -504,6 +575,318 @@
           "mime_type"
         ],
         "title": "FileInfoSchema",
+        "type": "object"
+      },
+      "GeoClusterSchema": {
+        "description": "Geotagged photos in one map grid cell.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Nearest place, e.g. 'Tokyo, Japan'",
+            "title": "Label"
+          },
+          "latitude": {
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "title": "Longitude",
+            "type": "number"
+          },
+          "representative_hash": {
+            "description": "Most recently captured member (thumbnail)",
+            "title": "Representative Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "count",
+          "representative_hash",
+          "label"
+        ],
+        "title": "GeoClusterSchema",
+        "type": "object"
+      },
+      "GeoClustersRequest": {
+        "description": "Search filters plus the map viewport: clusters of the geotagged photos that match.",
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundingBoxSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Visible map area"
+          },
+          "camera_make": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Make"
+          },
+          "camera_makes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Any of these makes, matched exactly (camera checkboxes)",
+            "title": "Camera Makes"
+          },
+          "camera_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Model"
+          },
+          "collection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Members of this collection",
+            "title": "Collection"
+          },
+          "date_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date End"
+          },
+          "date_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Start"
+          },
+          "flagged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flagged"
+          },
+          "has_capture_date": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "false: only photos with an unknown capture date",
+            "title": "Has Capture Date"
+          },
+          "has_location": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only (un)geotagged photos",
+            "title": "Has Location"
+          },
+          "location_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Lat"
+          },
+          "location_lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Lon"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 50,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "radius_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radius Km"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "search_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Term"
+          },
+          "sort_by": {
+            "default": "captured_at",
+            "enum": [
+              "captured_at",
+              "size_bytes",
+              "camera_model",
+              "file_name"
+            ],
+            "title": "Sort By",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": "asc",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Sort Order",
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "within": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundingBoxSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only photos inside this map area"
+          },
+          "zoom": {
+            "default": 2,
+            "description": "Web-Mercator zoom level",
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Zoom",
+            "type": "integer"
+          }
+        },
+        "title": "GeoClustersRequest",
+        "type": "object"
+      },
+      "GeoClustersResponse": {
+        "properties": {
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/GeoClusterSchema"
+            },
+            "title": "Clusters",
+            "type": "array"
+          },
+          "total_count": {
+            "description": "Geotagged photos represented by the clusters",
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clusters",
+          "total_count"
+        ],
+        "title": "GeoClustersResponse",
         "type": "object"
       },
       "GpsBoundsSchema": {
@@ -1166,6 +1549,17 @@
               }
             ],
             "title": "Tags"
+          },
+          "within": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundingBoxSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only photos inside this map area"
           }
         },
         "title": "SearchRequest",
@@ -1359,6 +1753,28 @@
         ]
       }
     },
+    "/api/config": {
+      "get": {
+        "description": "The Map view draws the bundled world outline unless a tile server is configured.",
+        "operationId": "get_config_api_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "UI-relevant settings",
+        "tags": [
+          "config"
+        ]
+      }
+    },
     "/api/export/json": {
       "post": {
         "description": "Metadata of the selected photos, or of the whole library when none are given.",
@@ -1456,6 +1872,48 @@
           }
         },
         "summary": "Aggregate counts for filter UIs",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/geo/clusters": {
+      "post": {
+        "description": "Grid clusters sized for the map's zoom level, each labelled with its nearest place.",
+        "operationId": "geo_clusters_api_geo_clusters_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeoClustersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeoClustersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Map clusters of the geotagged photos matching a search",
         "tags": [
           "search"
         ]

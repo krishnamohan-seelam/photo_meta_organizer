@@ -38,7 +38,7 @@ export const DashboardView: React.FC = () => {
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>TOTAL PHOTOS</span>
-              <Camera size={16} color="var(--accent-primary)" />
+              <Camera size={16} />
             </div>
             <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
               {totalPhotos}
@@ -49,7 +49,7 @@ export const DashboardView: React.FC = () => {
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>STORAGE FOOTPRINT</span>
-              <HardDrive size={16} color="var(--accent-secondary)" />
+              <HardDrive size={16} />
             </div>
             <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
               {(totalBytes / 1048576).toFixed(1)} <span style={{ fontSize: '0.9rem' }}>MB</span>
@@ -60,7 +60,7 @@ export const DashboardView: React.FC = () => {
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>GEOTAGGED GPS</span>
-              <MapPin size={16} color="var(--accent-warning)" />
+              <MapPin size={16} />
             </div>
             <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
               {totalPhotos > 0 ? Math.round((geotaggedCount / totalPhotos) * 100) : 0}%
@@ -71,7 +71,7 @@ export const DashboardView: React.FC = () => {
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>AVG RESOLUTION</span>
-              <Zap size={16} color="var(--accent-success)" />
+              <Zap size={16} />
             </div>
             <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
               {avgMp} <span style={{ fontSize: '0.9rem' }}>MP</span>
@@ -114,7 +114,7 @@ export const DashboardView: React.FC = () => {
                         style={{
                           height: '100%',
                           width: `${pct}%`,
-                          background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))',
+                          background: 'var(--text-secondary)',
                           borderRadius: '4px',
                         }}
                       />
@@ -146,7 +146,7 @@ export const DashboardView: React.FC = () => {
                         style={{
                           height: '100%',
                           width: `${pct}%`,
-                          background: 'var(--accent-warning)',
+                          background: 'var(--text-muted)',
                           borderRadius: '4px',
                         }}
                       />

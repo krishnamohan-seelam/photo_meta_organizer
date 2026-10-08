@@ -78,18 +78,22 @@ from photo_meta_organizer.application.interfaces.image_retriever import (
     RemoteFileHandle,
 )
 from photo_meta_organizer.application.interfaces.search_types import (
+    BoundingBox,
     Facets,
     FacetCount,
+    GeoCluster,
     GpsBounds,
     Page,
     SearchQuery,
 )
 
 __all__ = [
-    "CollectionRecord",
+    "BoundingBox",
     "CollectionRepository",
+    "CollectionRecord",
     "Facets",
     "FacetCount",
+    "GeoCluster",
     "GpsBounds",
     "ImageMetadataExtractor",
     "ImageMetadataRepository",

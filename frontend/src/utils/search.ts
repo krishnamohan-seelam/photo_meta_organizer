@@ -1,17 +1,13 @@
-import type { SearchRequest, SortField } from '../types/metadata'
+import type { BoundingBox, SearchRequest, SortField } from '../types/metadata'
 import { UNKNOWN_DATE } from './captureDate'
+import type { QueryFilters } from './query'
 
 /** The filter and sort state the UI keeps (useUiStore). */
-export interface LibraryFilters {
-  searchQuery: string
-  filterCameras: string[]
-  filterTags: string[]
-  /** 'all', 'Favorites' (flagged) or a collection name. */
-  filterCollection: string
-  /** 'all', a four-digit year, or UNKNOWN_DATE. */
-  filterTimeframe: string
+export interface LibraryFilters extends QueryFilters {
   sortBy: SortField
   sortOrder: 'asc' | 'desc'
+  /** A map area chosen on the Map view ("Show these in Library"); not expressible in the query bar. */
+  filterArea?: BoundingBox | null
 }
 
 /**
@@ -27,7 +23,15 @@ export function toSearchRequest(f: LibraryFilters): SearchRequest {
   if (f.filterTags.length > 0) request.tags = [...f.filterTags].sort()
   if (f.filterCollection === 'Favorites') request.flagged = true
   else if (f.filterCollection !== 'all') request.collection = f.filterCollection
-  if (f.filterTimeframe === UNKNOWN_DATE) {
+  if (f.filterRating !== null) request.rating = f.filterRating
+  const model = f.filterModel.trim()
+  if (model) request.camera_model = model
+  if (f.filterHasLocation !== null) request.has_location = f.filterHasLocation
+  if (f.filterArea) request.within = f.filterArea
+  if (f.filterDateRange) {
+    request.date_start = `${f.filterDateRange.start}T00:00:00`
+    request.date_end = `${f.filterDateRange.end}T23:59:59.999999`
+  } else if (f.filterTimeframe === UNKNOWN_DATE) {
     request.has_capture_date = false
   } else if (f.filterTimeframe !== 'all') {
     request.date_start = `${f.filterTimeframe}-01-01T00:00:00`

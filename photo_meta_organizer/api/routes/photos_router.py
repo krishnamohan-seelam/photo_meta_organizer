@@ -29,12 +29,14 @@ from fastapi.responses import FileResponse
 from photo_meta_organizer.api.dependencies import (
     get_collection_repository,
     get_job_manager,
+    get_place_namer,
     get_repository,
     get_thumbnail_service,
 )
 from photo_meta_organizer.api.schemas import (
     BatchPhotoRequest,
     BatchPhotoResponse,
+    BoundingBoxSchema,
     CollectionCreateRequest,
     CollectionResponse,
     DeleteResponse,
@@ -43,6 +45,9 @@ from photo_meta_organizer.api.schemas import (
     FacetCountSchema,
     FacetsResponse,
     FileInfoSchema,
+    GeoClusterSchema,
+    GeoClustersRequest,
+    GeoClustersResponse,
     GpsBoundsSchema,
     GpsCoordinatesSchema,
     IndexFolderRequest,
@@ -56,6 +61,9 @@ from photo_meta_organizer.api.schemas import (
     SyncFolderRequest,
 )
 from photo_meta_organizer.application.composition import build_local_retriever
+from photo_meta_organizer.application.geo import cell_degrees_for_zoom, place_scope_for_zoom
+from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
+from photo_meta_organizer.application.interfaces.search_types import BoundingBox
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
 )
@@ -491,6 +499,42 @@ def search_photo_ids(
     ]
 
 
+@search_router.post(
+    "/geo/clusters",
+    response_model=GeoClustersResponse,
+    summary="Map clusters of the geotagged photos matching a search",
+)
+def geo_clusters(
+    request: GeoClustersRequest,
+    repository: ImageMetadataRepository = Depends(get_repository),
+    places: PlaceNamer = Depends(get_place_namer),
+) -> GeoClustersResponse:
+    """Grid clusters sized for the map's zoom level, each labelled with its nearest place."""
+    clusters = repository.geo_clusters(
+        _search_query(request), _to_box(request.bbox), cell_degrees_for_zoom(request.zoom)
+    )
+    scope = place_scope_for_zoom(request.zoom)
+    return GeoClustersResponse(
+        clusters=[
+            GeoClusterSchema(
+                latitude=c.latitude,
+                longitude=c.longitude,
+                count=c.count,
+                representative_hash=c.representative_hash,
+                label=places.name(c.latitude, c.longitude, scope),
+            )
+            for c in clusters
+        ],
+        total_count=sum(c.count for c in clusters),
+    )
+
+
+def _to_box(box: BoundingBoxSchema | None) -> BoundingBox | None:
+    if box is None:
+        return None
+    return BoundingBox(south=box.south, west=box.west, north=box.north, east=box.east)
+
+
 def _search_query(request: SearchRequest) -> SearchPhotosQuery:
     return SearchPhotosQuery(
         search_term=request.search_term,
@@ -501,6 +545,7 @@ def _search_query(request: SearchRequest) -> SearchPhotosQuery:
         camera_makes=request.camera_makes,
         has_capture_date=request.has_capture_date,
         has_location=request.has_location,
+        within=_to_box(request.within),
         collection=request.collection,
         location_lat=request.location_lat,
         location_lon=request.location_lon,

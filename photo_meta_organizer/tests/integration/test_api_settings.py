@@ -75,3 +75,26 @@ def test_in_memory_database_works_out_of_the_box(tmp_path, monkeypatch):
     )
     assert [p["file_hash"] for p in client.get("/api/photos").json()["items"]] == ["m" * 64]
     assert sorted(p.name for p in tmp_path.iterdir()) == ["thumbs"]
+
+
+def test_config_reports_no_tiles_by_default(tmp_path):
+    client = TestClient(
+        create_app(str(tmp_path / "a.db"), settings=Settings(db_path=tmp_path / "a.db"))
+    )
+    assert client.get("/api/config").json() == {
+        "map_tiles_url": None,
+        "map_tiles_attribution": None,
+    }
+
+
+def test_config_reports_the_opted_in_tile_server(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "a.db",
+        map_tiles_url="https://tiles.example/{z}/{x}/{y}.png",
+        map_tiles_attribution="© Example",
+    )
+    client = TestClient(create_app(settings=settings))
+    assert client.get("/api/config").json() == {
+        "map_tiles_url": "https://tiles.example/{z}/{x}/{y}.png",
+        "map_tiles_attribution": "© Example",
+    }

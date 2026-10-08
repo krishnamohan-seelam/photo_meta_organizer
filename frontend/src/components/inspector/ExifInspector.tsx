@@ -1,291 +1,247 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { Copy, Flag, Plus, Star, X } from 'lucide-react'
+import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
-import { useInspectedPhoto } from '../../hooks/usePhotos'
+import { useInspectedPhoto, usePhotoSearch } from '../../hooks/usePhotos'
 import { useCuration } from '../../hooks/usePhotoMutations'
-import { Star, Flag, Copy } from 'lucide-react'
+import { useHistogram } from '../../hooks/useHistogram'
+import { getThumbnailUrl } from '../../api/client'
+import { swapToPlaceholder } from '../../utils/placeholder'
+import { BINS, histogramScale, type RgbHistogram } from '../../utils/histogram'
+import {
+  displayTitle,
+  exposureParts,
+  fileFormat,
+  formatBytes,
+  formatCapturedAt,
+  lensModel,
+  shortHash,
+} from '../../utils/photoFormat'
+import { NameDialog } from '../collections/NameDialog'
 
-export const ExifInspector: React.FC = () => {
-  const inspectedPhoto = useInspectedPhoto()
-  const { inspectorOpen, showToast } = useUiStore(useShallow((s) => ({ inspectorOpen: s.inspectorOpen, showToast: s.showToast })))
-  const { patchPhoto } = useCuration()
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+/** Inspector preview: a 640 px box, the same size the gallery asks for at large rows. */
+const PREVIEW_BOX = 640
 
-  // Draw simulated multi-channel RGB histogram on the canvas
+/** Three filled channel areas, blended additively so overlaps read as white (FR-1e.2). */
+const HistogramCanvas: React.FC<{ histogram: RgbHistogram }> = ({ histogram }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const w = (canvas.width = canvas.offsetWidth || 300)
-    const h = (canvas.height = canvas.offsetHeight || 60)
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx) return
+    const dpr = window.devicePixelRatio || 1
+    const w = (canvas.width = Math.round((canvas.clientWidth || 288) * dpr))
+    const h = (canvas.height = Math.round((canvas.clientHeight || 72) * dpr))
     ctx.clearRect(0, 0, w, h)
-
-    // Red wave
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.4)'
-    ctx.beginPath()
-    ctx.moveTo(0, h)
-    for (let x = 0; x <= w; x += 10) {
-      const y = h - Math.sin(x / 20) * 20 - Math.cos(x / 40) * 15 - 10
-      ctx.lineTo(x, y)
+    const scale = histogramScale(histogram)
+    const styles = getComputedStyle(canvas)
+    ctx.globalCompositeOperation = 'lighter'
+    for (const channel of ['r', 'g', 'b'] as const) {
+      const bins = histogram[channel]
+      ctx.fillStyle = styles.getPropertyValue(`--histo-${channel}`).trim() || 'gray'
+      ctx.beginPath()
+      ctx.moveTo(0, h)
+      for (let i = 0; i < BINS; i++) {
+        ctx.lineTo((i / (BINS - 1)) * w, h - Math.min(1, bins[i] / scale) * h * 0.95)
+      }
+      ctx.lineTo(w, h)
+      ctx.closePath()
+      ctx.fill()
     }
-    ctx.lineTo(w, h)
-    ctx.fill()
+  }, [histogram])
 
-    // Green wave
-    ctx.fillStyle = 'rgba(52, 211, 153, 0.4)'
-    ctx.beginPath()
-    ctx.moveTo(0, h)
-    for (let x = 0; x <= w; x += 10) {
-      const y = h - Math.sin((x + 30) / 25) * 25 - 8
-      ctx.lineTo(x, y)
-    }
-    ctx.lineTo(w, h)
-    ctx.fill()
+  return <canvas ref={canvasRef} className="histo" role="img" aria-label="RGB histogram of the photo" />
+}
 
-    // Blue wave
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.45)'
-    ctx.beginPath()
-    ctx.moveTo(0, h)
-    for (let x = 0; x <= w; x += 10) {
-      const y = h - Math.cos((x + 10) / 18) * 30 - 5
-      ctx.lineTo(x, y)
-    }
-    ctx.lineTo(w, h)
-    ctx.fill()
-  }, [inspectedPhoto?.file_hash])
-
+export const ExifInspector: React.FC = () => {
+  const photo = useInspectedPhoto()
+  const inspectorOpen = useUiStore((s) => s.inspectorOpen)
   if (!inspectorOpen) return null
-
-  if (!inspectedPhoto) {
+  if (!photo) {
     return (
-      <aside
-        className="inspector-pane"
-        style={{
-          width: '320px',
-          background: 'var(--bg-secondary)',
-          borderLeft: '1px solid var(--border-color)',
-          padding: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--text-muted)',
-          fontSize: '0.85rem',
-        }}
-      >
-        Select a photo to view EXIF details
+      <aside className="inspector-pane inspector-empty" aria-label="Details">
+        Select a photo to see its details
       </aside>
     )
   }
+  return <Inspector photo={photo} />
+}
 
-  // The inspector shows the cached record, which is updated at once and rolled back if the save fails.
-  const handleRatingChange = (newRating: number) =>
-    patchPhoto(inspectedPhoto.file_hash, { rating: newRating }, `Set rating to ${newRating} ★`)
+const Inspector: React.FC<{ photo: PhotoMetadata }> = ({ photo }) => {
+  const { showToast, setLightboxIndex } = useUiStore(useShallow((s) => ({ showToast: s.showToast, setLightboxIndex: s.setLightboxIndex })))
+  const { photos } = usePhotoSearch()
+  const { patchPhoto } = useCuration()
+  const [addingTag, setAddingTag] = useState(false)
 
-  const handleFlagToggle = () => {
-    const nextFlag = !inspectedPhoto.flagged
-    return patchPhoto(
-      inspectedPhoto.file_hash,
-      { flagged: nextFlag },
-      nextFlag ? '🚩 Flagged as Pick' : 'Unflagged photo'
-    )
+  const previewUrl = getThumbnailUrl(photo.file_hash, PREVIEW_BOX, PREVIEW_BOX)
+  const histogram = useHistogram(photo.file_hash, previewUrl)
+  const index = photos.findIndex((p) => p.file_hash === photo.file_hash)
+  const exif = photo.exif
+  const expo = exposureParts(exif)
+  const lens = lensModel(exif)
+  const camera = [exif.camera_make, exif.camera_model].filter(Boolean).join(' ')
+  const title = displayTitle(photo.file_info.name)
+
+  // The cached record updates at once and rolls back with an error toast if the save fails.
+  const setRating = (rating: number) =>
+    patchPhoto(photo.file_hash, { rating: photo.rating === rating ? null : rating }, photo.rating === rating ? 'Rating cleared' : `Rated ${rating} ★`)
+  const togglePick = () => {
+    const next = !photo.flagged
+    return patchPhoto(photo.file_hash, { flagged: next }, next ? 'Picked' : 'Pick removed')
   }
 
-  const copyRawJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(inspectedPhoto, null, 2)).then(
-      () => showToast('Copied raw JSON metadata to clipboard'),
+  const copy = (text: string, what: string) =>
+    navigator.clipboard.writeText(text).then(
+      () => showToast(`Copied ${what}`),
       () => showToast('Could not copy to the clipboard', 'error')
     )
-  }
-
-  const exif = inspectedPhoto.exif
 
   return (
-    <aside
-      className="inspector-pane"
-      style={{
-        width: '330px',
-        background: 'var(--bg-secondary)',
-        borderLeft: '1px solid var(--border-color)',
-        padding: '16px',
-        overflowY: 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-        flexShrink: 0,
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Deep EXIF Inspector</div>
-        <span className="badge badge-camera">{exif.camera_profile.toUpperCase()}</span>
+    <aside className="inspector-pane" aria-label="Details">
+      <button
+        type="button"
+        className="btn-reset insp-preview"
+        onClick={() => index >= 0 && setLightboxIndex(index)}
+        disabled={index < 0}
+        aria-label={`Open ${photo.file_info.name} in the viewer`}
+      >
+        <img src={previewUrl} alt="" onError={swapToPlaceholder} />
+      </button>
+
+      <div className="insp-title">{title}</div>
+      <div className="insp-file">{photo.file_info.name}</div>
+
+      <div className="curate">
+        <div className="stars" role="radiogroup" aria-label="Rating">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={photo.rating === n}
+              aria-label={`${n} star${n > 1 ? 's' : ''}`}
+              aria-keyshortcuts={String(n)}
+              className={`btn-reset${(photo.rating ?? 0) >= n ? ' on' : ''}`}
+              onClick={() => void setRating(n)}
+            >
+              <Star size={17} />
+            </button>
+          ))}
+        </div>
+        <button type="button" className="btn-reset pick-btn" aria-pressed={photo.flagged} aria-keyshortcuts="P" onClick={() => void togglePick()}>
+          <Flag size={13} />
+          <span>{photo.flagged ? 'Picked' : 'Pick'}</span>
+          <span className="key-hint">P</span>
+        </button>
       </div>
 
-      {/* RGB Histogram */}
-      <div>
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
-          Luminance & RGB Histogram
-        </div>
-        <div
-          style={{
-            background: 'var(--box-bg)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '8px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-          }}
-        >
-          <canvas ref={canvasRef} style={{ width: '100%', height: '55px', borderRadius: '4px' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-            <span>Shadows</span>
-            <span>Midtones</span>
-            <span>Highlights</span>
-          </div>
-        </div>
-      </div>
+      {histogram !== null && (
+        <section className="insp-sec" aria-label="Histogram">
+          <h3>
+            Histogram <span>{histogram === 'loading' ? 'reading pixels…' : 'from pixels'}</span>
+          </h3>
+          {histogram === 'loading' ? <div className="histo-placeholder" /> : <HistogramCanvas histogram={histogram} />}
+        </section>
+      )}
 
-      {/* Exposure Triangle Dials */}
-      <div>
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
-          Exposure Triangle
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700 }}>⭕ APERTURE</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-primary)' }}>
-              {exif.f_stop ? `f/${exif.f_stop}` : '—'}
-            </span>
+      <section className="insp-sec" aria-label="Exposure">
+        <h3>Exposure</h3>
+        <div className="expo">
+          <div>
+            <b>{expo.aperture}</b>
+            <small>Aperture</small>
           </div>
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700 }}>⏱️ SHUTTER</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-primary)' }}>
-              {exif.exposure_time || '—'}
-            </span>
+          <div>
+            <b>{expo.shutter}</b>
+            <small>Shutter</small>
           </div>
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700 }}>⚡ ISO SPEED</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-primary)' }}>
-              {exif.iso || '—'}
-            </span>
+          <div>
+            <b>{expo.iso}</b>
+            <small>ISO</small>
           </div>
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700 }}>🔍 FOCAL LENGTH</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-primary)' }}>
-              {exif.focal_length || '—'}
-            </span>
+          <div>
+            <b>{expo.focal}</b>
+            <small>mm</small>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Curation Ratings & Flags */}
-      <div>
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
-          Rating & Curation
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div role="radiogroup" aria-label="Rating" style={{ display: 'flex', gap: '4px' }}>
-            {[1, 2, 3, 4, 5].map((star) => (
+      <section className="insp-sec" aria-label="Details">
+        <h3>
+          Details
+          <button type="button" className="btn-reset link-btn" onClick={() => void copy(JSON.stringify(photo, null, 2), 'the raw JSON')}>
+            <Copy size={11} /> JSON
+          </button>
+        </h3>
+        <dl className="kv">
+          <dt>Camera</dt>
+          <dd>{camera || '—'}</dd>
+          {lens && (
+            <>
+              <dt>Lens</dt>
+              <dd>{lens}</dd>
+            </>
+          )}
+          <dt>Captured</dt>
+          <dd className="num">{formatCapturedAt(exif.captured_at)}</dd>
+          <dt>Location</dt>
+          <dd className="num">
+            {exif.location ? `${exif.location.latitude.toFixed(2)}, ${exif.location.longitude.toFixed(2)}` : 'Not geotagged'}
+          </dd>
+          <dt>Size</dt>
+          <dd className="num">
+            {photo.dimensions.width && photo.dimensions.height
+              ? `${photo.dimensions.width} × ${photo.dimensions.height} · ${((photo.dimensions.width * photo.dimensions.height) / 1e6).toFixed(1)} MP`
+              : '—'}
+          </dd>
+          <dt>File</dt>
+          <dd className="num">
+            {fileFormat(photo.file_info.name)} · {formatBytes(photo.file_info.size_bytes)}
+          </dd>
+          <dt>Hash</dt>
+          <dd className="hash" title={photo.file_hash}>
+            <span>{shortHash(photo.file_hash)}</span>
+            <button type="button" className="btn-reset" onClick={() => void copy(photo.file_hash, 'the hash')} aria-label="Copy hash">
+              <Copy size={12} />
+            </button>
+          </dd>
+        </dl>
+      </section>
+
+      <section className="insp-sec" aria-label="Tags">
+        <h3>Tags</h3>
+        <div className="insp-tags">
+          {photo.labels.map((tag) => (
+            <span key={tag} className="chip">
+              {tag}
               <button
-                key={star}
-                role="radio"
-                aria-checked={inspectedPhoto.rating === star}
-                aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                onClick={() => handleRatingChange(star)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}
+                type="button"
+                className="btn-reset"
+                aria-label={`Remove tag ${tag}`}
+                onClick={() => void patchPhoto(photo.file_hash, { remove_tags: [tag] }, `Removed #${tag}`)}
               >
-                <Star
-                  size={18}
-                  fill={(inspectedPhoto.rating || 0) >= star ? 'var(--accent-warning)' : 'none'}
-                  color={(inspectedPhoto.rating || 0) >= star ? 'var(--accent-warning)' : 'var(--text-muted)'}
-                />
+                <X size={12} />
               </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleFlagToggle}
-            aria-pressed={inspectedPhoto.flagged}
-            className={`btn ${inspectedPhoto.flagged ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-          >
-            <Flag size={13} fill={inspectedPhoto.flagged ? 'currentColor' : 'none'} />
-            <span>{inspectedPhoto.flagged ? 'Flagged (P)' : 'Pick (P)'}</span>
+            </span>
+          ))}
+          <button type="button" className="btn-reset pill pill-add" onClick={() => setAddingTag(true)}>
+            <Plus size={12} /> Add
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* Technical Details Table */}
-      <div>
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
-          File & Technical Details
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
-          <tbody>
-            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <td style={{ color: 'var(--text-muted)', padding: '6px 0', width: '38%' }}>File Name</td>
-              <td style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
-                {inspectedPhoto.file_info.name}
-              </td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <td style={{ color: 'var(--text-muted)', padding: '6px 0' }}>Dimensions</td>
-              <td style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                {inspectedPhoto.dimensions.width} x {inspectedPhoto.dimensions.height} ({((inspectedPhoto.dimensions.width * inspectedPhoto.dimensions.height) / 1000000).toFixed(1)} MP)
-              </td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <td style={{ color: 'var(--text-muted)', padding: '6px 0' }}>File Size</td>
-              <td style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                {(inspectedPhoto.file_info.size_bytes / 1048576).toFixed(1)} MB
-              </td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <td style={{ color: 'var(--text-muted)', padding: '6px 0' }}>Camera</td>
-              <td style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                {exif.camera_make} {exif.camera_model}
-              </td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <td style={{ color: 'var(--text-muted)', padding: '6px 0' }}>SHA-256 Hash</td>
-              <td style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', wordBreak: 'break-all' }}>
-                {inspectedPhoto.file_hash}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Raw JSON viewer */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-            Raw JSON Payload
-          </span>
-          <button onClick={copyRawJson} style={{ background: 'transparent', border: 'none', color: 'var(--accent-primary)', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-            <Copy size={11} />
-            <span>Copy</span>
-          </button>
-        </div>
-        <pre
-          style={{
-            background: 'var(--box-bg)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '8px',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.68rem',
-            color: 'var(--text-secondary)',
-            maxHeight: '140px',
-            overflow: 'auto',
-            whiteSpace: 'pre-wrap',
-          }}
-        >
-          {JSON.stringify(inspectedPhoto, null, 2)}
-        </pre>
-      </div>
+      {addingTag && (
+        <NameDialog
+          title="Add a tag"
+          label="Tag"
+          placeholder="e.g. sunset"
+          submitLabel="Add tag"
+          onSubmit={(tag) => patchPhoto(photo.file_hash, { add_tags: [tag] }, `Added #${tag}`)}
+          onClose={() => setAddingTag(false)}
+        />
+      )}
     </aside>
   )
 }

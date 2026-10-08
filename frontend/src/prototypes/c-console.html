@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Console Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* Prototype C · Console — a dense, keyboard-first metadata workspace. */
+:root, [data-theme="dark"] {
+  --bg: #0d0f12;
+  --panel: #13161a;
+  --raised: #1a1e23;
+  --hover: #20252b;
+  --line: #242930;
+  --line-2: #2f353e;
+  --text: #e3e6ea;
+  --text-2: #9aa3ae;
+  --text-3: #66707c;
+  --accent: #6ee7b7;           /* mint: focus, selection, active filters */
+  --accent-ink: #04241a;
+  --accent-soft: rgba(110, 231, 183, .12);
+  --blue: #8ab4ff;
+  --amber: #f6c26b;
+  --rose: #f38ba8;
+  --ghost: #22272e;
+  --shadow: 0 24px 60px rgba(0,0,0,.55);
+}
+[data-theme="light"] {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --raised: #f0f2f5;
+  --hover: #e8ebef;
+  --line: #e1e4e9;
+  --line-2: #cfd4db;
+  --text: #15191e;
+  --text-2: #4f5965;
+  --text-3: #8a939e;
+  --accent: #0f9f6e;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(15, 159, 110, .1);
+  --blue: #2f6fe0;
+  --amber: #b7791f;
+  --rose: #c43c64;
+  --ghost: #e9ecf0;
+  --shadow: 0 24px 60px rgba(20,30,40,.18);
+}
+:root { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); overflow: hidden; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+kbd { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; line-height: 15px; display: inline-block; }
+
+.app { display: grid; grid-template-rows: 48px 1fr 28px; height: 100vh; }
+
+/* ---------- Title bar with the token query bar */
+.titlebar { display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.crumb { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--text-2); }
+.crumb .glyph { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.crumb b { color: var(--text); font-weight: 600; }
+.qwrap { flex: 1; position: relative; max-width: 760px; margin: 0 auto; }
+.qbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; height: 32px; padding: 0 8px; border-radius: 7px; background: var(--raised); border: 1px solid var(--line); overflow: hidden; cursor: text; }
+.qbar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.qbar .ic { color: var(--text-3); display: grid; flex: none; }
+.tok { display: inline-flex; align-items: center; height: 22px; border-radius: 5px; background: var(--accent-soft); color: var(--text); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; flex: none; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.tok .f { padding: 0 4px 0 7px; color: var(--accent); }
+.tok .v { padding-right: 4px; }
+.tok.text .f { display: none; }
+.tok.text .v { padding-left: 7px; }
+.tok button { display: grid; padding: 0 4px; height: 100%; color: var(--text-3); border-left: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+.tok button:hover { color: var(--text); }
+.qbar input { flex: 1; min-width: 120px; border: 0; outline: none; background: none; font-family: var(--mono); font-size: 12px; color: var(--text); }
+.qbar input::placeholder { font-family: var(--sans); color: var(--text-3); }
+.suggest { position: absolute; top: 38px; left: 0; right: 0; background: var(--panel); border: 1px solid var(--line-2); border-radius: 9px; box-shadow: var(--shadow); padding: 5px; z-index: 40; display: none; max-height: 320px; overflow: auto; }
+.suggest.open { display: block; }
+.sg-h { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); padding: 6px 8px 4px; }
+.sg { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: 6px; text-align: left; }
+.sg[aria-selected="true"] { background: var(--hover); }
+.sg .k { font-family: var(--mono); font-size: 12px; color: var(--accent); min-width: 120px; }
+.sg .d { color: var(--text-2); font-size: 12px; }
+.sg .c { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.tbtns { display: flex; align-items: center; gap: 6px; }
+.seg { display: flex; background: var(--raised); border: 1px solid var(--line); border-radius: 7px; padding: 2px; }
+.seg button { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 5px; color: var(--text-3); font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--hover); color: var(--text); }
+.ib { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; color: var(--text-2); }
+.ib:hover { background: var(--raised); color: var(--text); }
+
+/* ---------- Body */
+.body { display: grid; grid-template-columns: 264px 1fr 356px; min-height: 0; }
+
+/* Facets: filters and analytics in one place (ghost bar = whole library, solid = current result) */
+.facets { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 10px 0 30px; }
+.fx { padding: 8px 12px 10px; border-bottom: 1px solid var(--line); }
+.fx-h { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; }
+.fx-h span { font-family: var(--mono); letter-spacing: 0; text-transform: none; font-weight: 400; }
+.fr { display: grid; grid-template-columns: 1fr 28px; align-items: center; gap: 8px; width: 100%; padding: 3px 4px; border-radius: 5px; text-align: left; }
+.fr:hover { background: var(--raised); }
+.fr .lbl { position: relative; height: 20px; display: flex; align-items: center; padding-left: 6px; font-size: 12px; color: var(--text-2); overflow: hidden; white-space: nowrap; }
+.fr .lbl i, .fr .lbl s { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; text-decoration: none; }
+.fr .lbl s { background: var(--ghost); }
+.fr .lbl i { background: color-mix(in srgb, var(--blue) 26%, transparent); transition: width .25s; }
+.fr .lbl em { position: relative; font-style: normal; }
+.fr .n { font-family: var(--mono); font-size: 11px; color: var(--text-3); text-align: right; }
+.fr.on .lbl i { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+.fr.on .lbl em { color: var(--text); font-weight: 500; }
+.months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; align-items: end; height: 56px; }
+.months button { position: relative; height: 100%; display: flex; align-items: flex-end; border-radius: 3px; }
+.months button s, .months button i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 2px; text-decoration: none; }
+.months button s { background: var(--ghost); }
+.months button i { background: color-mix(in srgb, var(--blue) 45%, transparent); }
+.months button:hover i { background: var(--accent); }
+.mlbl { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; font-family: var(--mono); font-size: 9.5px; color: var(--text-3); text-align: center; margin-top: 3px; }
+
+/* ---------- Main: table / grid */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mhead { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 12px; }
+.mhead b { color: var(--text); font-size: 13px; }
+.mhead .sp { flex: 1; }
+.scroller { flex: 1; overflow: auto; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+thead th { position: sticky; top: 0; z-index: 2; background: var(--panel); text-align: left; font-weight: 500; color: var(--text-3); font-size: 11.5px; padding: 0 8px; height: 30px; border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none; }
+thead th.sortable { cursor: pointer; }
+thead th.sortable:hover { color: var(--text); }
+thead th[aria-sort="ascending"], thead th[aria-sort="descending"] { color: var(--text); }
+thead th .arr { display: inline-block; width: 10px; color: var(--accent); }
+th.r, td.r { text-align: right; }
+tbody tr { cursor: default; }
+tbody td { padding: 0 8px; height: 38px; border-bottom: 1px solid var(--line); white-space: nowrap; color: var(--text-2); }
+tbody tr:hover td { background: var(--raised); }
+tbody tr.sel td { background: var(--accent-soft); }
+tbody tr.cur td { box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+tbody tr.cur td:first-child { box-shadow: inset 2px 0 0 var(--accent), inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+td .thumb { width: 44px; height: 30px; border-radius: 3px; object-fit: cover; display: block; background: var(--raised); }
+td.name b { display: block; color: var(--text); font-weight: 500; font-size: 12.5px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+td.name span { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--text-3); max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+td.mono { font-family: var(--mono); font-size: 12px; }
+td .cam { color: var(--text); }
+.cb { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line-2); display: grid; place-items: center; color: transparent; }
+.sel .cb, .cb.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rt { font-family: var(--mono); letter-spacing: 1px; color: var(--amber); font-size: 11px; }
+.rt i { color: var(--line-2); font-style: normal; }
+.pk { color: var(--rose); display: grid; }
+.pk svg { fill: currentColor; }
+.gridv { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; padding: 12px; }
+.gt { border-radius: 6px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); cursor: default; position: relative; }
+.gt img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.gt .gc { padding: 5px 7px; font-family: var(--mono); font-size: 10.5px; color: var(--text-3); display: flex; justify-content: space-between; }
+.gt.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.gt.cur { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gt .cb { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.4); border-color: rgba(255,255,255,.7); }
+.gt.sel .cb { background: var(--accent); border-color: var(--accent); }
+.empty { padding: 60px 20px; text-align: center; color: var(--text-3); }
+.empty b { color: var(--text); display: block; font-size: 14px; margin-bottom: 4px; }
+
+/* ---------- Inspector with tabs */
+.insp { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+.tabs button { padding: 11px 10px 9px; color: var(--text-3); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--text); border-color: var(--accent); }
+.tabs .sp { flex: 1; }
+.ipane { flex: 1; overflow-y: auto; padding: 12px 14px 30px; }
+.ipv { border-radius: 8px; overflow: hidden; background: #000; display: grid; place-items: center; aspect-ratio: 3 / 2; }
+.ipv img { max-width: 100%; max-height: 100%; display: block; }
+.ititle { margin-top: 10px; font-size: 15px; font-weight: 600; }
+.ifile { font-family: var(--mono); font-size: 11px; color: var(--text-3); word-break: break-all; }
+.irow { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.stars { display: flex; }
+.stars button { padding: 2px; color: var(--line-2); display: grid; }
+.stars button.on { color: var(--amber); }
+.stars button.on svg { fill: currentColor; }
+.pbtn { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--text-2); font-size: 12px; }
+.pbtn[aria-pressed="true"] { border-color: var(--rose); color: var(--rose); background: color-mix(in srgb, var(--rose) 12%, transparent); }
+.pbtn[aria-pressed="true"] svg { fill: currentColor; }
+.kgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-top: 12px; }
+.kgrid div { background: var(--raised); padding: 7px 8px; }
+.kgrid small { display: block; font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+.kgrid b { font-family: var(--mono); font-weight: 500; font-size: 13px; }
+.grp { margin-top: 14px; }
+.grp h4 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); font-weight: 600; margin-bottom: 4px; }
+.kv { display: grid; grid-template-columns: 110px 1fr 18px; align-items: center; gap: 0 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 12px; }
+.kv .k { color: var(--text-3); font-family: var(--mono); font-size: 11px; }
+.kv .v { color: var(--text); font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv button { color: var(--text-3); opacity: 0; display: grid; }
+.kv:hover button { opacity: 1; }
+.kv button:hover { color: var(--accent); }
+pre.json { font-family: var(--mono); font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; color: var(--text-2); }
+.json .jk { color: var(--blue); } .json .js { color: var(--accent); } .json .jn { color: var(--amber); } .json .jb { color: var(--rose); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.chip { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 4px; background: var(--raised); border: 1px solid var(--line); color: var(--text-2); }
+.chip:hover { border-color: var(--accent); color: var(--text); }
+
+/* ---------- Status bar (job progress moves here from the header) */
+.status { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; }
+.status .it { display: inline-flex; align-items: center; gap: 6px; }
+.status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.status .sp { flex: 1; }
+.status b { color: var(--text-2); font-weight: 500; }
+.status button { color: var(--text-3); display: inline-flex; align-items: center; gap: 5px; }
+.status button:hover { color: var(--text); }
+.bar { width: 120px; height: 4px; border-radius: 2px; background: var(--line-2); overflow: hidden; display: none; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.busy .bar { display: block; }
+
+/* ---------- Command palette */
+.cmdk-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60; display: none; }
+.cmdk { position: fixed; top: 14vh; left: 50%; transform: translateX(-50%); width: min(600px, 92vw); background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); z-index: 61; display: none; overflow: hidden; }
+.cmdk.open, .cmdk-bg.open { display: block; }
+.cmdk input { width: 100%; height: 48px; padding: 0 16px; border: 0; border-bottom: 1px solid var(--line); background: none; outline: none; font-size: 15px; }
+.cmdk .list { max-height: 360px; overflow: auto; padding: 6px; }
+.cmd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 7px; text-align: left; color: var(--text-2); }
+.cmd[aria-selected="true"] { background: var(--hover); color: var(--text); }
+.cmd .ic { color: var(--text-3); display: grid; }
+.cmd .cli { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+
+.toast { position: fixed; bottom: 40px; right: 16px; background: var(--raised); border: 1px solid var(--line-2); border-left: 3px solid var(--accent); padding: 9px 14px; border-radius: 7px; font-size: 12.5px; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); transition: .2s; z-index: 70; pointer-events: none; max-width: 380px; }
+.toast.show { opacity: 1; transform: none; }
+
+/* ---------- Prototype chrome: design notes */
+.notes-fab { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 9px; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 12px; box-shadow: var(--shadow); }
+.notes { visibility: hidden; position: fixed; top: 0; right: 0; bottom: 0; width: min(540px, 100vw); background: var(--panel); border-left: 1px solid var(--line-2); z-index: 80; transform: translateX(100%); transition: transform .3s cubic-bezier(.2,.7,.2,1); overflow-y: auto; padding: 26px 26px 60px; box-shadow: var(--shadow); }
+.notes.open { transform: none; visibility: visible; }
+.notes h2 { font-size: 20px; font-weight: 600; }
+.status .notes-fab { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.notes .lede { color: var(--text-2); margin: 6px 0 16px; font-size: 13px; }
+.notes .close { position: absolute; top: 14px; right: 14px; }
+.note { border-top: 1px solid var(--line); padding: 14px 0; }
+.note h4 { font-size: 13.5px; margin-bottom: 6px; }
+.note .ba { display: grid; grid-template-columns: 56px 1fr; gap: 4px 10px; font-size: 12.5px; color: var(--text-2); }
+.note .ba span { font-family: var(--mono); font-size: 10px; text-transform: uppercase; padding-top: 2px; }
+.note .ba .b { color: var(--rose); } .note .ba .a { color: var(--accent); } .note .ba .w { color: var(--text-3); }
+.note code { font-family: var(--mono); font-size: 11.5px; background: var(--raised); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+.notes a { color: var(--accent); }
+
+@media (max-width: 1100px) { .body { grid-template-columns: 220px 1fr; } .insp { display: none; } }
+@media (max-width: 760px) { .body { grid-template-columns: 1fr; } .facets { display: none; } .crumb span.path, .tbtns .seg { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="titlebar">
+    <div class="crumb"><span class="glyph" id="glyph"></span><span class="path"><b>photos.db</b> / All photos</span></div>
+    <div class="qwrap">
+      <div class="qbar" id="qbar"><span class="ic" id="qIc"></span><span id="toks" style="display:contents"></span><input id="qin" placeholder="Filter: try camera:sony  iso:>=1600  tag:japan  rating:>=4" autocomplete="off" spellcheck="false" aria-label="Query" aria-autocomplete="list" aria-controls="suggest" /></div>
+      <div class="suggest" id="suggest" role="listbox"></div>
+    </div>
+    <div class="tbtns">
+      <div class="seg" role="group" aria-label="Layout"><button id="vTable" aria-pressed="true"></button><button id="vGrid" aria-pressed="false"></button></div>
+      <button class="ib" id="theme" aria-label="Toggle theme"></button>
+      <button class="ib" id="cmdBtn" aria-label="Command palette"></button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="facets" id="facets" aria-label="Facets"></aside>
+    <main class="main">
+      <div class="mhead" id="mhead"></div>
+      <div class="scroller" id="scroller" tabindex="0" aria-label="Results"></div>
+    </main>
+    <aside class="insp" aria-label="Inspector">
+      <div class="tabs" role="tablist" id="tabs"><button role="tab" data-tab="summary" aria-selected="true">Summary</button><button role="tab" data-tab="exif" aria-selected="false">EXIF</button><button role="tab" data-tab="json" aria-selected="false">JSON</button></div>
+      <div class="ipane" id="ipane" role="tabpanel"></div>
+    </aside>
+  </div>
+
+  <footer class="status" id="status">
+    <span class="it"><span class="dot"></span><b>photos.db</b> SQLite · WAL</span>
+    <span class="it mono" id="stTotal"></span>
+    <span class="it" id="stSel"></span>
+    <span class="sp"></span>
+    <span class="it" id="job"><span id="jobTxt">Sync idle</span><span class="bar"><i id="jobBar"></i></span></span>
+    <button id="stSync"></button>
+    <button id="stCmd"></button>
+    <button class="notes-fab" id="notesFab"></button>
+  </footer>
+</div>
+
+<div class="cmdk-bg" id="cmdkBg"></div>
+<div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Command palette">
+  <input id="cmdIn" placeholder="Type a command…" autocomplete="off" />
+  <div class="list" id="cmdList" role="listbox"></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<aside class="notes" id="notes" aria-label="Design notes">
+  <button class="close ib" id="notesClose" aria-label="Close notes"></button>
+  <h2>Prototype C · Console</h2>
+  <p class="lede">Built for people who treat the library as data: a token query bar, facets that double as charts, a sortable table and an inspector that shows the raw record. Dense, fast and keyboard-first, like an IDE for your photos. <a href="index.html">← All prototypes</a></p>
+
+  <div class="note"><h4>1 · Search box → token query bar</h4><div class="ba">
+    <span class="b">Before</span><div>The Ctrl+K trigger is a fake input, and filters live in sidebar checkboxes, so you can't type <i>"Sony shots above ISO 1600"</i>.</div>
+    <span class="a">After</span><div>Type <code>camera:sony iso:>=1600 tag:night</code>. Each clause becomes a removable token, and autocomplete suggests fields, then values with live counts. Backspace removes the last token; plain words become free-text tokens.</div>
+    <span class="w">Why</span><div>Camera, tag, rating, pick, date and text tokens map onto the existing <code>POST /api/search</code> request, so power users can skip the mouse. The ISO, aperture and focal ranges shown here are aspirational: they need new API fields (see <code>design_docs/front_enddesign.md</code> §9).</div></div></div>
+
+  <div class="note"><h4>2 · Filter sidebar + Analytics view → facet panel</h4><div class="ba">
+    <span class="b">Before</span><div>Checkbox lists with counts in brackets, and distributions hidden in a separate Analytics tab.</div>
+    <span class="a">After</span><div>Each facet (camera, lens, ISO band, focal band, aperture band, rating, capture month) shows a bar per value. The grey bar is the whole library and the coloured bar is the current result. Clicking a row adds the matching token.</div>
+    <span class="w">Why</span><div>You see the shape of the data while you filter, for example "most night shots are from the GR III". <code>GET /api/facets</code> already returns most of these counts.</div></div></div>
+
+  <div class="note"><h4>3 · Gallery → table/grid toggle</h4><div class="ba">
+    <span class="b">Before</span><div>One card grid. Comparing exposure settings across photos means clicking each one.</div>
+    <span class="a">After</span><div>A dense table with sortable columns (camera, lens, focal length, aperture, shutter, ISO, date, rating, size) and right-aligned tabular numbers. Shift-click selects a range, Ctrl-click toggles a row, and <kbd>J</kbd>/<kbd>K</kbd> move. The grid layout stays one click away.</div>
+    <span class="w">Why</span><div>A table is the right tool for comparing metadata. It also virtualizes trivially (fixed 38px rows) for libraries of 100k photos.</div></div></div>
+
+  <div class="note"><h4>4 · Inspector → tabbed Summary / EXIF / JSON</h4><div class="ba">
+    <span class="b">Before</span><div>One long panel. Raw JSON only reaches the clipboard, unseen.</div>
+    <span class="a">After</span><div>Summary has the preview, curation and four key numbers. EXIF has grouped key/value rows with copy on hover. JSON shows the exact API record with syntax highlighting.</div>
+    <span class="w">Why</span><div>It shows information in layers: casual users stay on Summary, and debugging an extraction issue means opening the JSON tab.</div></div></div>
+
+  <div class="note"><h4>5 · Header progress → status bar</h4><div class="ba">
+    <span class="b">Before</span><div><code>JobProgress</code> replaces the Scan/Sync buttons in the header while a job runs.</div>
+    <span class="a">After</span><div>A status bar like an IDE's: database, library totals, selection count and size, job progress, and quick Sync.</div>
+    <span class="w">Why</span><div>Background work stays visible without moving the header around, and the status bar is a natural place for desktop-app status.</div></div></div>
+
+  <div class="note"><h4>6 · Command palette exposes the CLI</h4><div class="ba">
+    <span class="b">Before</span><div><code>prune</code>, <code>dedupe</code> and <code>sync --rehash</code> exist only in the CLI.</div>
+    <span class="a">After</span><div>Every command appears in <kbd>Ctrl</kbd>+<kbd>K</kbd> with its CLI equivalent shown next to it.</div>
+    <span class="w">Why</span><div>Parity between the CLI and the UI, and it teaches the CLI to people who want to script it.</div></div></div>
+
+  <div class="note"><h4>Adopting it in the React code</h4><div style="font-size:12.5px;color:var(--text-2);line-height:1.65">
+    Add <code>QueryBar.tsx</code> with a pure <code>parseQuery()</code>/<code>toSearchRequest()</code> in <code>utils/search.ts</code> (easy to unit-test with Vitest). Use a new <code>PhotoTable.tsx</code> with TanStack Virtual (already a dependency). The facet panel reuses <code>useFacets</code>. Add <code>StatusBar.tsx</code> using <code>useJobs</code>. Extend <code>CommandPalette.tsx</code> with job commands. Effort: medium. It is the closest match to the current component structure.</div></div>
+</aside>
+
+<script src="shared/sample-library.js"></script>
+<script>
+(() => {
+  'use strict'
+  const { PHOTOS, src, icon, fmtDate, esc, hash, countBy } = window.PMO
+  const $ = (id) => document.getElementById(id)
+  const st = { toks: [], sort: { key: 'date', dir: -1 }, layout: 'table', cur: PHOTOS[0].id, sel: new Set(), anchor: null, tab: 'summary' }
+
+  // ---------- query language
+  const FIELDS = [
+    ['camera', 'Camera make or model', 'camera:sony'], ['lens', 'Lens model', 'lens:gm'], ['tag', 'Label (all must match)', 'tag:japan'],
+    ['place', 'Place or country', 'place:kyoto'], ['iso', 'ISO, supports >= <= and a..b', 'iso:>=1600'], ['f', 'Aperture ƒ-number', 'f:<=2.8'],
+    ['fl', 'Focal length, mm', 'fl:70..200'], ['rating', 'Star rating', 'rating:>=4'], ['pick', 'Picked / flagged', 'pick:yes'], ['year', 'Capture year', 'year:2026'],
+  ]
+  const ss2num = (s) => (s.includes('/') ? 1 / +s.split('/')[1].replace('s', '') : parseFloat(s))
+  function parseTok(raw) {
+    const m = raw.match(/^(\w+):(>=|<=|>|<|=)?(.+)$/)
+    if (!m || !FIELDS.some((f) => f[0] === m[1].toLowerCase())) return { field: 'text', op: '', value: raw }
+    return { field: m[1].toLowerCase(), op: m[2] || '', value: m[3] }
+  }
+  function numMatch(n, op, v) {
+    if (v.includes('..')) { const [a, b] = v.split('..').map(Number); return n >= a && n <= b }
+    const x = +v
+    return op === '>=' ? n >= x : op === '<=' ? n <= x : op === '>' ? n > x : op === '<' ? n < x : n === x
+  }
+  function match(p, t) {
+    const v = t.value.toLowerCase()
+    switch (t.field) {
+      case 'camera': return p.camera.toLowerCase().includes(v) || p.make.toLowerCase().includes(v)
+      case 'lens': return p.lens.toLowerCase().includes(v)
+      case 'tag': return p.tags.includes(v)
+      case 'place': return (p.place + ' ' + p.country).toLowerCase().includes(v)
+      case 'iso': return numMatch(p.iso, t.op, t.value)
+      case 'f': return numMatch(p.f, t.op, t.value)
+      case 'fl': return numMatch(p.fl, t.op, t.value)
+      case 'rating': return numMatch(p.rating, t.op || '>=', t.value)
+      case 'pick': return p.flag === /^(y|yes|true|1)$/.test(v)
+      case 'year': return p.date.startsWith(v)
+      default: return [p.title, p.name, p.camera, p.lens, p.place, p.country, ...p.tags].join(' ').toLowerCase().includes(v)
+    }
+  }
+  const filtered = () => sortList(PHOTOS.filter((p) => st.toks.every((t) => match(p, t))))
+  const COLS = {
+    name: (p) => p.title, camera: (p) => p.camera, lens: (p) => p.lens, fl: (p) => p.fl, f: (p) => p.f, ss: (p) => ss2num(p.ss),
+    iso: (p) => p.iso, date: (p) => p.date, rating: (p) => p.rating, flag: (p) => +p.flag, mb: (p) => p.mb,
+  }
+  function sortList(l) { const g = COLS[st.sort.key]; return l.sort((a, b) => { const x = g(a), y = g(b); return (x > y ? 1 : x < y ? -1 : 0) * st.sort.dir }) }
+
+  // ---------- query bar UI
+  $('qIc').innerHTML = icon('search', 14)
+  function renderToks() {
+    $('toks').innerHTML = st.toks.map((t, i) => `<span class="tok ${t.field === 'text' ? 'text' : ''}"><span class="f">${t.field}:</span><span class="v">${esc(t.op + t.value)}</span><button data-i="${i}" aria-label="Remove ${esc(t.field)} filter">${icon('x', 11)}</button></span>`).join('')
+    $('qin').placeholder = st.toks.length ? 'Add filter…' : 'Filter: try camera:sony  iso:>=1600  tag:japan  rating:>=4'
+  }
+  $('qbar').onclick = (e) => { const b = e.target.closest('[data-i]'); if (b) { st.toks.splice(+b.dataset.i, 1); renderAll() } $('qin').focus() }
+  function addTok(raw) { raw = raw.trim(); if (!raw) return; st.toks.push(parseTok(raw)); $('qin').value = ''; renderAll(); renderSuggest() }
+
+  let sgIdx = 0, sgItems = []
+  function renderSuggest() {
+    const v = $('qin').value
+    const box = $('suggest')
+    const m = v.match(/^(\w+):(>=|<=|>|<)?(.*)$/)
+    sgItems = []
+    let html = ''
+    if (m && FIELDS.some((f) => f[0] === m[1])) {
+      const field = m[1], part = m[3].toLowerCase()
+      const vals = { camera: () => countBy(PHOTOS, (p) => p.camera), lens: () => countBy(PHOTOS, (p) => p.lens), tag: () => countBy(PHOTOS, (p) => p.tags), place: () => countBy(PHOTOS, (p) => p.place),
+        pick: () => [['yes', PHOTOS.filter((p) => p.flag).length], ['no', PHOTOS.filter((p) => !p.flag).length]], year: () => countBy(PHOTOS, (p) => p.date.slice(0, 4)),
+        iso: () => [['>=1600', 0], ['<=200', 0], ['400..800', 0]], f: () => [['<=2', 0], ['2.8..4', 0], ['>=8', 0]], fl: () => [['<=24', 0], ['24..70', 0], ['>=135', 0]], rating: () => [['>=4', 0], ['5', 0], ['>=3', 0]] }[field]()
+      const opts = vals.filter(([x]) => String(x).toLowerCase().includes(part)).slice(0, 8)
+      sgItems = opts.map(([x]) => `${field}:${String(x).toLowerCase()}`)
+      html = `<div class="sg-h">${field} values</div>` + opts.map(([x, n], i) => `<button class="sg" role="option" data-s="${i}" aria-selected="${i === sgIdx}"><span class="k">${esc(sgItems[i])}</span><span class="d">${esc(x)}</span>${n ? `<span class="c">${n}</span>` : ''}</button>`).join('')
+    } else {
+      const fs = FIELDS.filter((f) => f[0].startsWith(v.toLowerCase()))
+      sgItems = fs.map((f) => f[0] + ':')
+      html = (fs.length ? '<div class="sg-h">Fields</div>' : '') + fs.map((f, i) => `<button class="sg" role="option" data-s="${i}" aria-selected="${i === sgIdx}"><span class="k">${f[0]}:</span><span class="d">${f[1]}</span><span class="c">${f[2]}</span></button>`).join('')
+      if (v && !fs.length) html = `<div class="sg-h">Free text</div><button class="sg" aria-selected="true" data-free><span class="k">"${esc(v)}"</span><span class="d">Match title, file, camera, place or tag</span><span class="c">Enter</span></button>`
+    }
+    box.innerHTML = html
+    box.classList.toggle('open', document.activeElement === $('qin') && !!html)
+  }
+  function pickSuggest(i) {
+    const s = sgItems[i]; if (!s) return addTok($('qin').value)
+    if (s.endsWith(':')) { $('qin').value = s; sgIdx = 0; renderSuggest() } else addTok(s)
+    $('qin').focus()
+  }
+  $('qin').addEventListener('input', () => { sgIdx = 0; renderSuggest() })
+  $('qin').addEventListener('focus', renderSuggest)
+  $('qin').addEventListener('blur', () => setTimeout(() => $('suggest').classList.remove('open'), 120))
+  $('qin').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sgIdx = (sgIdx + (e.key === 'ArrowDown' ? 1 : -1) + Math.max(1, sgItems.length)) % Math.max(1, sgItems.length); renderSuggest() }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      const v = $('qin').value.trim(), sg = sgItems[sgIdx]
+      // Complete a partial field or value from the highlighted suggestion; otherwise commit what was typed.
+      if (sg && (!v || v.endsWith(':') || (sg.startsWith(v.toLowerCase()) && sg !== v.toLowerCase()))) pickSuggest(sgIdx)
+      else addTok(v)
+    }
+    else if (e.key === 'Tab' && sgItems.length) { e.preventDefault(); pickSuggest(sgIdx) }
+    else if (e.key === ' ' && /^\S+$/.test($('qin').value) && $('qin').value.includes(':')) { e.preventDefault(); addTok($('qin').value) }
+    else if (e.key === 'Backspace' && !$('qin').value && st.toks.length) { st.toks.pop(); renderAll(); renderSuggest() }
+    else if (e.key === 'Escape') { $('qin').blur() }
+  })
+  $('suggest').addEventListener('mousedown', (e) => { e.preventDefault(); const b = e.target.closest('.sg'); if (!b) return; if (b.hasAttribute('data-free')) addTok($('qin').value); else pickSuggest(+b.dataset.s) })
+
+  // ---------- facets: ghost bar = library, solid bar = current result; click adds a token
+  const BANDS = {
+    iso: [['≤ 200', 'iso:<=200', (p) => p.iso <= 200], ['400 – 800', 'iso:400..800', (p) => p.iso >= 400 && p.iso <= 800], ['1600 – 3200', 'iso:1600..3200', (p) => p.iso >= 1600 && p.iso <= 3200], ['≥ 6400', 'iso:>=6400', (p) => p.iso >= 6400]],
+    fl: [['Wide ≤ 24mm', 'fl:<=24', (p) => p.fl <= 24], ['Standard 25–70', 'fl:25..70', (p) => p.fl > 24 && p.fl <= 70], ['Tele 71–135', 'fl:71..135', (p) => p.fl > 70 && p.fl <= 135], ['Long > 135', 'fl:>135', (p) => p.fl > 135]],
+    f: [['ƒ/1.2 – 2', 'f:<=2', (p) => p.f <= 2], ['ƒ/2.8 – 4', 'f:2.8..4', (p) => p.f >= 2.8 && p.f <= 4], ['ƒ/5.6 – 8', 'f:5.6..8', (p) => p.f >= 5.6 && p.f <= 8], ['ƒ/11+', 'f:>=11', (p) => p.f >= 11]],
+    rating: [5, 4, 3, 2, 1].map((r) => ['★'.repeat(r), `rating:=${r}`, (p) => p.rating === r]),
+  }
+  const has = (raw) => st.toks.some((t) => `${t.field}:${t.op}${t.value}`.toLowerCase() === raw.toLowerCase())
+  function facetRows(rows, max) {
+    return rows.map(([label, raw, all, cur]) => `<button class="fr ${has(raw) ? 'on' : ''}" data-raw="${esc(raw)}" title="${esc(raw)}"><span class="lbl"><s style="width:${(all / max) * 100}%"></s><i style="width:${(cur / max) * 100}%"></i><em>${esc(label)}</em></span><span class="n">${cur}</span></button>`).join('')
+  }
+  function renderFacets(list) {
+    let h = ''
+    const section = (title, rows) => { const max = Math.max(...rows.map((r) => r[2]), 1); h += `<div class="fx"><div class="fx-h">${title}<span>${rows.reduce((a, r) => a + (r[3] > 0), 0)}/${rows.length}</span></div>${facetRows(rows, max)}</div>` }
+    const cat = (key, field, val = (x) => x) => countBy(PHOTOS, key).map(([v, n]) => [v, `${field}:${val(v)}`, n, list.filter((p) => [].concat(key(p)).includes(v)).length])
+    section('Camera', cat((p) => p.camera, 'camera', (v) => v.toLowerCase()))
+    section('Lens', cat((p) => p.lens, 'lens', (v) => v.toLowerCase()).slice(0, 6))
+    for (const [k, title] of [['iso', 'ISO'], ['fl', 'Focal length'], ['f', 'Aperture'], ['rating', 'Rating']])
+      section(title, BANDS[k].map(([label, raw, fn]) => [label, raw, PHOTOS.filter(fn).length, list.filter(fn).length]))
+    // capture months of 2026 as a column chart
+    const mAll = Array(12).fill(0), mCur = Array(12).fill(0)
+    PHOTOS.forEach((p) => mAll[+p.date.slice(5, 7) - 1]++); list.forEach((p) => mCur[+p.date.slice(5, 7) - 1]++)
+    const mx = Math.max(...mAll, 1)
+    h += `<div class="fx"><div class="fx-h">Captured 2026<span>by month</span></div><div class="months">${mAll.map((n, i) => `<button data-month="${i + 1}" title="${n} photos" aria-label="Month ${i + 1}: ${mCur[i]} of ${n}"><s style="height:${(n / mx) * 100}%"></s><i style="height:${(mCur[i] / mx) * 100}%"></i></button>`).join('')}</div><div class="mlbl">${'JFMAMJJASOND'.split('').map((c) => `<span>${c}</span>`).join('')}</div></div>`
+    h += `<div class="fx"><div class="fx-h">Tags</div><div class="chips">${countBy(PHOTOS, (p) => p.tags).map(([t, n]) => `<button class="chip" data-raw="tag:${esc(t)}" style="${has('tag:' + t) ? 'border-color:var(--accent);color:var(--text)' : ''}">${esc(t)} <span style="color:var(--text-3)">${n}</span></button>`).join('')}</div></div>`
+    $('facets').innerHTML = h
+  }
+  $('facets').onclick = (e) => {
+    const b = e.target.closest('[data-raw],[data-month]'); if (!b) return
+    if (b.dataset.month) return toast(`Month filters map to date_from / date_to on the API (month ${b.dataset.month})`)
+    const raw = b.dataset.raw
+    const i = st.toks.findIndex((t) => `${t.field}:${t.op}${t.value}`.toLowerCase() === raw.toLowerCase())
+    if (i >= 0) st.toks.splice(i, 1); else st.toks.push(parseTok(raw))
+    renderAll()
+  }
+
+  // ---------- main: table or grid
+  const HEAD = [['', null], ['', null], ['Name', 'name'], ['Camera · Lens', 'camera'], ['mm', 'fl', 'r'], ['ƒ', 'f', 'r'], ['Shutter', 'ss', 'r'], ['ISO', 'iso', 'r'], ['Captured', 'date'], ['Rating', 'rating']]
+  function renderMain(list) {
+    const selMb = PHOTOS.filter((p) => st.sel.has(p.id)).reduce((a, p) => a + p.mb, 0)
+    $('mhead').innerHTML = `<b class="mono">${list.length}</b> results${st.toks.length ? ` <span>for ${st.toks.length} filter${st.toks.length > 1 ? 's' : ''}</span>` : ''}<span class="sp"></span>${st.sel.size ? `<span class="mono">${st.sel.size} selected · ${selMb.toFixed(1)} MB</span><button class="pbtn" data-a="export">${icon('download', 13)}Export</button><button class="pbtn" data-a="clear">Clear</button>` : '<span><kbd>J</kbd> <kbd>K</kbd> move · <kbd>X</kbd> select · <kbd>1</kbd>–<kbd>5</kbd> rate · <kbd>P</kbd> pick</span>'}`
+    if (!list.length) { $('scroller').innerHTML = `<div class="empty"><b>No photos match all ${st.toks.length} filters</b>Press Backspace in the query bar to remove the last one.</div>`; return }
+    if (st.layout === 'grid') {
+      $('scroller').innerHTML = `<div class="gridv">${list.map((p) => `<div class="gt ${st.sel.has(p.id) ? 'sel' : ''} ${st.cur === p.id ? 'cur' : ''}" data-id="${p.id}"><img src="${src(p)}" alt="${esc(p.title)}" loading="lazy" /><span class="cb" data-cb>${icon('check', 11, 3)}</span><div class="gc"><span>ƒ/${p.f} · ${p.ss}</span><span>${p.iso}</span></div></div>`).join('')}</div>`
+      return
+    }
+    const allSel = list.every((p) => st.sel.has(p.id))
+    $('scroller').innerHTML = `<table><thead><tr>${HEAD.map(([l, k, a], i) => {
+      if (i === 0) return `<th style="width:30px"><button class="cb ${allSel ? 'on' : ''}" data-all aria-label="Select all">${icon('check', 11, 3)}</button></th>`
+      const sorted = st.sort.key === k
+      return `<th class="${k ? 'sortable' : ''} ${a || ''}" ${k ? `data-k="${k}"` : ''} ${sorted ? `aria-sort="${st.sort.dir > 0 ? 'ascending' : 'descending'}"` : ''}>${l}${k && l ? `<span class="arr">${sorted ? (st.sort.dir > 0 ? '↑' : '↓') : ''}</span>` : ''}</th>`
+    }).join('')}</tr></thead><tbody>${list.map((p) => `<tr data-id="${p.id}" class="${st.sel.has(p.id) ? 'sel' : ''} ${st.cur === p.id ? 'cur' : ''}" aria-selected="${st.sel.has(p.id)}">
+      <td><span class="cb" data-cb>${icon('check', 11, 3)}</span></td>
+      <td style="width:56px"><img class="thumb" src="${src(p)}" alt="" loading="lazy" /></td>
+      <td class="name"><b>${esc(p.title)}</b><span>${esc(p.name)}</span></td>
+      <td class="name"><b>${esc(p.camera)}</b><span>${esc(p.lens)}</span></td>
+      <td class="mono r">${p.fl}</td><td class="mono r">${p.f}</td><td class="mono r">${p.ss}</td><td class="mono r" style="${p.iso >= 3200 ? 'color:var(--amber)' : ''}">${p.iso}</td>
+      <td class="mono" title="${p.date.replace('T', ' ')}">${p.date.slice(0, 10)}</td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px"><span class="rt">${'★'.repeat(p.rating)}<i>${'★'.repeat(5 - p.rating)}</i></span>${p.flag ? `<span class="pk" title="Pick">${icon('flag', 12)}</span>` : ''}</span></td></tr>`).join('')}</tbody></table>`
+  }
+  $('scroller').addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-k]')
+    if (th) { const k = th.dataset.k; st.sort = { key: k, dir: st.sort.key === k ? -st.sort.dir : (k === 'name' || k === 'camera' || k === 'lens' ? 1 : -1) }; return renderAll() }
+    if (e.target.closest('[data-all]')) { const l = filtered(); const all = l.every((p) => st.sel.has(p.id)); l.forEach((p) => (all ? st.sel.delete(p.id) : st.sel.add(p.id))); return renderAll() }
+    const row = e.target.closest('[data-id]'); if (!row) return
+    const id = row.dataset.id
+    if (e.shiftKey && st.anchor) { const l = filtered(); const a = l.findIndex((p) => p.id === st.anchor), b = l.findIndex((p) => p.id === id); l.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((p) => st.sel.add(p.id)) }
+    else if (e.ctrlKey || e.metaKey || e.target.closest('[data-cb]')) { st.sel.has(id) ? st.sel.delete(id) : st.sel.add(id); st.anchor = id }
+    else { st.anchor = id }
+    st.cur = id; renderAll()
+  })
+  $('mhead').addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); if (!b) return; if (b.dataset.a === 'clear') { st.sel.clear(); renderAll() } else toast(`Export ${st.sel.size} photos · ZIP of originals or JSON metadata`) })
+
+  // ---------- inspector
+  $('tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; st.tab = b.dataset.tab; $('tabs').querySelectorAll('[data-tab]').forEach((x) => x.setAttribute('aria-selected', x === b)); renderInsp() }
+  function apiRecord(p) {
+    return { file_hash: hash(p), file_info: { name: p.name, path: `D:/photos/${p.country || 'home'}/${p.name}`, size_bytes: Math.round(p.mb * 1048576), mime_type: `image/x-${p.fmt.toLowerCase()}` },
+      exif: { camera_make: p.make, camera_model: p.camera, f_stop: p.f, exposure_time: p.ss, iso: p.iso, focal_length: `${p.fl}.0 mm`, captured_at: p.date + ':00', location: p.lat != null ? { latitude: p.lat, longitude: p.lon, datum: 'WGS84' } : null, raw_tags: { LensModel: p.lens } },
+      labels: p.tags, rating: p.rating, flagged: p.flag }
+  }
+  function highlight(json) {
+    return esc(json).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+\.?\d*)/g, (m, s, colon, b, n) =>
+      s ? (colon ? `<span class="jk">${s}</span>${colon}` : `<span class="js">${s}</span>`) : b ? `<span class="jb">${b}</span>` : `<span class="jn">${n}</span>`)
+  }
+  function renderInsp() {
+    const p = PHOTOS.find((x) => x.id === st.cur)
+    if (!p) { $('ipane').innerHTML = '<div class="empty">Nothing selected</div>'; return }
+    const kv = (k, v) => `<div class="kv"><span class="k">${k}</span><span class="v" title="${esc(v)}">${esc(v)}</span><button data-copy="${esc(v)}" aria-label="Copy ${k}">${icon('copy', 12)}</button></div>`
+    if (st.tab === 'summary') {
+      $('ipane').innerHTML = `<div class="ipv"><img src="${src(p)}" alt="${esc(p.title)}" /></div>
+        <div class="ititle">${esc(p.title)}</div><div class="ifile">${esc(p.name)}</div>
+        <div class="irow"><div class="stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((s) => `<button role="radio" aria-checked="${p.rating === s}" data-r="${s}" class="${s <= p.rating ? 'on' : ''}" aria-label="${s} stars">${icon('star', 17)}</button>`).join('')}</div>
+          <button class="pbtn" id="pick" aria-pressed="${p.flag}">${icon('flag', 13)}${p.flag ? 'Picked' : 'Pick'} <kbd>P</kbd></button></div>
+        <div class="kgrid"><div><small>Aperture</small><b>ƒ/${p.f}</b></div><div><small>Shutter</small><b>${p.ss}</b></div><div><small>ISO</small><b>${p.iso}</b></div><div><small>Focal</small><b>${p.fl}mm</b></div></div>
+        <div class="grp"><h4>Overview</h4>${kv('camera', p.camera)}${kv('lens', p.lens)}${kv('captured', fmtDate(p.date))}${kv('place', [p.place, p.country].filter(Boolean).join(', '))}</div>
+        <div class="grp"><h4>Labels</h4><div class="chips">${p.tags.map((t) => `<button class="chip" data-addtok="tag:${esc(t)}" title="Filter by this tag">${esc(t)}</button>`).join('')}</div></div>`
+    } else if (st.tab === 'exif') {
+      const r = apiRecord(p)
+      $('ipane').innerHTML = `<div class="grp" style="margin-top:0"><h4>Camera</h4>${kv('camera_make', p.make)}${kv('camera_model', p.camera)}${kv('LensModel', p.lens)}</div>
+        <div class="grp"><h4>Exposure</h4>${kv('f_stop', p.f)}${kv('exposure_time', p.ss)}${kv('iso', p.iso)}${kv('focal_length', r.exif.focal_length)}</div>
+        <div class="grp"><h4>Capture</h4>${kv('captured_at', r.exif.captured_at)}${p.lat != null ? kv('latitude', p.lat) + kv('longitude', p.lon) : kv('location', 'none')}</div>
+        <div class="grp"><h4>File</h4>${kv('name', p.name)}${kv('path', r.file_info.path)}${kv('size_bytes', r.file_info.size_bytes)}${kv('mime_type', r.file_info.mime_type)}${kv('file_hash', r.file_hash)}</div>`
+    } else {
+      const json = JSON.stringify(apiRecord(p), null, 2)
+      $('ipane').innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="mono" style="font-size:11px;color:var(--text-3)">GET /api/photos/${hash(p).slice(0, 10)}…</span><button class="pbtn" data-copy-json>${icon('copy', 12)}Copy</button></div><pre class="json">${highlight(json)}</pre>`
+    }
+  }
+  $('ipane').addEventListener('click', (e) => {
+    const p = PHOTOS.find((x) => x.id === st.cur)
+    const r = e.target.closest('[data-r]'); if (r) { p.rating = p.rating === +r.dataset.r ? 0 : +r.dataset.r; return renderAll() }
+    if (e.target.closest('#pick')) { p.flag = !p.flag; return renderAll() }
+    const c = e.target.closest('[data-copy]'); if (c) { navigator.clipboard?.writeText(c.dataset.copy).catch(() => {}); return toast('Copied ' + c.getAttribute('aria-label').replace('Copy ', '')) }
+    if (e.target.closest('[data-copy-json]')) { navigator.clipboard?.writeText(JSON.stringify(apiRecord(p), null, 2)).catch(() => {}); return toast('Copied the API record as JSON') }
+    const t = e.target.closest('[data-addtok]'); if (t && !has(t.dataset.addtok)) { st.toks.push(parseTok(t.dataset.addtok)); renderAll() }
+  })
+
+  // ---------- status bar + jobs
+  function renderStatus(list) {
+    $('stTotal').textContent = `${PHOTOS.length} photos · ${(PHOTOS.reduce((a, p) => a + p.mb, 0) / 1024).toFixed(2)} GB`
+    $('stSel').innerHTML = `showing <b class="mono">${list.length}</b>${st.sel.size ? ` · <b class="mono">${st.sel.size}</b> selected` : ''}`
+  }
+  $('stSync').innerHTML = icon('refresh', 12) + 'Sync'
+  $('stCmd').innerHTML = '<kbd>Ctrl</kbd><kbd>K</kbd> Commands'
+  function runJob(label, done) {
+    const j = $('job'); j.classList.add('busy'); let n = 0
+    const t = setInterval(() => { n += 7; $('jobBar').style.width = Math.min(n, 100) + '%'; $('jobTxt').textContent = `${label} · ${Math.min(n, 100)}%`; if (n >= 100) { clearInterval(t); j.classList.remove('busy'); $('jobTxt').textContent = 'Sync idle'; toast(done) } }, 180)
+  }
+  $('stSync').onclick = () => runJob('Syncing D:\\photos', 'Sync finished · 0 new · 0 modified · 0 deleted')
+
+  // ---------- command palette (with CLI equivalents)
+  const CMDS = [
+    ['Table layout', 'table', '', () => setLayout('table')], ['Grid layout', 'grid', '', () => setLayout('grid')],
+    ['Scan a folder…', 'folderPlus', 'pmo index --path', () => runJob('Indexing', 'Indexed 0 new photos')],
+    ['Sync library', 'refresh', 'pmo sync', () => runJob('Syncing', 'Sync finished · nothing changed')],
+    ['Sync and re-hash every file', 'refresh', 'pmo sync --rehash', () => runJob('Re-hashing', 'Re-hash finished · 0 silent edits found')],
+    ['Prune non-image records', 'layers', 'pmo prune --apply', () => toast('Dry run: 0 non-image records')],
+    ['Merge duplicate paths', 'layers', 'pmo dedupe --apply', () => toast('Dry run: 0 duplicate paths')],
+    ['Export selection as JSON', 'download', '', () => toast('Exported JSON')], ['Export selection as ZIP', 'download', '', () => toast('Exported ZIP')],
+    ['Filter: picks only', 'flag', 'pick:yes', () => { st.toks.push(parseTok('pick:yes')); renderAll() }],
+    ['Filter: rated 4★ and up', 'star', 'rating:>=4', () => { st.toks.push(parseTok('rating:>=4')); renderAll() }],
+    ['Clear all filters', 'x', '', () => { st.toks = []; renderAll() }],
+    ['Toggle light / dark', 'sun', '', toggleTheme],
+  ]
+  let cmdIdx = 0, cmdList = CMDS
+  function openCmd() { $('cmdk').classList.add('open'); $('cmdkBg').classList.add('open'); $('cmdIn').value = ''; cmdIdx = 0; renderCmd(); $('cmdIn').focus() }
+  function closeCmd() { $('cmdk').classList.remove('open'); $('cmdkBg').classList.remove('open') }
+  function renderCmd() {
+    const q = $('cmdIn').value.toLowerCase()
+    cmdList = CMDS.filter((c) => (c[0] + ' ' + c[2]).toLowerCase().includes(q))
+    $('cmdList').innerHTML = cmdList.map((c, i) => `<button class="cmd" role="option" data-c="${i}" aria-selected="${i === cmdIdx}"><span class="ic">${icon(c[1], 15)}</span>${esc(c[0])}<span class="cli">${esc(c[2])}</span></button>`).join('') || '<div class="empty">No command</div>'
+  }
+  $('cmdIn').oninput = () => { cmdIdx = 0; renderCmd() }
+  $('cmdIn').onkeydown = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); cmdIdx = (cmdIdx + (e.key === 'ArrowDown' ? 1 : -1) + cmdList.length) % Math.max(1, cmdList.length); renderCmd() }
+    if (e.key === 'Enter' && cmdList[cmdIdx]) { closeCmd(); cmdList[cmdIdx][3]() }
+  }
+  $('cmdList').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) { closeCmd(); cmdList[+b.dataset.c][3]() } }
+  $('cmdkBg').onclick = closeCmd
+  $('cmdBtn').innerHTML = icon('command', 15); $('cmdBtn').onclick = openCmd; $('stCmd').onclick = openCmd
+
+  // ---------- chrome
+  $('glyph').innerHTML = icon('aperture', 14, 2.2)
+  $('vTable').innerHTML = icon('table', 13) + 'Table'; $('vGrid').innerHTML = icon('grid', 13) + 'Grid'
+  function setLayout(l) { st.layout = l; $('vTable').setAttribute('aria-pressed', l === 'table'); $('vGrid').setAttribute('aria-pressed', l === 'grid'); renderAll() }
+  $('vTable').onclick = () => setLayout('table'); $('vGrid').onclick = () => setLayout('grid')
+  function toggleTheme() { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; $('theme').innerHTML = icon(r.dataset.theme === 'dark' ? 'sun' : 'moon', 15) }
+  $('theme').innerHTML = icon('sun', 15); $('theme').onclick = toggleTheme
+  $('notesFab').innerHTML = icon('info', 13, 2) + 'Design notes'; $('notesClose').innerHTML = icon('x', 16)
+  $('notesFab').onclick = () => $('notes').classList.add('open'); $('notesClose').onclick = () => $('notes').classList.remove('open')
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return $('cmdk').classList.contains('open') ? closeCmd() : openCmd() }
+    if (e.key === 'Escape') { closeCmd(); $('notes').classList.remove('open'); return }
+    if (e.target.matches('input') || e.ctrlKey || e.metaKey || e.altKey) return
+    if (e.target.matches('button') && (e.key === ' ' || e.key === 'Enter')) return
+    if (e.key === '/') { e.preventDefault(); return $('qin').focus() }
+    const l = filtered(); const i = l.findIndex((p) => p.id === st.cur); const p = l[i]
+    const k = e.key.toLowerCase()
+    if (k === 'j' || e.key === 'ArrowDown' || k === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const n = l[Math.max(0, Math.min(l.length - 1, i + (k === 'j' || e.key === 'ArrowDown' ? 1 : -1)))]
+      if (n) { st.cur = n.id; if (e.shiftKey) st.sel.add(n.id); renderAll(); document.querySelector(`[data-id="${n.id}"]`)?.scrollIntoView({ block: 'nearest' }) }
+    } else if (!p) return
+    else if (k === 'x' || e.key === ' ') { e.preventDefault(); st.sel.has(p.id) ? st.sel.delete(p.id) : st.sel.add(p.id); renderAll() }
+    else if (/^[0-5]$/.test(k)) { p.rating = +k; renderAll() }
+    else if (k === 'p') { p.flag = !p.flag; renderAll() }
+  })
+
+  let tt
+  function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2200) }
+
+  function renderAll() { const l = filtered(); renderToks(); renderFacets(l); renderMain(l); renderInsp(); renderStatus(l) }
+  renderAll()
+})()
+</script>
+</body>
+</html>

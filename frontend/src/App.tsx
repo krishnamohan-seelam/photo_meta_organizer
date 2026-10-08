@@ -1,28 +1,32 @@
-import React, { useEffect } from 'react'
+import React, { Suspense, lazy, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { errorMessage } from './api/client'
 import { isDemoMode, usePhotoSearch } from './hooks/usePhotos'
 import { useFacetsQuery } from './hooks/useFacets'
 import { useJobCompletionNotices, useJobs } from './hooks/useJobs'
+import { useGlobalHotkeys } from './hooks/useGlobalHotkeys'
 import { useUiStore } from './stores/useUiStore'
-import { shouldIgnoreHotkey } from './utils/hotkeys'
-import { AppHeader } from './components/header/AppHeader'
+import { NavRail } from './components/shell/NavRail'
+import { TopBar } from './components/header/TopBar'
 import { CommandPalette } from './components/header/CommandPalette'
+import { ShortcutsOverlay } from './components/header/ShortcutsOverlay'
 import { FolderJobDialog } from './components/jobs/FolderJobDialog'
-import { FilterSidebar } from './components/filters/FilterSidebar'
-import { PhotoGallery } from './components/gallery/PhotoGallery'
+import { LibraryPanel } from './components/filters/LibraryPanel'
+import { LibraryView } from './components/gallery/LibraryView'
 import { ExifInspector } from './components/inspector/ExifInspector'
 import { SelectionDock } from './components/collections/SelectionDock'
 import { TimelineView } from './components/timeline/TimelineView'
-import { MapExplorerView } from './components/maps/MapExplorerView'
 import { KanbanBoardView } from './components/kanban/KanbanBoardView'
 import { DashboardView } from './components/dashboard/DashboardView'
 import { LightboxModal } from './components/lightbox/LightboxModal'
 import { EmptyLibraryState, ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
 import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
 
+// Leaflet and the country outlines are only needed on the Map view.
+const MapExplorerView = lazy(() => import('./components/maps/MapExplorerView').then((m) => ({ default: m.MapExplorerView })))
+
 export const App: React.FC = () => {
-  const { theme, activeView, lightsOut, toggleLightsOut, inspectedHash, setInspectedHash, toastMessage, toastKind } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, toggleLightsOut: s.toggleLightsOut, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind })))
+  const { theme, activeView, lightsOut, inspectedHash, setInspectedHash, toastMessage, toastKind } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind })))
 
   // The server filters, sorts and pages the library (PMO-27); views read the loaded pages from one cache entry.
   const { data, photos, isPending, isError, error, refetch, isFetching } = usePhotoSearch()
@@ -32,6 +36,7 @@ export const App: React.FC = () => {
   const { activeJob } = useJobs()
   const setJobDialog = useUiStore((s) => s.setJobDialog)
   useJobCompletionNotices()
+  useGlobalHotkeys()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -42,80 +47,67 @@ export const App: React.FC = () => {
     if (!inspectedHash && photos.length > 0) setInspectedHash(photos[0].file_hash)
   }, [inspectedHash, photos, setInspectedHash])
 
-  // Keyboard shortcut listener for 'L' (Lights Out)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Not while typing, not with modifiers (Ctrl+L is the address bar), not inside a dialog.
-      if (shouldIgnoreHotkey(e) || document.querySelector('[aria-modal="true"]')) return
-      if (e.key.toLowerCase() === 'l') {
-        toggleLightsOut()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleLightsOut])
-
   return (
-    <div
-      className={lightsOut ? 'lights-out' : ''}
-      style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}
-    >
-      {/* Lights out indicator badge */}
+    <div className={`app-shell${lightsOut ? ' lights-out' : ''}`}>
       {lightsOut && (
-        <div className="lights-out-indicator">
+        <div className="lights-out-indicator" role="status">
           <EyeOff size={14} />
-          <span>Lights Out Active (Press L or click Dim to restore)</span>
+          <span>Lights Out · press L to restore</span>
         </div>
       )}
 
-      {/* App Header */}
-      <AppHeader />
+      <NavRail />
 
-      {/* A failed refresh must not hide photos we already have, but must not pass them off as current */}
-      {isError && data && <StaleBanner message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />}
+      <div className="app-main">
+        <TopBar />
 
-      {/* Main Content Area: loading, error and empty are distinct states, never a stand-in library */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        {isPending ? (
-          <LoadingState />
-        ) : !data ? (
-          <ErrorState message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />
-        ) : libraryIsEmpty ? (
-          <EmptyLibraryState onScan={() => setJobDialog('index')} scanning={activeJob !== null} />
-        ) : (
-          <>
-            {activeView === 'studio' && (
-              <>
-                <FilterSidebar />
-                <PhotoGallery />
-                <ExifInspector />
-              </>
-            )}
+        {/* A failed refresh must not hide photos we already have, but must not pass them off as current */}
+        {isError && data && <StaleBanner message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />}
 
-            {activeView === 'timeline' && <TimelineView />}
-            {activeView === 'map' && <MapExplorerView />}
-            {activeView === 'kanban' && <KanbanBoardView />}
-            {activeView === 'analytics' && <DashboardView />}
-          </>
-        )}
+        {/* Loading, error and empty are distinct states, never a stand-in library */}
+        <div className="app-body">
+          {isPending ? (
+            <LoadingState />
+          ) : !data ? (
+            <ErrorState message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />
+          ) : libraryIsEmpty ? (
+            <EmptyLibraryState onScan={() => setJobDialog('index')} scanning={activeJob !== null} />
+          ) : (
+            <>
+              {activeView === 'studio' && (
+                <>
+                  <LibraryPanel />
+                  <LibraryView />
+                  <ExifInspector />
+                </>
+              )}
+
+              {activeView === 'timeline' && <TimelineView />}
+              {activeView === 'map' && (
+                <>
+                  <Suspense fallback={<LoadingState />}>
+                    <MapExplorerView />
+                  </Suspense>
+                  <ExifInspector />
+                </>
+              )}
+              {activeView === 'kanban' && <KanbanBoardView />}
+              {activeView === 'analytics' && <DashboardView />}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Floating Selection Dock */}
       <SelectionDock />
 
-      {/* Modals & Overlays */}
       <CommandPalette />
+      <ShortcutsOverlay />
       <FolderJobDialog />
       <LightboxModal />
 
-      {/* Toast notifications */}
       {toastMessage && (
         <div className={`toast-notice${toastKind === 'error' ? ' toast-error' : ''}`} role={toastKind === 'error' ? 'alert' : 'status'}>
-          {toastKind === 'error' ? (
-            <AlertCircle size={16} color="var(--accent-danger)" />
-          ) : (
-            <CheckCircle2 size={16} color="var(--accent-primary)" />
-          )}
+          {toastKind === 'error' ? <AlertCircle size={16} className="toast-icon-error" /> : <CheckCircle2 size={16} className="toast-icon-ok" />}
           <span>{toastMessage}</span>
         </div>
       )}

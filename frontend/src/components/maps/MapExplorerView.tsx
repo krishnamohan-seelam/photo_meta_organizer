@@ -1,165 +1,123 @@
-import React from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useQuery } from '@tanstack/react-query'
+import { Crosshair, Images, MapPin } from 'lucide-react'
+import { useFacets } from '../../hooks/useFacets'
+import { useAppConfig, useGeoClusters, useMapFilterRequest } from '../../hooks/useGeoClusters'
 import { useUiStore } from '../../stores/useUiStore'
-import { photosKey, runSearch, useSearchRequest } from '../../hooks/usePhotos'
-import { MapPin, Sliders } from 'lucide-react'
+import type { GeoCluster } from '../../types/metadata'
+import { normalizeBounds, padBounds } from '../../utils/geo'
+import { LeafletMap, type FitRequest, type MapView } from './LeafletMap'
 
-// Markers drawn for at most this many geotagged photos; the count shows the full total.
-const MAP_PHOTO_LIMIT = 500
+/** The request covers this much more than the screen on each side, so a small pan needs no reload. */
+const VIEWPORT_PADDING = 0.25
+const NO_CLUSTERS: GeoCluster[] = []
 
+/**
+ * Map Explorer: your geotagged photos, clustered by the server for the area and zoom on screen
+ * and filtered like the Library. The Library's own filters apply; the map has its own area.
+ */
 export const MapExplorerView: React.FC = () => {
-  const { radiusKm, setRadiusKm, setInspectedHash, setLightboxIndex, showToast } = useUiStore(useShallow((s) => ({ radiusKm: s.radiusKm, setRadiusKm: s.setRadiusKm, setInspectedHash: s.setInspectedHash, setLightboxIndex: s.setLightboxIndex, showToast: s.showToast })))
+  const { theme, inspectorOpen, toggleInspector, setInspectedHash, setActiveView, setFilterArea, showToast } =
+    useUiStore(
+      useShallow((s) => ({
+        theme: s.theme,
+        inspectorOpen: s.inspectorOpen,
+        toggleInspector: s.toggleInspector,
+        setInspectedHash: s.setInspectedHash,
+        setActiveView: s.setActiveView,
+        setFilterArea: s.setFilterArea,
+        showToast: s.showToast,
+      }))
+    )
+  const facets = useFacets()
+  const config = useAppConfig()
+  const filters = useMapFilterRequest()
 
-  // Geotagged photos matching the current filters, asked of the server (PMO-27).
-  const request = useSearchRequest()
-  const geoQuery = { ...request, has_location: true, page: 1, page_size: MAP_PHOTO_LIMIT }
-  const { data } = useQuery({ queryKey: [...photosKey, 'map', geoQuery], queryFn: () => runSearch(geoQuery) })
-  const geoPhotos = data?.items ?? []
-  const geoTotal = data?.total_count ?? 0
+  const [view, setView] = useState<MapView | null>(null)
+  const [fitTo, setFitTo] = useState<FitRequest | null>(null)
+  // The library's extent, once known, is where the map first looks (one automatic fit).
+  const [autoFitted, setAutoFitted] = useState(false)
+  if (!autoFitted && facets.gps_bounds) {
+    setAutoFitted(true)
+    const b = facets.gps_bounds
+    setFitTo({ bounds: { south: b.min_lat, west: b.min_lon, north: b.max_lat, east: b.max_lon }, key: 1 })
+  }
 
-  const clusters = [
-    { city: 'Tokyo, Japan', lat: 35.6762, lon: 139.6503, count: 12, top: '42%', left: '78%' },
-    { city: 'Kyoto, Japan', lat: 35.0116, lon: 135.7681, count: 6, top: '46%', left: '76%' },
-    { city: 'San Francisco, USA', lat: 37.7749, lon: -122.4194, count: 4, top: '38%', left: '22%' },
-    { city: 'London, UK', lat: 51.5074, lon: -0.1278, count: 2, top: '30%', left: '48%' },
-  ]
+  const request = useMemo(
+    () => (view ? { ...filters, bbox: padBounds(view.bbox, VIEWPORT_PADDING), zoom: view.zoom } : null),
+    [filters, view]
+  )
+  const { data, isError, error } = useGeoClusters(request)
+  const clusters = data?.clusters ?? NO_CLUSTERS
+  const inView = data?.total_count ?? 0
+  const geotagged = facets.stats.geotagged_count
+
+  const fitToPhotos = () => {
+    const b = facets.gps_bounds
+    if (!b) return
+    setFitTo({
+      bounds: { south: b.min_lat, west: b.min_lon, north: b.max_lat, east: b.max_lon },
+      key: (fitTo?.key ?? 0) + 1,
+    })
+  }
+
+  const showInLibrary = () => {
+    if (!view) return
+    setFilterArea(normalizeBounds(view.bbox))
+    setActiveView('studio')
+    showToast('Library narrowed to the map area. Remove the “Map area” chip to see everything.')
+  }
+
+  const openPhoto = useCallback(
+    (fileHash: string) => {
+      setInspectedHash(fileHash)
+      if (!inspectorOpen) toggleInspector()
+    },
+    [setInspectedHash, inspectorOpen, toggleInspector]
+  )
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-      {/* Top Map Filter Controls */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '20px',
-          left: '20px',
-          zIndex: 30,
-          background: 'var(--header-bg)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius-md)',
-          padding: '12px 18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          boxShadow: 'var(--shadow-lg)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '0.85rem' }}>
-          <MapPin size={16} color="var(--accent-primary)" />
-          <span>Geospatial Search</span>
+    <div className="map-view">
+      <div className="map-toolbar">
+        <div className="map-toolbar-title">
+          <MapPin size={16} />
+          <span>Map</span>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          <Sliders size={14} />
-          <span>Radius:</span>
-          <input
-            type="range"
-            min="5"
-            max="100"
-            value={radiusKm}
-            onChange={(e) => setRadiusKm(parseInt(e.target.value))}
-            style={{ width: '90px', accentColor: 'var(--accent-primary)' }}
-          />
-          <span style={{ color: 'var(--accent-primary)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-            {radiusKm} km
-          </span>
+        <div className="badge badge-camera" aria-live="polite">
+          {inView} {inView === 1 ? 'photo' : 'photos'} in view
         </div>
-
-        <div className="badge badge-camera">
-          {geoTotal} geotagged photos
+        <span className="map-toolbar-muted">{geotagged} geotagged in the library</span>
+        <div className="map-toolbar-actions">
+          <button type="button" className="btn-secondary" onClick={fitToPhotos} disabled={!facets.gps_bounds}>
+            <Crosshair size={14} /> Fit to photos
+          </button>
+          <button type="button" className="btn-primary" onClick={showInLibrary} disabled={!view || inView === 0}>
+            <Images size={14} /> Show these in Library
+          </button>
         </div>
       </div>
 
-      {/* Map Graphic Canvas */}
-      <div
-        style={{
-          flex: 1,
-          background: '#0a0f1d',
-          position: 'relative',
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {/* World Map SVG Vector */}
-        <svg
-          viewBox="0 0 1000 500"
-          style={{ width: '100%', height: '100%', opacity: 0.35, filter: 'drop-shadow(0 0 10px rgba(56,189,248,0.2))' }}
-        >
-          <path
-            d="M150,150 Q180,100 260,110 T350,220 T200,340 Z M420,120 Q500,80 580,130 T600,280 T480,260 Z M650,120 Q780,100 860,180 T800,340 T670,260 Z M750,380 Q850,360 880,440 T760,450 Z"
-            fill="var(--bg-surface)"
-            stroke="var(--accent-primary)"
-            strokeWidth="1.5"
-          />
-        </svg>
-
-        {/* GPS Cluster Markers */}
-        {clusters.map((c) => (
-          <button
-            type="button"
-            className="btn-reset"
-            aria-label={`${c.city}: ${c.count} photos`}
-            key={c.city}
-            onClick={() => {
-              showToast(`Focused on ${c.city} (${c.count} photos within ${radiusKm}km)`)
-              const matched = geoPhotos[0]
-              if (matched) {
-                setInspectedHash(matched.file_hash)
-                setLightboxIndex(0)
-              }
-            }}
-            style={{
-              position: 'absolute',
-              top: c.top,
-              left: c.left,
-              transform: 'translate(-50%, -50%)',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              zIndex: 10,
-            }}
-          >
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                background: 'rgba(56, 189, 248, 0.25)',
-                border: '2px solid var(--accent-primary)',
-                boxShadow: '0 0 15px var(--accent-glow)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              {c.count}
-            </div>
-            <div
-              style={{
-                marginTop: '4px',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-                whiteSpace: 'nowrap',
-                boxShadow: 'var(--shadow-lg)',
-              }}
-            >
-              {c.city}
-            </div>
-          </button>
-        ))}
+      <div className="map-stage">
+        <LeafletMap
+          clusters={clusters}
+          tilesUrl={config.map_tiles_url}
+          tilesAttribution={config.map_tiles_attribution}
+          theme={theme}
+          fitTo={fitTo}
+          onViewChange={setView}
+          onOpenPhoto={openPhoto}
+        />
+        {isError && (
+          <div className="map-notice map-notice-error" role="alert">
+            {error instanceof Error ? error.message : 'Could not load the map.'}
+          </div>
+        )}
+        {!isError && data && geotagged === 0 && (
+          <div className="map-notice">None of your photos have GPS coordinates, so there is nothing to place on the map.</div>
+        )}
+        {!isError && data && geotagged > 0 && inView === 0 && (
+          <div className="map-notice">No geotagged photos match the filters in this area.</div>
+        )}
       </div>
     </div>
   )

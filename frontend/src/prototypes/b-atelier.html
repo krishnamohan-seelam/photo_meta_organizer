@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Atelier Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* Prototype B · Atelier — editorial, story-led browsing on warm paper. */
+:root, [data-theme="light"] {
+  --bg: #f5f1ea;
+  --paper: #fbf9f5;
+  --card: #ffffff;
+  --ink: #1d1a16;
+  --ink-2: #5d564c;
+  --ink-3: #958c7f;
+  --line: #e4ddd1;
+  --line-2: #d6cdbe;
+  --accent: #c4552d;          /* terracotta */
+  --accent-soft: #f6e3d9;
+  --chip: #ece6db;
+  --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 8px 24px rgba(60, 40, 20, .08);
+  --shadow-lg: 0 30px 80px rgba(40, 25, 10, .25);
+  --sheet-media: #e9e3d8;
+}
+[data-theme="dark"] {
+  --bg: #171512;
+  --paper: #1d1a16;
+  --card: #24201b;
+  --ink: #efe9df;
+  --ink-2: #bdb4a6;
+  --ink-3: #847b6e;
+  --line: #2f2a24;
+  --line-2: #3d362e;
+  --accent: #e78a62;
+  --accent-soft: #3a2519;
+  --chip: #2a251f;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+  --shadow-lg: 0 30px 80px rgba(0,0,0,.6);
+  --sheet-media: #110f0d;
+}
+:root { --serif: 'Fraunces', Georgia, serif; --sans: 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace; --ease: cubic-bezier(.2,.7,.2,1); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; transition: background .3s, color .3s; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.serif { font-family: var(--serif); }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 32px; }
+
+/* ---------- Header: wordmark, text navigation, one primary action */
+header.top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+.top-in { display: flex; align-items: center; height: 64px; gap: 28px; }
+.wordmark { font-family: var(--serif); font-size: 21px; font-weight: 500; letter-spacing: -.02em; white-space: nowrap; }
+.wordmark em { color: var(--accent); font-style: italic; }
+nav.tabs { display: flex; gap: 22px; margin-left: 12px; }
+nav.tabs button { position: relative; padding: 21px 0; color: var(--ink-2); font-weight: 500; }
+nav.tabs button:hover { color: var(--ink); }
+nav.tabs button[aria-current="page"] { color: var(--ink); }
+nav.tabs button[aria-current="page"]::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--ink); border-radius: 2px; }
+.top-sp { flex: 1; }
+.search { display: flex; align-items: center; gap: 8px; width: 260px; height: 38px; padding: 0 14px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); color: var(--ink-3); transition: width .25s var(--ease), border-color .2s; }
+.search:focus-within { width: 340px; border-color: var(--ink-3); }
+.search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; color: var(--ink); }
+.ibtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); }
+.ibtn:hover { background: var(--chip); color: var(--ink); }
+.pbtn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 999px; background: var(--ink); color: var(--bg); font-weight: 500; white-space: nowrap; }
+.pbtn:hover { opacity: .9; }
+.gbtn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink); font-weight: 500; }
+.gbtn:hover { background: var(--chip); }
+.gbtn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.gbtn[aria-pressed="true"] svg { fill: currentColor; }
+
+/* ---------- Intro: a sentence that describes the current view */
+.intro { padding-top: 44px; padding-bottom: 22px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.intro h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 4.4vw, 54px); line-height: 1.04; letter-spacing: -.025em; margin-top: 8px; }
+.intro h1 em { font-style: italic; color: var(--accent); }
+.intro p { color: var(--ink-2); font-size: 16px; margin-top: 12px; max-width: 640px; }
+.intro p b { color: var(--ink); font-weight: 600; }
+.stats { display: flex; gap: 28px; }
+.stats div { text-align: right; }
+.stats b { display: block; font-family: var(--serif); font-size: 30px; font-weight: 400; line-height: 1; }
+.stats span { font-size: 12px; color: var(--ink-3); }
+
+/* ---------- Collections: cover cards */
+.colls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding-bottom: 28px; }
+.coll { text-align: left; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; transition: transform .25s var(--ease), box-shadow .25s; }
+.coll:hover { transform: translateY(-3px); box-shadow: var(--shadow), 0 16px 36px rgba(60,40,20,.12); }
+.coll[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mosaic { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; aspect-ratio: 16 / 9; }
+.mosaic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mosaic img:first-child { grid-row: span 2; }
+.coll-b { padding: 12px 14px 14px; display: flex; justify-content: space-between; align-items: baseline; }
+.coll-b b { font-family: var(--serif); font-weight: 500; font-size: 17px; }
+.coll-b span { font-size: 12px; color: var(--ink-3); }
+.coll.new { border: 1.5px dashed var(--line-2); background: transparent; box-shadow: none; display: grid; place-items: center; color: var(--ink-3); min-height: 120px; }
+.coll.new:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* ---------- Filter bar: horizontal chips + popovers instead of a 280px sidebar */
+.fbar { position: sticky; top: 64px; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+.fbar-in { display: flex; gap: 8px; align-items: center; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 14px; border-radius: 999px; background: var(--chip); color: var(--ink); font-weight: 500; white-space: nowrap; }
+.fchip:hover { background: var(--line); }
+.fchip.on { background: var(--ink); color: var(--bg); }
+.fchip .n { font-size: 11px; background: var(--accent); color: #fff; border-radius: 999px; padding: 0 6px; line-height: 17px; }
+.fsep { width: 1px; height: 22px; background: var(--line-2); margin: 0 4px; }
+.fclear { color: var(--accent); font-weight: 500; padding: 0 6px; }
+.sortsel { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.sortsel select { font: inherit; color: var(--ink); background: transparent; border: 0; font-weight: 500; cursor: pointer; }
+.pop { position: absolute; z-index: 40; min-width: 240px; max-height: 340px; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 6px; display: none; }
+.pop.open { display: block; animation: rise .18s var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(-4px); } }
+.opt { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; text-align: left; }
+.opt:hover { background: var(--chip); }
+.opt .box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--line-2); display: grid; place-items: center; color: transparent; flex: none; }
+.opt[aria-checked="true"] .box { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.opt .c { margin-left: auto; color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---------- Chapters (trips) and the mosaic */
+.chapter { padding: 36px 0 8px; }
+.ch-h { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.ch-h h2 { font-family: var(--serif); font-weight: 400; font-size: 32px; letter-spacing: -.02em; }
+.ch-h .sub { color: var(--ink-2); }
+.ch-h .sub b { color: var(--ink); font-weight: 600; }
+.ch-h .sel-all { margin-left: auto; color: var(--ink-3); font-size: 13px; opacity: 0; transition: opacity .2s; }
+.chapter:hover .sel-all { opacity: 1; }
+.ch-h .sel-all:hover { color: var(--accent); }
+.mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); grid-auto-rows: 170px; grid-auto-flow: dense; gap: 12px; }
+.ph { position: relative; border-radius: 12px; overflow: hidden; background: var(--chip); cursor: zoom-in; box-shadow: 0 1px 2px rgba(60,40,20,.08); transition: transform .3s var(--ease), box-shadow .3s; }
+.ph:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.ph.tall { grid-row: span 2; }
+.ph.wide { grid-column: span 2; }
+.ph.hero { grid-column: span 2; grid-row: span 2; }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s var(--ease); }
+.ph:hover img { transform: scale(1.04); }
+.ph .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 14px 12px; color: #fff; background: linear-gradient(transparent, rgba(20,12,4,.72)); opacity: 0; transform: translateY(6px); transition: .25s var(--ease); pointer-events: none; }
+.ph:hover .cap, .ph:focus-visible .cap, .ph.hero .cap { opacity: 1; transform: none; }
+.cap b { font-family: var(--serif); font-weight: 500; font-size: 16px; display: block; line-height: 1.2; }
+.ph.hero .cap b { font-size: 24px; }
+.cap span { font-size: 12px; opacity: .85; }
+.ribbon { position: absolute; top: 0; right: 14px; width: 18px; height: 26px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%); box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+.selbox { position: absolute; top: 10px; left: 10px; width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.85); color: transparent; display: grid; place-items: center; opacity: 0; transition: opacity .15s; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.ph:hover .selbox, .ph.sel .selbox, body.selecting .selbox { opacity: 1; }
+.ph.sel .selbox { background: var(--accent); color: #fff; }
+.ph.sel { box-shadow: 0 0 0 3px var(--accent); }
+.none { text-align: center; padding: 80px 0; color: var(--ink-2); }
+.none h3 { font-family: var(--serif); font-weight: 400; font-size: 26px; color: var(--ink); margin-bottom: 6px; }
+
+/* ---------- Detail sheet: museum-label EXIF card */
+.sheet-bg { position: fixed; inset: 0; background: rgba(20, 14, 8, .55); backdrop-filter: blur(6px); z-index: 50; display: none; }
+.sheet-bg.open { display: block; animation: fade .2s; }
+@keyframes fade { from { opacity: 0; } }
+.sheet { position: fixed; inset: 3vh 3vw; z-index: 51; background: var(--paper); border-radius: 22px; box-shadow: var(--shadow-lg); display: none; grid-template-columns: 1fr 400px; overflow: hidden; }
+.sheet.open { display: grid; animation: rise .25s var(--ease); }
+.s-media { background: var(--sheet-media); display: grid; place-items: center; padding: 36px; position: relative; min-height: 0; }
+.s-media img { max-width: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.s-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; background: var(--paper); box-shadow: var(--shadow); display: grid; place-items: center; }
+.s-label { padding: 30px 30px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; }
+.s-label .x { position: absolute; top: 16px; right: 16px; background: var(--paper); }
+.s-label h2 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.08; letter-spacing: -.02em; margin-top: 6px; }
+.s-sentence { color: var(--ink-2); font-size: 15px; line-height: 1.6; }
+.s-sentence b { color: var(--ink); font-weight: 600; }
+.specs { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.specs div { padding: 14px 0; text-align: center; }
+.specs div + div { border-left: 1px solid var(--line); }
+.specs b { font-family: var(--serif); font-weight: 400; font-size: 24px; display: block; line-height: 1.1; }
+.specs span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.s-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.stars { display: flex; gap: 2px; }
+.stars button { color: var(--line-2); padding: 2px; display: grid; }
+.stars button.on { color: var(--accent); }
+.stars button.on svg { fill: currentColor; }
+.stars button:hover { color: var(--accent); }
+.s-h { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; margin-bottom: 10px; }
+.tagset { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tg { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px 4px 11px; border-radius: 999px; background: var(--chip); font-size: 13px; }
+.tg button { display: grid; color: var(--ink-3); border-radius: 50%; padding: 2px; }
+.tg button:hover { color: var(--ink); background: var(--line); }
+.tagset input { border: 0; outline: none; background: transparent; width: 110px; padding: 4px 6px; color: var(--ink); }
+.minimap { position: relative; height: 130px; border-radius: 12px; overflow: hidden; background: var(--chip); }
+.minimap svg { width: 100%; height: 100%; display: block; }
+.minimap .pl { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--ink-2); background: var(--paper); padding: 3px 9px; border-radius: 999px; }
+details.file summary { cursor: pointer; color: var(--ink-2); font-size: 13px; list-style: none; display: flex; align-items: center; gap: 6px; }
+details.file summary::-webkit-details-marker { display: none; }
+details.file dl { display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; font-size: 12.5px; margin-top: 10px; }
+details.file dt { color: var(--ink-3); }
+details.file dd { font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+
+/* ---------- Selection tray */
+.tray { position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 140%); z-index: 35; background: var(--ink); color: var(--bg); border-radius: 999px; padding: 6px 6px 6px 20px; display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow-lg); transition: transform .3s var(--ease); }
+.tray.show { transform: translate(-50%, 0); }
+.tray button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; font-weight: 500; }
+.tray button:hover { background: rgba(255,255,255,.12); }
+[data-theme="dark"] .tray button:hover { background: rgba(0,0,0,.08); }
+.tray .go { background: var(--accent); color: #fff; }
+.tray .go:hover { background: var(--accent); filter: brightness(1.08); }
+
+.toast { position: fixed; top: 80px; left: 50%; transform: translate(-50%, -10px); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 999px; font-size: 13px; opacity: 0; transition: .2s var(--ease); z-index: 70; pointer-events: none; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Prototype chrome: design notes */
+.notes-fab { position: fixed; left: 20px; bottom: 20px; z-index: 36; display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 600; font-size: 12.5px; box-shadow: var(--shadow-lg); }
+.notes { visibility: hidden; position: fixed; top: 0; right: 0; bottom: 0; width: min(540px, 100vw); background: var(--paper); z-index: 80; transform: translateX(100%); transition: transform .35s var(--ease); overflow-y: auto; padding: 34px 32px 60px; box-shadow: var(--shadow-lg); border-left: 1px solid var(--line); }
+.notes.open { transform: none; visibility: visible; }
+.notes h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; letter-spacing: -.02em; }
+.notes .lede { color: var(--ink-2); margin: 8px 0 18px; }
+.notes .close { position: absolute; top: 18px; right: 18px; }
+.note { border-top: 1px solid var(--line); padding: 16px 0; }
+.note h4 { font-family: var(--serif); font-weight: 500; font-size: 18px; margin-bottom: 8px; }
+.note .ba { display: grid; grid-template-columns: 58px 1fr; gap: 5px 12px; font-size: 13px; color: var(--ink-2); }
+.note .ba span { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding-top: 3px; }
+.note .ba .b { color: #b0412e; } .note .ba .a { color: #3f8a55; } .note .ba .w { color: var(--ink-3); }
+.note code { font-family: var(--mono); font-size: 11.5px; background: var(--chip); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+.notes a { color: var(--accent); }
+
+@media (max-width: 980px) {
+  nav.tabs { display: none; }
+  .colls { grid-template-columns: repeat(2, 1fr); }
+  .intro { grid-template-columns: 1fr; }
+  .stats div { text-align: left; }
+  .sheet { grid-template-columns: 1fr; grid-template-rows: 45% 1fr; inset: 0; border-radius: 0; }
+}
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px; }
+  .search { width: 150px; } .search:focus-within { width: 200px; }
+  .pbtn span { display: none; }
+  .ph.hero, .ph.wide { grid-column: span 1; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <div class="wordmark">Photo <em>Meta</em></div>
+    <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+    <div class="top-sp"></div>
+    <label class="search"><span id="sIc"></span><input id="q" placeholder="Search places, cameras, tags…" autocomplete="off" /></label>
+    <button class="ibtn" id="theme" aria-label="Toggle dark mode"></button>
+    <button class="pbtn" id="add"></button>
+  </div>
+</header>
+
+<main>
+  <section class="wrap intro">
+    <div>
+      <div class="eyebrow" id="eyebrow">Library</div>
+      <h1 id="headline"></h1>
+      <p id="sentence"></p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="wrap colls" id="colls" aria-label="Collections"></section>
+
+  <div class="fbar"><div class="wrap fbar-in" id="fbar"></div></div>
+  <div class="pop" id="pop" role="dialog" aria-label="Filter options"></div>
+
+  <section class="wrap" id="chapters" style="padding-bottom:120px"></section>
+</main>
+
+<div class="tray" id="tray" role="toolbar" aria-label="Selection"></div>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Photo details">
+  <div class="s-media"><img id="sImg" alt="" /><button class="s-nav" id="sPrev" style="left:18px" aria-label="Previous photo"></button><button class="s-nav" id="sNext" style="right:18px" aria-label="Next photo"></button></div>
+  <div class="s-label" id="sLabel" style="position:relative"></div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<button class="notes-fab" id="notesFab"></button>
+<aside class="notes" id="notes" aria-label="Design notes">
+  <button class="close ibtn" id="notesClose" aria-label="Close notes"></button>
+  <h2>Prototype B · Atelier</h2>
+  <p class="lede">Editorial and warm. The library reads like a photo book: trips become chapters, metadata becomes readable captions, and filters sit in one quiet row. <a href="index.html">← All prototypes</a></p>
+
+  <div class="note"><h4>1 · Palette and typography</h4><div class="ba">
+    <span class="b">Before</span><div>Tailwind-default slate and sky blue, Inter everywhere, uppercase micro-labels on every section, and emoji used as icons.</div>
+    <span class="a">After</span><div>Warm paper (<code>#f5f1ea</code>), ink text and one terracotta accent. Fraunces serif for headings, titles and numbers, Inter for the interface. Dark mode is warm charcoal, not blue-black.</div>
+    <span class="w">Why</span><div>A distinct personality instead of the generic dashboard look. The serif type brings the feel of printed photo books and gallery labels, which suits a personal library.</div></div></div>
+
+  <div class="note"><h4>2 · Navigation and header</h4><div class="ba">
+    <span class="b">Before</span><div>Segmented buttons with icons and labels, plus a row of theme, dim, panel, scan, sync and export buttons.</div>
+    <span class="a">After</span><div>Text tabs with an underline indicator (Library, Moments, Places, Collections, Insights), an expanding search pill, a theme toggle and one primary "Add photos" button. Scan and Sync live behind it.</div>
+    <span class="w">Why</span><div>The header answers two questions only: where am I, and what is the main thing I can do?</div></div></div>
+
+  <div class="note"><h4>3 · Filter sidebar → chip bar and a describing sentence</h4><div class="ba">
+    <span class="b">Before</span><div>A permanent 280px sidebar of accordion cards (Camera, Tags, Collections, Hotkeys).</div>
+    <span class="a">After</span><div>A sticky row of chips (Camera, Place, Tags, 4★+, Picks, Sort) with popovers and live counts. The headline sentence restates the filter in plain English, for example "6 photos tagged japan, shot on Sony α7 IV".</div>
+    <span class="w">Why</span><div>Photos get the full width. The sentence makes the active filter impossible to miss, which matters because the API ANDs tags together.</div></div></div>
+
+  <div class="note"><h4>4 · Chapters instead of a flat grid</h4><div class="ba">
+    <span class="b">Before</span><div>One uniform grid sorted by date. Timeline is a separate view.</div>
+    <span class="a">After</span><div>Photos are grouped into chapters by country and month, built from <code>captured_at</code> and GPS. Each chapter header shows a date range, places, cameras and count, with "Select chapter" on hover. Inside, a mosaic gives the top-rated pick a 2×2 hero tile; portraits span two rows and panoramas two columns.</div>
+    <span class="w">Why</span><div>People remember photos by trip and place, not by filename. The rhythm of the mosaic makes scanning a large library feel lighter.</div></div></div>
+
+  <div class="note"><h4>5 · Photo card</h4><div class="ba">
+    <span class="b">Before</span><div>Filename caption (<code>DSC04928_Tokyo_Tower_Sunset.ARW</code>), a border and an always-visible checkbox.</div>
+    <span class="a">After</span><div>A human title derived from the filename ("Tokyo Tower Sunset") and the place, shown on hover. Picks get a terracotta ribbon. The select circle appears on hover or once a selection exists.</div>
+    <span class="w">Why</span><div>Readable at a glance, and the photo stays clean until you interact with it.</div></div></div>
+
+  <div class="note"><h4>6 · Inspector → museum-label detail sheet</h4><div class="ba">
+    <span class="b">Before</span><div>A 330px side panel of boxed EXIF tiles and a fake histogram, competing with the grid for space.</div>
+    <span class="a">After</span><div>A large sheet: the image on the left; on the right a label card with place and date, a serif title, and a sentence like "Shot on Canon EOS R5 with RF 24-70mm…". Four large spec numbers, rating and pick, editable tags, a minimap from GPS, and file and hash folded away.</div>
+    <span class="w">Why</span><div>Metadata reads as a story first and as data second. Technical fields stay one click away for power users.</div></div></div>
+
+  <div class="note"><h4>Adopting it in the React code</h4><div style="font-size:13px;color:var(--ink-2);line-height:1.65">
+    Replace <code>FilterSidebar.tsx</code> with a <code>FilterBar.tsx</code> that uses the same store actions. Add a <code>groupIntoChapters()</code> util next to <code>utils/search.ts</code>. Merge <code>TimelineView</code> ideas into the studio grid. Turn <code>ExifInspector</code> into a <code>PhotoSheet</code> modal reusing <code>useDialogFocus</code>. Add a <code>humanTitle(name)</code> util. Effort: medium to high, because it changes the information architecture.</div></div>
+</aside>
+
+<script src="shared/sample-library.js"></script>
+<script>
+(() => {
+  'use strict'
+  const { PHOTOS, COLLECTIONS, src, icon, esc, hash, countBy } = window.PMO
+  const $ = (id) => document.getElementById(id)
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+  const st = { q: '', cams: new Set(), places: new Set(), tags: new Set(), top: false, picks: false, coll: null, sort: 'new', sel: new Set(), open: null }
+
+  // ---------- chrome
+  const TABS = ['Library', 'Moments', 'Places', 'Collections', 'Insights']
+  $('tabs').innerHTML = TABS.map((t, i) => `<button ${i === 0 ? 'aria-current="page"' : ''}>${t}</button>`).join('')
+  $('tabs').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; $('tabs').querySelectorAll('button').forEach((x) => x.removeAttribute('aria-current')); b.setAttribute('aria-current', 'page'); if (b.textContent !== 'Library') toast(`${b.textContent} uses the same paper, type and chapter layout (not mocked)`) }
+  $('sIc').innerHTML = icon('search', 15)
+  $('add').innerHTML = icon('plus', 16) + '<span>Add photos</span>'
+  $('add').onclick = () => toast('Choose a folder to scan, or sync folders you have already added')
+  const setThemeIcon = () => ($('theme').innerHTML = icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 17))
+  $('theme').onclick = () => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; setThemeIcon() }
+  setThemeIcon()
+  $('sPrev').innerHTML = icon('chevronLeft', 20); $('sNext').innerHTML = icon('chevronRight', 20)
+  $('notesFab').innerHTML = icon('sparkles', 14, 2) + 'Design notes'
+  $('notesClose').innerHTML = icon('x', 18)
+  $('notesFab').onclick = () => $('notes').classList.add('open')
+  $('notesClose').onclick = () => $('notes').classList.remove('open')
+  $('q').oninput = (e) => { st.q = e.target.value; render() }
+
+  // ---------- data
+  function filtered() {
+    const q = st.q.trim().toLowerCase()
+    const c = COLLECTIONS.find((x) => x.name === st.coll)
+    const list = PHOTOS.filter((p) =>
+      (!st.cams.size || st.cams.has(p.camera)) &&
+      (!st.places.size || st.places.has(p.country || 'Home')) &&
+      [...st.tags].every((t) => p.tags.includes(t)) &&
+      (!st.top || p.rating >= 4) && (!st.picks || p.flag) && (!c || c.ids.includes(p.id)) &&
+      (!q || [p.title, p.camera, p.lens, p.place, p.country, ...p.tags].join(' ').toLowerCase().includes(q)))
+    const by = { new: (a, b) => b.date.localeCompare(a.date), old: (a, b) => a.date.localeCompare(b.date), best: (a, b) => b.rating - a.rating || b.date.localeCompare(a.date) }
+    return list.sort(by[st.sort])
+  }
+
+  // Chapters: one per country and month (trip-shaped), in the current sort order.
+  function chapters(list) {
+    const map = new Map()
+    for (const p of list) {
+      const key = st.sort === 'best' ? 'best' : `${p.date.slice(0, 7)}|${p.country || 'Home'}`
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(p)
+    }
+    return [...map.entries()].map(([key, ps]) => ({ key, ps }))
+  }
+
+  // ---------- intro sentence: restates the active filters in plain English
+  function renderIntro(list) {
+    const c = COLLECTIONS.find((x) => x.name === st.coll)
+    const anyFilter = st.cams.size || st.places.size || st.tags.size || st.top || st.picks || st.q
+    $('eyebrow').textContent = c ? 'Collection' : anyFilter ? 'Filtered view' : 'Library'
+    $('headline').innerHTML = c ? `${esc(c.name)}` : anyFilter ? `<em>${list.length}</em> photo${list.length === 1 ? '' : 's'} found` : `Your <em>library</em>, in chapters`
+    const parts = []
+    if (st.picks) parts.push('<b>picks</b>')
+    if (st.top) parts.push('rated <b>4★ or more</b>')
+    if (st.tags.size) parts.push('tagged ' + [...st.tags].map((t) => `<b>${esc(t)}</b>`).join(' and '))
+    if (st.cams.size) parts.push('shot on ' + [...st.cams].map((t) => `<b>${esc(t)}</b>`).join(' or '))
+    if (st.places.size) parts.push('in ' + [...st.places].map((t) => `<b>${esc(t)}</b>`).join(' or '))
+    if (st.q) parts.push(`matching <b>“${esc(st.q)}”</b>`)
+    if (parts.length) $('sentence').innerHTML = `Showing ${list.length} photo${list.length === 1 ? '' : 's'} ${parts.join(', ')}.`
+    else {
+      const dates = list.map((p) => p.date).sort()
+      const span = dates.length ? `${MONTHS[+dates[0].slice(5, 7) - 1]} to ${MONTHS[+dates.at(-1).slice(5, 7) - 1]} ${dates.at(-1).slice(0, 4)}` : ''
+      $('sentence').innerHTML = `<b>${list.length} photos</b> from <b>${new Set(list.map((p) => p.place)).size} places</b>, taken with <b>${new Set(list.map((p) => p.camera)).size} cameras</b> from ${span}.`
+    }
+    $('stats').innerHTML = `<div><b>${list.filter((p) => p.flag).length}</b><span>picks</span></div><div><b>${new Set(list.map((p) => p.country).filter(Boolean)).size}</b><span>countries</span></div><div><b>${(list.reduce((a, p) => a + p.mb, 0) / 1024).toFixed(2)}</b><span>GB</span></div>`
+  }
+
+  // ---------- collections
+  function renderColls() {
+    $('colls').innerHTML = COLLECTIONS.map((c) => {
+      const ps = c.ids.map((id) => PHOTOS.find((p) => p.id === id))
+      const cover = [...ps].sort((a, b) => b.rating - a.rating).slice(0, 3)
+      return `<button class="coll" data-coll="${esc(c.name)}" aria-pressed="${st.coll === c.name}"><div class="mosaic">${cover.map((p) => `<img src="${src(p)}" alt="" />`).join('')}</div><div class="coll-b"><b>${esc(c.name)}</b><span>${c.ids.length} photos</span></div></button>`
+    }).join('') + `<button class="coll new" data-new>${icon('plus', 20)}<span style="margin-top:6px">New collection</span></button>`
+  }
+  $('colls').onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    if (b.hasAttribute('data-new')) return toast('Name your collection, then add photos by selecting them')
+    st.coll = st.coll === b.dataset.coll ? null : b.dataset.coll
+    render(); $('fbar').scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // ---------- filter bar + popovers
+  const FACETS = {
+    cams: { label: 'Camera', values: () => countBy(PHOTOS, (p) => p.camera) },
+    places: { label: 'Place', values: () => countBy(PHOTOS, (p) => p.country || 'Home') },
+    tags: { label: 'Tags', values: () => countBy(PHOTOS, (p) => p.tags) },
+  }
+  function renderBar() {
+    const fc = (k) => { const n = st[k].size; return `<button class="fchip ${n ? 'on' : ''}" data-pop="${k}" aria-haspopup="true">${FACETS[k].label}${n ? `<span class="n">${n}</span>` : ''}${icon('chevronDown', 14)}</button>` }
+    const any = st.cams.size || st.places.size || st.tags.size || st.top || st.picks || st.coll || st.q
+    $('fbar').innerHTML = fc('cams') + fc('places') + fc('tags') + '<span class="fsep"></span>' +
+      `<button class="gbtn" data-tog="top" aria-pressed="${st.top}">${icon('star', 14)}4★ and up</button>` +
+      `<button class="gbtn" data-tog="picks" aria-pressed="${st.picks}">${icon('flag', 14)}Picks</button>` +
+      (st.coll ? `<button class="gbtn" aria-pressed="true" data-tog="coll">${icon('folder', 14)}${esc(st.coll)} ${icon('x', 12)}</button>` : '') +
+      (any ? '<button class="fclear" data-clear>Clear all</button>' : '') +
+      `<span style="flex:1"></span><label class="sortsel">Sort <select id="sort"><option value="new">Newest first</option><option value="old">Oldest first</option><option value="best">Best rated</option></select></label>`
+    $('sort').value = st.sort
+    $('sort').onchange = (e) => { st.sort = e.target.value; render() }
+  }
+  $('fbar').onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    if (b.dataset.pop) return openPop(b.dataset.pop, b)
+    if (b.dataset.tog === 'coll') st.coll = null
+    else if (b.dataset.tog) st[b.dataset.tog] = !st[b.dataset.tog]
+    if (b.hasAttribute('data-clear')) { st.cams.clear(); st.places.clear(); st.tags.clear(); st.top = st.picks = false; st.coll = null; st.q = ''; $('q').value = '' }
+    render()
+  }
+  let popKey = null
+  function openPop(k, anchor) {
+    const pop = $('pop')
+    if (popKey === k && pop.classList.contains('open')) return closePop()
+    popKey = k
+    pop.innerHTML = FACETS[k].values().map(([v, n]) => `<button class="opt" role="menuitemcheckbox" data-v="${esc(v)}" aria-checked="${st[k].has(v)}"><span class="box">${icon('check', 12, 3)}</span>${k === 'tags' ? '#' : ''}${esc(v)}<span class="c">${n}</span></button>`).join('')
+    const r = anchor.getBoundingClientRect()
+    pop.style.left = Math.min(r.left + scrollX, innerWidth - 260) + 'px'
+    pop.style.top = r.bottom + scrollY + 6 + 'px'
+    pop.classList.add('open')
+  }
+  function closePop() { $('pop').classList.remove('open'); popKey = null }
+  $('pop').onclick = (e) => {
+    const b = e.target.closest('.opt'); if (!b) return
+    const s = st[popKey]; const v = b.dataset.v
+    s.has(v) ? s.delete(v) : s.add(v)
+    b.setAttribute('aria-checked', s.has(v))
+    const k = popKey; render(); popKey = k
+    const anchor = document.querySelector(`[data-pop="${k}"]`); const r = anchor.getBoundingClientRect(); $('pop').style.top = r.bottom + scrollY + 6 + 'px'
+  }
+  document.addEventListener('click', (e) => { if (!e.target.closest('#pop, [data-pop]')) closePop() })
+
+  // ---------- chapters + mosaic
+  function renderChapters(list) {
+    if (!list.length) { $('chapters').innerHTML = `<div class="none"><h3>Nothing here yet</h3>No photo matches every filter. Tags combine with “and”, so try removing one.</div>`; return }
+    $('chapters').innerHTML = chapters(list).map(({ key, ps }) => {
+      let head
+      if (key === 'best') head = `<h2>Best rated</h2><span class="sub">${ps.length} photos, highest rating first</span>`
+      else {
+        const [ym, country] = key.split('|')
+        const days = ps.map((p) => +p.date.slice(8, 10))
+        const range = Math.min(...days) === Math.max(...days) ? `${Math.min(...days)}` : `${Math.min(...days)}–${Math.max(...days)}`
+        const places = [...new Set(ps.map((p) => p.place))]
+        head = `<h2>${MONTHS[+ym.slice(5) - 1]} <span style="color:var(--ink-3)">${ym.slice(0, 4)}</span></h2>
+          <span class="sub"><b>${esc(country)}</b>${places[0] !== country ? ' · ' + esc(places.join(', ')) : ''} · ${range} ${MONTHS[+ym.slice(5) - 1].slice(0, 3)} · ${ps.length} photo${ps.length > 1 ? 's' : ''}</span>`
+      }
+      const heroId = ps.length >= 4 ? [...ps].sort((a, b) => (b.flag - a.flag) || (b.rating - a.rating))[0].id : null
+      return `<div class="chapter"><div class="ch-h">${head}<button class="sel-all" data-selall="${esc(key)}">Select chapter</button></div>
+        <div class="mgrid">${ps.map((p) => card(p, p.id === heroId)).join('')}</div></div>`
+    }).join('')
+    document.body.classList.toggle('selecting', st.sel.size > 0)
+  }
+  function card(p, hero) {
+    const shape = hero ? 'hero' : p.h > p.w ? 'tall' : p.w / p.h > 1.6 ? 'wide' : ''
+    return `<div class="ph ${shape} ${st.sel.has(p.id) ? 'sel' : ''}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc(p.title)}, ${esc(p.place)}">
+      <img src="${src(p)}" alt="" loading="lazy" />
+      ${p.flag ? '<span class="ribbon" title="Pick"></span>' : ''}
+      <span class="selbox" data-sel role="checkbox" aria-checked="${st.sel.has(p.id)}" aria-label="Select">${icon('check', 14, 3)}</span>
+      <span class="cap"><b>${esc(p.title)}</b><span>${esc(p.place)}${p.rating ? ' · ' + '★'.repeat(p.rating) : ''}</span></span></div>`
+  }
+  $('chapters').onclick = (e) => {
+    const sa = e.target.closest('[data-selall]')
+    if (sa) { const ch = chapters(filtered()).find((c) => c.key === sa.dataset.selall); ch.ps.forEach((p) => st.sel.add(p.id)); return renderSel() }
+    const ph = e.target.closest('.ph'); if (!ph) return
+    if (e.target.closest('[data-sel]') || st.sel.size) { const id = ph.dataset.id; st.sel.has(id) ? st.sel.delete(id) : st.sel.add(id); return renderSel() }
+    openSheet(ph.dataset.id)
+  }
+  $('chapters').onkeydown = (e) => { const ph = e.target.closest('.ph'); if (ph && e.key === 'Enter') openSheet(ph.dataset.id) }
+
+  function renderSel() {
+    renderChapters(filtered())
+    const n = st.sel.size
+    $('tray').classList.toggle('show', n > 0)
+    if (n) $('tray').innerHTML = `<span style="font-weight:600;margin-right:6px">${n} selected</span>
+      <button data-t="coll">${icon('folderPlus', 15)}Add to collection</button><button data-t="pick">${icon('flag', 15)}Pick</button>
+      <button class="go" data-t="export">${icon('download', 15)}Export</button><button data-t="clear" aria-label="Clear selection">${icon('x', 15)}</button>`
+  }
+  $('tray').onclick = (e) => {
+    const b = e.target.closest('[data-t]'); if (!b) return
+    const t = b.dataset.t
+    if (t === 'clear') st.sel.clear()
+    else if (t === 'pick') { PHOTOS.forEach((p) => st.sel.has(p.id) && (p.flag = true)); toast(`${st.sel.size} photos added to picks`); st.sel.clear() }
+    else toast(t === 'coll' ? 'Choose a collection…' : 'Export as ZIP (originals) or JSON (metadata)')
+    render()
+  }
+
+  // ---------- detail sheet
+  function openSheet(id) { st.open = id; $('sheet').classList.add('open'); $('sheetBg').classList.add('open'); renderSheet() }
+  function closeSheet() { st.open = null; $('sheet').classList.remove('open'); $('sheetBg').classList.remove('open'); render() }
+  $('sheetBg').onclick = closeSheet
+  const step = (d) => { const l = filtered(); const i = l.findIndex((p) => p.id === st.open); st.open = l[(i + d + l.length) % l.length].id; renderSheet() }
+  $('sPrev').onclick = () => step(-1); $('sNext').onclick = () => step(1)
+
+  function renderSheet() {
+    const p = PHOTOS.find((x) => x.id === st.open)
+    $('sImg').src = src(p); $('sImg').alt = p.title
+    const h = hash(p)
+    const [d, t] = p.date.split('T')
+    const date = `${+d.slice(8)} ${MONTHS[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}, ${t}`
+    $('sLabel').innerHTML = `
+      <button class="ibtn x" id="sClose" aria-label="Close">${icon('x', 18)}</button>
+      <div><div class="eyebrow">${esc([p.place, p.country].filter(Boolean).join(', '))} · ${date}</div><h2>${esc(p.title)}</h2></div>
+      <p class="s-sentence">Shot on <b>${esc(p.camera)}</b> with the <b>${esc(p.lens)}</b>, at ${p.fl} mm, ƒ/${p.f}, ${p.ss}${/s$/.test(p.ss) ? '' : ' s'} and ISO ${p.iso}.</p>
+      <div class="specs"><div><b>${p.fl}</b><span>mm</span></div><div><b>ƒ/${p.f}</b><span>aperture</span></div><div><b>${p.ss}</b><span>shutter</span></div><div><b>${p.iso}</b><span>iso</span></div></div>
+      <div class="s-row"><div class="stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((s) => `<button role="radio" aria-checked="${p.rating === s}" data-r="${s}" class="${s <= p.rating ? 'on' : ''}" aria-label="${s} stars">${icon('star', 22, 1.5)}</button>`).join('')}</div>
+        <button class="gbtn" id="sPick" aria-pressed="${p.flag}">${icon('flag', 14)}${p.flag ? 'In picks' : 'Add to picks'}</button></div>
+      <div><div class="s-h">Tags</div><div class="tagset" id="tagset">${p.tags.map((tg) => `<span class="tg">${esc(tg)}<button data-rm="${esc(tg)}" aria-label="Remove ${esc(tg)}">${icon('x', 11)}</button></span>`).join('')}<input id="tagIn" placeholder="+ add tag" aria-label="Add tag" /></div></div>
+      ${p.lat != null ? `<div><div class="s-h">Location</div><div class="minimap">${miniMap(p)}<span class="pl">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span></div></div>` : ''}
+      <details class="file"><summary>${icon('chevronRight', 14)} File details</summary><dl><dt>File</dt><dd>${esc(p.name)}</dd><dt>Format</dt><dd>${p.fmt} · ${p.mb.toFixed(1)} MB</dd><dt>SHA-256</dt><dd>${h}</dd></dl></details>`
+    $('sClose').onclick = closeSheet
+    $('sLabel').querySelector('.stars').onclick = (e) => { const b = e.target.closest('[data-r]'); if (b) { p.rating = p.rating === +b.dataset.r ? 0 : +b.dataset.r; renderSheet() } }
+    $('sPick').onclick = () => { p.flag = !p.flag; renderSheet() }
+    $('tagset').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { p.tags = p.tags.filter((x) => x !== b.dataset.rm); renderSheet() } }
+    $('tagIn').onkeydown = (e) => { if (e.key === 'Enter' && e.target.value.trim()) { const v = e.target.value.trim().toLowerCase(); if (!p.tags.includes(v)) p.tags.push(v); renderSheet(); $('tagIn').focus() } }
+  }
+  // Stylised equirectangular mini map: graticule + a pin from the photo's GPS.
+  function miniMap(p) {
+    const x = ((p.lon + 180) / 360) * 400, y = ((90 - p.lat) / 180) * 200
+    const vx = Math.max(0, Math.min(400 - 160, x - 80)), vy = Math.max(0, Math.min(200 - 52, y - 26))
+    let g = ''
+    for (let i = 0; i <= 400; i += 10) g += `<line x1="${i}" y1="0" x2="${i}" y2="200" style="stroke:var(--line-2)" stroke-width=".25"/>`
+    for (let j = 0; j <= 200; j += 10) g += `<line x1="0" y1="${j}" x2="400" y2="${j}" style="stroke:var(--line-2)" stroke-width=".25"/>`
+    const others = PHOTOS.filter((o) => o.lat != null && o.id !== p.id).map((o) => `<circle cx="${((o.lon + 180) / 360) * 400}" cy="${((90 - o.lat) / 180) * 200}" r="1" style="fill:var(--ink-3)"/>`).join('')
+    return `<svg viewBox="${vx} ${vy} 160 52" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${g}${others}<circle cx="${x}" cy="${y}" r="4" style="fill:var(--accent)" opacity=".2"/><circle cx="${x}" cy="${y}" r="1.6" style="fill:var(--accent);stroke:var(--paper)" stroke-width=".6"/></svg>`
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (st.open) closeSheet(); else if ($('notes').classList.contains('open')) $('notes').classList.remove('open'); else closePop() }
+    if (st.open && !e.target.matches('input')) { if (e.key === 'ArrowRight') step(1); if (e.key === 'ArrowLeft') step(-1) }
+    if (e.key === '/' && !e.target.matches('input')) { e.preventDefault(); $('q').focus() }
+  })
+
+  let tt
+  function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2000) }
+
+  function render() { const list = filtered(); renderIntro(list); renderColls(); renderBar(); renderSel() }
+  render()
+})()
+</script>
+</body>
+</html>

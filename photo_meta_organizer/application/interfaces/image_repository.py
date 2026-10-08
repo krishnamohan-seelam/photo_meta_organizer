@@ -14,7 +14,13 @@ The repository pattern provides:
 from datetime import datetime
 from typing import List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
-from photo_meta_organizer.application.interfaces.search_types import Facets, Page, SearchQuery
+from photo_meta_organizer.application.interfaces.search_types import (
+    BoundingBox,
+    Facets,
+    GeoCluster,
+    Page,
+    SearchQuery,
+)
 from photo_meta_organizer.domain.curation import CurationCommand
 from photo_meta_organizer.domain.models import ImageMetadata
 
@@ -58,6 +64,16 @@ class ImageMetadataRepository(Protocol):
 
     def facets(self) -> Facets:
         """Return aggregate counts (cameras, tags, years, GPS bounds) for filter UIs."""
+        ...
+
+    def geo_clusters(
+        self, query: SearchQuery, bbox: Optional[BoundingBox], cell_degrees: float
+    ) -> List[GeoCluster]:
+        """Group the geotagged records matching ``query`` into square grid cells.
+
+        Only the filters of ``query`` apply (paging, sort and the radius filter are
+        ignored); ``bbox`` restricts the result to a map viewport.
+        """
         ...
 
     def apply(self, file_hash: str, command: CurationCommand) -> Optional[ImageMetadata]:

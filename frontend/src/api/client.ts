@@ -1,8 +1,11 @@
 import type {
   BatchPhotoRequest,
   BatchPhotoResponse,
+  AppConfig,
   Collection,
   Facets,
+  GeoClustersRequest,
+  GeoClustersResponse,
   IndexFolderRequest,
   Job,
   PaginatedPhotosResponse,
@@ -101,6 +104,15 @@ export function searchPhotosApi(body: SearchRequest): Promise<PaginatedPhotosRes
 /** Hash and size of every photo matching `body`, ignoring paging ("select all"). */
 export function searchPhotoIdsApi(body: SearchRequest): Promise<PhotoId[]> {
   return request('/search/ids', 'Selecting photos', jsonInit('POST', body))
+}
+
+/** Clusters of the geotagged photos matching the filters, for the visible map area. */
+export function fetchGeoClustersApi(body: GeoClustersRequest): Promise<GeoClustersResponse> {
+  return request('/geo/clusters', 'Loading the map', jsonInit('POST', body))
+}
+
+export function fetchConfigApi(): Promise<AppConfig> {
+  return request('/config', 'Loading settings')
 }
 
 export function fetchFacetsApi(): Promise<Facets> {

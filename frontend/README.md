@@ -56,13 +56,14 @@ src/
 │   └── electron.d.ts       window.electronAPI (desktop shell only)
 ├── test/                   Test setup and the makePhoto() fixture
 └── components/
-    ├── header/             AppHeader, CommandPalette (Ctrl+K)
-    ├── filters/            FilterSidebar, DropdownFilterCard
-    ├── gallery/            PhotoGallery (virtualized grid), PhotoCard
-    ├── inspector/          ExifInspector
+    ├── shell/              NavRail (views, panel toggles)
+    ├── header/             TopBar, QueryBar, JobStatusPill, CommandPalette (Ctrl+K), ShortcutsOverlay (?)
+    ├── filters/            LibraryPanel
+    ├── gallery/            LibraryView (toolbar), PhotoGallery (justified grid), PhotoCard, PhotoTable
+    ├── inspector/          ExifInspector (real histogram)
     ├── lightbox/           LightboxModal
-    ├── collections/        SelectionDock (batch actions, ZIP export)
-    ├── jobs/               FolderJobDialog (Scan / Sync), JobProgress
+    ├── collections/        SelectionDock (batch actions, export), NameDialog
+    ├── jobs/               FolderJobDialog (Scan / Sync)
     ├── states/             Loading, error, empty and stale states; LoadMore
     ├── timeline/  maps/  kanban/  dashboard/   the other views
 ```
@@ -99,19 +100,25 @@ const { gridItemSize, setGridItemSize } = useUiStore(
 
 **Interactive elements are buttons.** Clickable cards, rows and markers are `<button>`s (the `btn-reset` class removes the button look), never nested inside another button. Dialogs use `useDialogFocus` (focus in, Tab trapped, focus restored). Single-key hotkeys go through `utils/hotkeys.shouldIgnoreHotkey`, which skips modifier combinations and typing in inputs.
 
-**Styling:** CSS variables in `index.css` for the theme; most components still use inline `style={{…}}`. When you touch a component for another reason, moving its styles to classes in `index.css` is welcome (the Kanban board is an example); there is no plan for a big-bang rewrite, and there is no Tailwind.
+**Styling:** design tokens are CSS variables at the top of `index.css` (hue-free greys, one amber accent, both themes; see `design_docs/front_enddesign.md` §4.1). The redesigned components use classes in `index.css` and take colours only from the variables; the Dashboard view still uses inline `style={{…}}`, and moving them to classes when you touch them is welcome. There is no Tailwind.
 
-## The gallery (`components/gallery/PhotoGallery.tsx`)
+**Accent:** `--accent-primary` is only for selection, picks, primary buttons, active filters and focus. Use the neutral tokens for everything else.
 
-The Studio grid is a **row virtualizer** (TanStack Virtual), so only the rows near the viewport exist in the DOM.
+## The Library view (`components/gallery/`)
 
-- The column count is computed from the scroll container's width (observed with a `ResizeObserver`) and the "Size" slider, matching what `repeat(auto-fill, minmax(size, 1fr))` would give.
-- Row heights start from an estimate (`cardWidth × 0.75 + CARD_INFO_HEIGHT + gap`) and are then **measured** after render (`measureElement`). `CARD_INFO_HEIGHT` is 78 px, the measured height of the text block under the 4:3 thumbnail. Update it if you change the card's layout, or the scrollbar will drift.
-- The toolbar sits above the scroll area, so it stays visible while scrolling.
-- Measured on a 700-photo library in headless Edge: DOM elements 8,704 → 525, `<img>` tags 700 → 18, and 20 grid-size changes 740 ms → ~350 ms. The scroll height stayed within 1%.
-- **Not virtualized:** the Timeline and Kanban views render the pages loaded so far and load more from a footer.
+`LibraryView` puts one toolbar (title, counts, filter chips, sort, layout, size) over either layout; `V` switches them and the choice is remembered. Both keep the filters, the selection, the inspected photo and the top photo in view.
 
-To re-measure: serve `dist/` over a copy of a real library, open it in headless Edge over the DevTools protocol, and compare `document.querySelectorAll('*').length` and `querySelectorAll('img').length` before and after a change. (Headless Edge prints nothing to stdout on Windows, so `--dump-dom` does not work; use the protocol.)
+- **Grid (`PhotoGallery`, `PhotoCard`):** justified rows from `utils/justifiedLayout.justifiedRows`, a pure function of the photos' aspect ratios, the container width (observed with a `ResizeObserver`) and the row-height slider. Ratios come from stored dimensions only (`utils/photoFormat.photoAspectRatio`), swapped for EXIF orientations 5-8 because the backend renders thumbnails upright, and clamped to 0.4-3.5. Row heights are therefore exact: the virtualizer never measures, and nothing depends on images having loaded.
+- **Table (`PhotoTable`):** fixed 38 px rows, a sticky header, and server sorting on Name, Camera, Captured and Size only (the API cannot sort by the others). A container query hides Lens and Size when the table is narrower than 1000 px.
+- **Virtualization:** a test renders 20,000 photos in each layout and asserts at most 60 rows in the DOM. Both prefetch the next page before the end of what is loaded.
+- **Keyboard:** `hooks/useLibraryHotkeys` serves both layouts (arrows or J/K, 0-5, P, X, Enter/Space, Esc); it is quiet while typing, with a modifier, or while any dialog is open.
+- **Not virtualized:** the Timeline (chapters use `content-visibility: auto`) and Kanban views render the pages loaded so far and load more from a footer.
+
+To measure in a browser: serve `dist/` from the backend, open it in headless Edge over the DevTools protocol, and count `document.querySelectorAll('*')` and `img` before and after a change. (Headless Edge prints nothing to stdout on Windows, so `--dump-dom` does not work; use the protocol.)
+
+## The query bar (`components/header/QueryBar.tsx`, `utils/query.ts`)
+
+The store stays the single source of truth. `utils/query.ts` is pure: `parseQuery` (text to tokens, with `invalid` tokens carrying a reason), `resolveTokens` (match `make:` and `in:` to the library's real names), `tokensToFilters` and `filtersToTokens` (round-trip stable). The bar shows `filtersToTokens(store)`, applies committed tokens with `applyQueryFilters`, keeps invalid tokens locally (never sent), and treats plain words as live search text (250 ms debounce). The syntax is documented in the root README.
 
 ## The Kanban board (`components/kanban/`)
 
@@ -123,20 +130,24 @@ When loaded by the desktop shell, `window.electronAPI` is available (typed in `t
 
 ## Keyboard shortcuts
 
+The full map is in `utils/shortcuts.ts` and in the app under `?`. App-wide keys live in `hooks/useGlobalHotkeys.ts`, Library keys in `hooks/useLibraryHotkeys.ts`, viewer keys in `LightboxModal`.
+
 | Key | Action |
 | --- | --- |
-| `L` | Toggle Lights Out |
-| `Ctrl + K` | Command palette (`↑`/`↓`, `Enter`) |
-| `Enter` | Open the inspected photo in the lightbox |
-| `Esc`, `←`, `→` | Close / previous / next in the lightbox |
-| `P`, `1`-`5` | Flag as pick / rate the photo in the lightbox |
+| `Ctrl + K` · `/` · `?` | Command palette · focus the query bar · shortcut list |
+| `G` `T` `M` `C` `A` | Library · Timeline · Map · Collections · Insights |
+| `\` · `I` · `L` · `V` | Library panel · Details panel · Lights Out · grid/table |
+| `←` `→` (grid), `J` `K` `↑` `↓` (table) | Move the inspected photo (`Shift` extends the selection in the table) |
+| `1`-`5` · `0` · `P` | Rate · clear rating · toggle Pick (Library and viewer) |
+| `X` (`Space` in the table) · `Enter` | Toggle selection · open the viewer |
+| `Esc` | Close the dialog, then clear the selection |
 
-Single-key shortcuts ignore `Ctrl`/`Alt`/`Meta` combinations and keys typed into inputs, selects, textareas and editable content; `L` is also ignored while a dialog is open.
+Single-key shortcuts ignore `Ctrl`/`Alt`/`Meta` combinations, keys typed into inputs, selects, textareas and editable content, and everything while a dialog is open (`utils/shortcuts.dialogOpen`).
 
 ## Known limitations
 
-- **Placeholder areas:** the Map Explorer clusters are fixed examples (only the geotagged count is real), the EXIF histogram is drawn from sine waves, and the command palette's camera and tag filters are hardcoded (Sony, Canon, #travel).
-- **No free-text search box:** the store's `searchQuery` is never set by a component, so `search_term` is reachable only through the API and CLI.
+- **Map Explorer:** `maps/LeafletMap.tsx` is the only file that touches Leaflet; clusters come from `POST /api/geo/clusters` (`hooks/useGeoClusters.ts`), the pure viewport and demo-clustering helpers are in `utils/geo.ts`. The view is lazy-loaded from `App.tsx`. The offline basemap is the `world-atlas` outline; `GET /api/config` supplies an opt-in tile server.
+- **Query bar limits:** only the fields the search API supports. ISO, aperture, focal length and lens filters, `rating:>=4`, and `pick:no` need backend changes (design doc §9).
 - **Batch edits after Select All** update unloaded photos on the server only; loaded ones are updated optimistically and confirmed by counts, not record by record.
 - **The view tab for the Kanban board is labelled "Collections"**, which is easy to confuse with the named collections in the sidebar.
 
