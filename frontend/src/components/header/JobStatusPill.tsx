@@ -3,11 +3,16 @@ import { X } from 'lucide-react'
 import type { Job } from '../../types/metadata'
 import { useJobActions, useJobs } from '../../hooks/useJobs'
 import { useUiStore } from '../../stores/useUiStore'
+import { formatBytes } from '../../utils/photoFormat'
+
+const VERBS: Record<string, string> = { sync: 'Syncing', analyze: 'Analyzing', 'model-download': 'Downloading AI model' }
 
 function jobLabel(job: Job): string {
-  const verb = job.kind === 'sync' ? 'Syncing' : 'Indexing'
+  const verb = VERBS[job.kind] ?? 'Indexing'
   if (job.cancel_requested) return 'Cancelling…'
-  if (job.total === null) return `${verb}: finding files…`
+  if (job.total === null) return `${verb}: ${job.kind === 'index' || job.kind === 'sync' ? 'finding files…' : 'starting…'}`
+  // The download counts bytes; everything else counts photos.
+  if (job.kind === 'model-download') return `${verb} ${formatBytes(job.processed)} / ${formatBytes(job.total)}`
   return `${verb} ${job.processed.toLocaleString()} / ${job.total.toLocaleString()}`
 }
 
@@ -34,7 +39,7 @@ export const JobStatusPill: React.FC = () => {
   const pct = job.total ? Math.min(100, Math.round((job.processed / job.total) * 100)) : null
   const details = () =>
     showToast(
-      `${label} in ${job.folder_path}${job.failed_count > 0 ? ` · ${job.failed_count} failed` : ''}`
+      `${label}${job.kind === 'index' || job.kind === 'sync' ? ` in ${job.folder_path}` : ''}${job.failed_count > 0 ? ` · ${job.failed_count} failed` : ''}`
     )
 
   return (

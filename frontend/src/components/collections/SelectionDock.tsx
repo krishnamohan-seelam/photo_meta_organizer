@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { ChevronUp, Download, Flag, FolderPlus, Plus, Star, Tag, X } from 'lucide-react'
+import { ChevronUp, Download, Flag, FolderPlus, Plus, Sparkles, Star, Tag, X } from 'lucide-react'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { useExport } from '../../hooks/useExport'
+import { aiSearchReady, useAnalysisStatus, useResolveAiTagsBatch } from '../../hooks/useAnalysis'
 import { useCollections, useSaveCollection } from '../../hooks/useCollections'
 import { formatBytes } from '../../utils/photoFormat'
 import { NameDialog } from './NameDialog'
@@ -42,6 +43,8 @@ export const SelectionDock: React.FC = () => {
   const { batchPhotos } = useCuration()
   const { exportZip, zipProgress, exportJson, jsonBusy } = useExport()
   const collections = useCollections()
+  const aiReady = aiSearchReady(useAnalysisStatus())
+  const resolveAiTags = useResolveAiTagsBatch()
   const saveCollection = useSaveCollection()
   const [menu, setMenu] = useState<Menu | null>(null)
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -133,6 +136,17 @@ export const SelectionDock: React.FC = () => {
         <button type="button" className="btn btn-sm" onClick={() => setDialog('tag')}>
           <Tag size={14} /> Tag
         </button>
+
+        {aiReady && (
+          <button
+            type="button"
+            className="btn btn-sm"
+            title="Add every open AI-suggested tag of these photos as a real tag"
+            onClick={() => void resolveAiTags(hashes(), 'accept')}
+          >
+            <Sparkles size={14} /> Accept suggestions
+          </button>
+        )}
 
         <span className="dock-sep" aria-hidden="true" />
 

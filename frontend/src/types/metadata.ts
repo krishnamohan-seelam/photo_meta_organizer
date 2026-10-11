@@ -45,3 +45,11 @@ export type GeoClustersResponse = Schemas['GeoClustersResponse']
 export type GeoCluster = Schemas['GeoClusterSchema']
 /** `GET /api/config`. */
 export type AppConfig = Schemas['AppConfigResponse']
+
+/** AI analysis (Phase 5, ADR-002). */
+export type AnalysisStatus = Schemas['AnalysisStatusResponse']
+export type SemanticSearchRequest = Schemas['SemanticSearchRequest']
+export type SemanticHit = Schemas['SemanticHitSchema']
+export type SemanticSearchResponse = Schemas['SemanticSearchResponse']
+export type AiTag = Schemas['AiTagSchema']
+export type AiTagBatchResponse = Schemas['AiTagBatchResponse']

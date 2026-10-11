@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react'
 import { useUiStore } from '../../stores/useUiStore'
 import { useFacets } from '../../hooks/useFacets'
 import { useCollections } from '../../hooks/useCollections'
+import { aiSearchReady, useAnalysisStatus } from '../../hooks/useAnalysis'
 import { useLibraryFilters } from '../../hooks/useLibraryFilters'
 import { SEARCH_INPUT_ID } from '../../hooks/useGlobalHotkeys'
 import { UNKNOWN_DATE } from '../../utils/captureDate'
@@ -29,6 +30,8 @@ interface Suggestion {
   /** A field name to complete into the input, or query text to commit. */
   fill?: string
   commit?: string
+  /** Run a search by meaning, or open the AI setup when it is not ready. */
+  meaning?: string
 }
 
 /** A complete, unquoted `field:value` (a space after it commits it, FR-2b.2). */
@@ -68,6 +71,8 @@ export const QueryBar: React.FC = () => {
   const filters = useLibraryFilters()
   const facets = useFacets()
   const collections = useCollections()
+  const analysis = useAnalysisStatus()
+  const aiReady = aiSearchReady(analysis)
   const [draft, setDraft] = useState('')
   const [invalid, setInvalid] = useState<Token[]>([])
   const [open, setOpen] = useState(false)
@@ -166,8 +171,13 @@ export const QueryBar: React.FC = () => {
       fill: `${f.field}:`,
     }))
     if (!text.trim()) return fields
-    return [{ id: 'text', label: `Search for “${text.trim()}”`, commit: text.trim().includes(' ') ? `"${text.trim()}"` : text.trim() }, ...fields]
-  }, [draft, facets, collections])
+    const typed: Suggestion = { id: 'text', label: `Search for “${text.trim()}”`, commit: text.trim().includes(' ') ? `"${text.trim()}"` : text.trim() }
+    // Offered only when the backend has the AI extra; without the model it leads to the setup dialog.
+    const meaning: Suggestion[] = analysis?.runtime_installed
+      ? [{ id: 'meaning', label: `Search by meaning “${text.trim()}”`, detail: aiReady ? 'AI' : 'set up first', meaning: text.trim() }]
+      : []
+    return [typed, ...meaning, ...fields]
+  }, [draft, facets, collections, analysis?.runtime_installed, aiReady])
 
   const current = Math.min(active, Math.max(0, suggestions.length - 1))
   const showList = open && suggestions.length > 0
@@ -175,7 +185,17 @@ export const QueryBar: React.FC = () => {
   const activeId = showList ? optionId(suggestions[current]) : undefined
 
   const choose = (s: Suggestion) => {
-    if (s.fill) {
+    if (s.meaning !== undefined) {
+      if (aiReady) useUiStore.getState().setSemantic({ kind: 'text', text: s.meaning })
+      else useUiStore.getState().setAiDialogOpen(true)
+      if (liveTimer.current) clearTimeout(liveTimer.current)
+      liveTimer.current = null
+      // The words were being applied live as a text filter; a search by meaning replaces that.
+      useUiStore.getState().setSearchQuery(baseText.current ?? '')
+      baseText.current = null
+      setDraft('')
+      setOpen(false)
+    } else if (s.fill) {
       onDraftChange(s.fill)
       inputRef.current?.focus()
     } else if (s.commit !== undefined) {

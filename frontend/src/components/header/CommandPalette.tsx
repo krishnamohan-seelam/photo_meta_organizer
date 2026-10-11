@@ -13,6 +13,7 @@ import {
   MapPin,
   RefreshCw,
   Search,
+  Sparkles,
   SunMoon,
   Tag,
 } from 'lucide-react'
@@ -57,7 +58,7 @@ export const CommandPalette: React.FC = () => {
 }
 
 const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen } = useUiStore(
+  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen } = useUiStore(
     useShallow((s) => ({
       toggleTheme: s.toggleTheme,
       toggleLightsOut: s.toggleLightsOut,
@@ -66,6 +67,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       toggleTagFilter: s.toggleTagFilter,
       setJobDialog: s.setJobDialog,
       setShortcutsOpen: s.setShortcutsOpen,
+      setAiDialogOpen: s.setAiDialogOpen,
     }))
   )
   const { cameras, tags } = useFacets()
@@ -91,6 +93,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     ...views,
     { id: 'scan', title: 'Import (scan a folder)…', icon: <FolderInput size={15} />, action: () => setJobDialog('index') },
     { id: 'sync', title: 'Sync a folder…', icon: <RefreshCw size={15} />, action: () => setJobDialog('sync') },
+    { id: 'ai', title: 'Search by meaning: set up and analyze…', icon: <Sparkles size={15} />, action: () => setAiDialogOpen(true) },
     { id: 'theme', title: 'Toggle light/dark theme', icon: <SunMoon size={15} />, action: () => toggleTheme() },
     { id: 'dim', title: 'Toggle Lights Out', icon: <EyeOff size={15} />, hotkey: 'L', action: () => toggleLightsOut() },
     { id: 'export', title: 'Export library as JSON', icon: <Download size={15} />, action: () => void exportJson() },

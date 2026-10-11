@@ -1,4 +1,7 @@
 import type {
+  AiTag,
+  AiTagBatchResponse,
+  AnalysisStatus,
   BatchPhotoRequest,
   BatchPhotoResponse,
   AppConfig,
@@ -13,6 +16,8 @@ import type {
   PhotoId,
   PhotoMetadata,
   SearchRequest,
+  SemanticSearchRequest,
+  SemanticSearchResponse,
   SyncFolderRequest,
 } from '../types/metadata'
 
@@ -193,6 +198,36 @@ export function getJobApi(jobId: string): Promise<Job> {
 
 export function cancelJobApi(jobId: string): Promise<Job> {
   return request(`/jobs/${jobId}/cancel`, 'Cancelling the job', { method: 'POST' })
+}
+
+/** AI analysis (Phase 5). Status codes: 503 no `ai` extra, 409 no model / nothing analysed yet. */
+export function fetchAnalysisStatusApi(): Promise<AnalysisStatus> {
+  return request('/analysis/status', 'Checking the AI setup')
+}
+
+/** Start the model download. The body is the user's explicit consent; the server refuses without it. */
+export function startModelDownloadApi(): Promise<Job> {
+  return request('/analysis/model/download', 'Downloading the AI model', jsonInit('POST', { accept: true }))
+}
+
+export function startAnalysisApi(options: { reanalyze?: boolean } = {}): Promise<Job> {
+  return request('/analysis/run', 'Analyzing the library', jsonInit('POST', options))
+}
+
+export function semanticSearchApi(body: SemanticSearchRequest): Promise<SemanticSearchResponse> {
+  return request('/search/semantic', 'Searching by meaning', jsonInit('POST', body))
+}
+
+export function fetchAiTagsApi(fileHash: string): Promise<AiTag[]> {
+  return request(`/photos/${fileHash}/ai-tags`, 'Loading suggested tags')
+}
+
+export function resolveAiTagApi(fileHash: string, label: string, action: 'accept' | 'reject' | 'reset'): Promise<AiTag[]> {
+  return request(`/photos/${fileHash}/ai-tags`, 'Saving the tag decision', jsonInit('POST', { label, action }))
+}
+
+export function resolveAiTagsBatchApi(photoHashes: string[], action: 'accept' | 'reject'): Promise<AiTagBatchResponse> {
+  return request('/ai-tags/batch', 'Saving the tag decisions', jsonInit('POST', { photo_hashes: photoHashes, action }))
 }
 
 /** What a finished export download reports (PMO-28). */

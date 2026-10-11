@@ -70,7 +70,7 @@ export function useJobActions() {
 }
 
 function finishedNotice(job: Job): { text: string; kind: 'success' | 'error' } {
-  const what = job.kind === 'sync' ? 'Sync' : 'Indexing'
+  const what = ({ sync: 'Sync', analyze: 'Analysis', 'model-download': 'Model download' } as Record<string, string>)[job.kind] ?? 'Indexing'
   if (job.status === 'failed') return { text: `${what} failed: ${job.message}`, kind: 'error' }
   if (job.failed_count > 0) {
     const first = job.errors[0] ? ` First: ${job.errors[0]}` : ''
@@ -98,6 +98,7 @@ export function useJobCompletionNotices() {
         showToast(text, kind)
         void qc.invalidateQueries({ queryKey: photosKey })
         void qc.invalidateQueries({ queryKey: facetsKey })
+        void qc.invalidateQueries({ queryKey: ['analysis'] })
       }
     }
   }, [jobs, qc, showToast])

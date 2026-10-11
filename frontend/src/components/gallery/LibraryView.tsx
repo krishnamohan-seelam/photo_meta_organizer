@@ -8,6 +8,7 @@ import { useFacets } from '../../hooks/useFacets'
 import { removeFilterChip, useLibraryFilters } from '../../hooks/useLibraryFilters'
 import { useSelectAllMatches } from '../../hooks/useSelectAllMatches'
 import { filterChips, galleryTitle } from '../../utils/filterChips'
+import { SemanticResults } from '../ai/SemanticResults'
 import { PhotoGallery } from './PhotoGallery'
 import { PhotoTable } from './PhotoTable'
 
@@ -98,10 +99,11 @@ const GalleryToolbar: React.FC = () => {
 /** The Library view: one toolbar over the grid or the table (FR-2c.1). Filters, selection and the inspected photo are shared. */
 export const LibraryView: React.FC = () => {
   const layout = useUiStore((s) => s.libraryLayout)
+  const semantic = useUiStore((s) => s.semantic)
   return (
     <main className="gallery-pane" aria-label="Library">
       <GalleryToolbar />
-      {layout === 'grid' ? <PhotoGallery /> : <PhotoTable />}
+      {semantic ? <SemanticResults query={semantic} /> : layout === 'grid' ? <PhotoGallery /> : <PhotoTable />}
     </main>
   )
 }

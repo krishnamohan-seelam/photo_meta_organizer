@@ -127,3 +127,54 @@ describe('QueryBar stays in sync with the store (AC-2b.2)', () => {
     expect(useUiStore.getState().filterTags).toEqual(['night'])
   })
 })
+
+describe('QueryBar: search by meaning (Phase 5)', () => {
+  const status = {
+    runtime_installed: true,
+    model_installed: true,
+    model_id: 'm',
+    model_source: 's',
+    model_licence: 'l',
+    download_bytes: 0,
+    total_photos: 4,
+    analyzed_photos: 4,
+    pending_photos: 0,
+    active_job_id: null,
+    active_job_kind: null,
+  }
+
+  function renderWith(analysis: typeof status | null) {
+    const qc = testQueryClient()
+    qc.setQueryData(['facets'], facets)
+    qc.setQueryData(['collections'], [])
+    if (analysis) qc.setQueryData(['analysis', 'status'], analysis)
+    renderWithQuery(<QueryBar />, qc)
+    return screen.getByRole('combobox', { name: 'Filter photos' }) as HTMLInputElement
+  }
+
+  it('runs a search by meaning and leaves the text filter alone', () => {
+    const input = renderWith(status)
+    input.focus()
+    fireEvent.change(input, { target: { value: 'dog on a beach' } })
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Search by meaning/ }))
+    expect(useUiStore.getState().semantic).toEqual({ kind: 'text', text: 'dog on a beach' })
+    expect(useUiStore.getState().searchQuery).toBe('')
+    expect(input.value).toBe('')
+  })
+
+  it('opens the setup instead when nothing is analysed yet', () => {
+    const input = renderWith({ ...status, model_installed: false, analyzed_photos: 0 })
+    input.focus()
+    fireEvent.change(input, { target: { value: 'sunset' } })
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Search by meaning/ }))
+    expect(useUiStore.getState().aiDialogOpen).toBe(true)
+    expect(useUiStore.getState().semantic).toBeNull()
+  })
+
+  it('is not offered when the backend has no AI runtime', () => {
+    const input = renderWith({ ...status, runtime_installed: false })
+    input.focus()
+    fireEvent.change(input, { target: { value: 'sunset' } })
+    expect(screen.queryByRole('option', { name: /Search by meaning/ })).toBeNull()
+  })
+})

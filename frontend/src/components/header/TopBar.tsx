@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderInput, RefreshCw } from 'lucide-react'
+import { FolderInput, RefreshCw, Sparkles } from 'lucide-react'
 import { useUiStore } from '../../stores/useUiStore'
 import { useJobs } from '../../hooks/useJobs'
 import { JobStatusPill } from './JobStatusPill'
@@ -8,6 +8,7 @@ import { QueryBar } from './QueryBar'
 /** Slim top bar (FR-1b.4): the query bar (FR-2b), job status, Sync and Import. Everything else lives in the rail and palette. */
 export const TopBar: React.FC = () => {
   const setJobDialog = useUiStore((s) => s.setJobDialog)
+  const setAiDialogOpen = useUiStore((s) => s.setAiDialogOpen)
   const { activeJob } = useJobs()
   const busy = activeJob !== null
 
@@ -16,6 +17,15 @@ export const TopBar: React.FC = () => {
       <QueryBar />
       <div className="topbar-actions">
         <JobStatusPill />
+        <button
+          type="button"
+          className="btn icon-btn"
+          onClick={() => setAiDialogOpen(true)}
+          aria-label="Search by meaning: set up and analyze"
+          title="Search by meaning: download the model and analyze the library"
+        >
+          <Sparkles size={16} />
+        </button>
         <button
           type="button"
           className="btn icon-btn"

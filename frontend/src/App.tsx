@@ -11,6 +11,7 @@ import { TopBar } from './components/header/TopBar'
 import { CommandPalette } from './components/header/CommandPalette'
 import { ShortcutsOverlay } from './components/header/ShortcutsOverlay'
 import { FolderJobDialog } from './components/jobs/FolderJobDialog'
+import { AiSetupDialog } from './components/ai/AiSetupDialog'
 import { LibraryPanel } from './components/filters/LibraryPanel'
 import { LibraryView } from './components/gallery/LibraryView'
 import { ExifInspector } from './components/inspector/ExifInspector'
@@ -103,6 +104,7 @@ export const App: React.FC = () => {
       <CommandPalette />
       <ShortcutsOverlay />
       <FolderJobDialog />
+      <AiSetupDialog />
       <LightboxModal />
 
       {toastMessage && (

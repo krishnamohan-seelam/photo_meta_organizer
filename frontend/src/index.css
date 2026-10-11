@@ -2318,3 +2318,77 @@ dl.kv dd.hash button:hover {
 .pmo-map .leaflet-control-attribution a {
   color: var(--text-muted);
 }
+
+/* ---- AI: search by meaning (Phase 5) ---- */
+.dialog-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.ai-facts {
+  margin: 0;
+}
+.ai-source {
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+.semantic-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 16px 16px;
+}
+.semantic-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 10px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.semantic-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tile-score {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.7rem;
+  pointer-events: none;
+}
+.chip-ai {
+  border-style: dashed;
+}
+.similar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.similar-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.similar-thumb {
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--bg-surface);
+}
+.similar-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

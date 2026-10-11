@@ -9,6 +9,7 @@ Run through ``npm run backend:package`` (builds the frontend, then runs this wit
 ``build`` dependency group, which provides PyInstaller).
 """
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -21,6 +22,13 @@ FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 CITIES_TABLE = ROOT_DIR / "photo_meta_organizer" / "infrastructure" / "geo" / "cities.tsv.gz"
 
 
+AI_PACKAGES = ("onnxruntime", "tokenizers")
+
+
+def ai_packages_present() -> bool:
+    return all(importlib.util.find_spec(name) is not None for name in AI_PACKAGES)
+
+
 def build_backend():
     print(f"[*] Packaging standalone backend from: {ENTRY_SCRIPT}")
     print(f"[*] Target output directory: {OUTPUT_DIR}")
@@ -29,6 +37,16 @@ def build_backend():
         # Without it the installed app starts but shows "Frontend not built" (PMO-12).
         print(f"[-] {FRONTEND_DIST} is missing: run `npm run frontend:build` first.")
         sys.exit(1)
+
+    # Search by meaning (Phase 5) needs the optional `ai` extra. Without it the build still works;
+    # the app then answers 503 on the AI routes and the UI says how to enable them. The model itself
+    # (~305 MB) is never bundled: the app downloads it on first use, with consent.
+    with_ai = ai_packages_present()
+    if with_ai:
+        print("[*] Including the AI runtime (onnxruntime, tokenizers).")
+    else:
+        print("[!] onnxruntime/tokenizers are not installed: building WITHOUT search by meaning.")
+        print("    Use `npm run backend:package` (it adds --extra ai) to include it.")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -61,6 +79,11 @@ def build_backend():
         "pillow_heif",
         "--collect-all",
         "rawpy",
+        *(
+            arg
+            for package in (AI_PACKAGES if with_ai else ())
+            for arg in ("--collect-all", package)
+        ),
         "--exclude-module",
         "photo_meta_organizer.tests",
         "--add-data",

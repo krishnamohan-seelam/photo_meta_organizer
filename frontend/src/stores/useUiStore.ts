@@ -9,6 +9,8 @@ export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
 export type ToastKind = 'success' | 'error'
 export type JobDialogKind = 'index' | 'sync'
 export type LibraryLayout = 'grid' | 'table'
+/** A search by meaning: free text, or "photos like this one". Replaces the Library's list while set. */
+export type SemanticQuery = { kind: 'text'; text: string } | { kind: 'like'; hash: string; name: string }
 
 /** Row height of the justified Library grid (FR-1c.5). */
 export const ROW_HEIGHT_MIN = 140
@@ -48,6 +50,9 @@ interface UiState {
   commandPaletteOpen: boolean
   /** Which folder dialog is open: Scan (index) or Sync. */
   jobDialog: JobDialogKind | null
+  /** The AI setup dialog (model download, analysis). */
+  aiDialogOpen: boolean
+  semantic: SemanticQuery | null
   searchQuery: string
   filterCameras: string[]
   filterTags: string[]
@@ -85,6 +90,8 @@ interface UiState {
   setLightboxIndex: (idx: number | null) => void
   setCommandPaletteOpen: (open: boolean) => void
   setJobDialog: (kind: JobDialogKind | null) => void
+  setAiDialogOpen: (open: boolean) => void
+  setSemantic: (query: SemanticQuery | null) => void
   setSearchQuery: (q: string) => void
   toggleCameraFilter: (camera: string) => void
   toggleTagFilter: (tag: string) => void
@@ -120,6 +127,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   lightboxIndex: null,
   commandPaletteOpen: false,
   jobDialog: null,
+  aiDialogOpen: false,
+  semantic: null,
   searchQuery: '',
   filterCameras: [],
   filterTags: [],
@@ -168,6 +177,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setLightboxIndex: (lightboxIndex) => set({ lightboxIndex }),
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
   setJobDialog: (jobDialog) => set({ jobDialog }),
+  setAiDialogOpen: (aiDialogOpen) => set({ aiDialogOpen }),
+  setSemantic: (semantic) => set({ semantic }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 
   toggleCameraFilter: (camera) =>
@@ -216,7 +227,7 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   resetFilters: () => {
     get().applyQueryFilters(EMPTY_QUERY_FILTERS)
-    set({ filterArea: null })
+    set({ filterArea: null, semantic: null })
   },
 
   showToast: (toastMessage, toastKind = 'success') => {
