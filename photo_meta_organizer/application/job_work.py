@@ -1,6 +1,10 @@
 """Adapters that turn use cases into ``JobManager`` work functions (PMO-18)."""
 
 from photo_meta_organizer.application.jobs import JobContext, JobOutcome, Work
+from photo_meta_organizer.application.use_cases.analyze_photos_use_case import (
+    AnalyzePhotosUseCase,
+    AnalyzeProgress,
+)
 from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
     IndexProgress,
     ParallelIndexPhotosUseCase,
@@ -90,6 +94,43 @@ def sync_work(
             },
             errors=result.errors,
             cancelled=result.cancelled,
+        )
+
+    return work
+
+
+def analyze_work(
+    use_case: AnalyzePhotosUseCase, *, reanalyze: bool = False, limit: int | None = None
+) -> Work:
+    """Run AI analysis of the library as a job: progress per photo, cooperative cancel."""
+
+    def work(ctx: JobContext) -> JobOutcome:
+        def on_progress(p: AnalyzeProgress) -> None:
+            ctx.report_progress(total=p.total, processed=p.processed, failed=p.failed)
+
+        report = use_case.run(
+            reanalyze=reanalyze,
+            limit=limit,
+            progress=on_progress,
+            should_cancel=ctx.cancel_requested,
+        )
+        failed = len(report.errors)
+        verb = "Cancelled after analysing" if report.cancelled else "Analysed"
+        message = f"{verb} {report.analyzed} photo(s)."
+        if report.tagged:
+            message += f" Suggested tags for {report.tagged}."
+        if failed:
+            message += f" {failed} file(s) failed."
+        return JobOutcome(
+            message=message,
+            counts={
+                "total": report.total,
+                "analyzed": report.analyzed,
+                "tagged": report.tagged,
+                "failed": failed,
+            },
+            errors=report.errors,
+            cancelled=report.cancelled,
         )
 
     return work

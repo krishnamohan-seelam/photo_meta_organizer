@@ -99,6 +99,28 @@ CREATE TABLE IF NOT EXISTS collections (
     updated_at TEXT NOT NULL
 );
 
+-- AI analysis (Phase 5, ADR-002). Keyed by content hash, so results go with a photo
+-- (ON DELETE CASCADE) and survive re-saving unchanged content (the upsert is an UPDATE).
+CREATE TABLE IF NOT EXISTS photo_embeddings (
+    file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    dim INTEGER NOT NULL,
+    vector BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (file_hash, model_id)
+);
+
+CREATE TABLE IF NOT EXISTS photo_ai_tags (
+    file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+    model_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'suggested'
+        CHECK (status IN ('suggested', 'accepted', 'rejected')),
+    PRIMARY KEY (file_hash, label)
+);
+CREATE INDEX IF NOT EXISTS idx_photo_ai_tags_label ON photo_ai_tags(label, status);
+
 CREATE TABLE IF NOT EXISTS collection_photos (
     collection TEXT NOT NULL REFERENCES collections(name) ON DELETE CASCADE,
     file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
@@ -311,71 +333,8 @@ class SqliteRepository:
     # Search, paging and facets
     # =========================================================================
 
-    @staticmethod
-    def _where(query: SearchQuery) -> tuple[str, list[Any]]:
-        """The ``WHERE`` clause (or ``""``) and its parameters for the SQL-expressible filters."""
-        clauses: list[str] = []
-        params: list[Any] = []
-
-        if query.date_start:
-            clauses.append("captured_at IS NOT NULL AND captured_at >= ?")
-            params.append(query.date_start.isoformat())
-        if query.date_end:
-            clauses.append("captured_at IS NOT NULL AND captured_at <= ?")
-            params.append(query.date_end.isoformat())
-        if query.camera_make:
-            clauses.append("camera_make LIKE ? ESCAPE '\\'")
-            params.append(f"%{_escape_like(query.camera_make)}%")
-        if query.camera_model:
-            clauses.append("camera_model LIKE ? ESCAPE '\\'")
-            params.append(f"%{_escape_like(query.camera_model)}%")
-        if query.camera_makes:
-            placeholders = ", ".join("?" for _ in query.camera_makes)
-            clauses.append(f"camera_make IN ({placeholders})")
-            params.extend(query.camera_makes)
-        if query.has_capture_date is not None:
-            clauses.append(
-                "captured_at IS NOT NULL" if query.has_capture_date else "captured_at IS NULL"
-            )
-        if query.has_location is not None:
-            located = "gps_lat IS NOT NULL AND gps_lon IS NOT NULL"
-            clauses.append(located if query.has_location else f"NOT ({located})")
-        if query.within is not None:
-            clause, bbox_params = _bbox_sql(query.within)
-            clauses.append(clause)
-            params.extend(bbox_params)
-        if query.collection is not None:
-            clauses.append(
-                "file_hash IN (SELECT file_hash FROM collection_photos WHERE collection = ?)"
-            )
-            params.append(query.collection)
-        if query.rating is not None:
-            clauses.append("rating = ?")
-            params.append(query.rating)
-        if query.flagged is not None:
-            clauses.append("flagged = ?")
-            params.append(1 if query.flagged else 0)
-        if query.tags:
-            placeholders = ", ".join("?" for _ in query.tags)
-            clauses.append(
-                f"file_hash IN (SELECT file_hash FROM photo_labels WHERE label IN "
-                f"({placeholders}) GROUP BY file_hash HAVING COUNT(DISTINCT label) = ?)"
-            )
-            params.extend(query.tags)
-            params.append(len(set(query.tags)))
-        if query.search_term:
-            term = f"%{_escape_like(query.search_term)}%"
-            clauses.append(
-                "(name LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\' OR "
-                "camera_make LIKE ? ESCAPE '\\' OR camera_model LIKE ? ESCAPE '\\' OR "
-                "file_hash IN (SELECT file_hash FROM photo_labels WHERE label LIKE ? ESCAPE '\\'))"
-            )
-            params.extend([term, term, term, term, term])
-
-        return (f"WHERE {' AND '.join(clauses)}" if clauses else ""), params
-
     def query(self, query: SearchQuery) -> Page[ImageMetadata]:
-        where_sql, params = self._where(query)
+        where_sql, params = search_where(query)
         order_sql = self._order_by_sql(query.sort_by, query.sort_order)
 
         with self.lock:
@@ -446,7 +405,7 @@ class SqliteRepository:
     def geo_clusters(
         self, query: SearchQuery, bbox: BoundingBox | None, cell_degrees: float
     ) -> list[GeoCluster]:
-        where_sql, params = self._where(query)
+        where_sql, params = search_where(query)
         located = "gps_lat IS NOT NULL AND gps_lon IS NOT NULL"
         where_sql = f"{where_sql} AND {located}" if where_sql else f"WHERE {located}"
         if bbox is not None:
@@ -656,6 +615,70 @@ class SqliteRepository:
         else:
             command = SetFlag(value)
         return self.apply_batch(file_hashes, command)
+
+
+def search_where(query: SearchQuery) -> tuple[str, list[Any]]:
+    """The ``WHERE`` clause (or ``""``) and its parameters for the SQL-expressible filters."""
+    clauses: list[str] = []
+    params: list[Any] = []
+
+    if query.date_start:
+        clauses.append("captured_at IS NOT NULL AND captured_at >= ?")
+        params.append(query.date_start.isoformat())
+    if query.date_end:
+        clauses.append("captured_at IS NOT NULL AND captured_at <= ?")
+        params.append(query.date_end.isoformat())
+    if query.camera_make:
+        clauses.append("camera_make LIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(query.camera_make)}%")
+    if query.camera_model:
+        clauses.append("camera_model LIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(query.camera_model)}%")
+    if query.camera_makes:
+        placeholders = ", ".join("?" for _ in query.camera_makes)
+        clauses.append(f"camera_make IN ({placeholders})")
+        params.extend(query.camera_makes)
+    if query.has_capture_date is not None:
+        clauses.append(
+            "captured_at IS NOT NULL" if query.has_capture_date else "captured_at IS NULL"
+        )
+    if query.has_location is not None:
+        located = "gps_lat IS NOT NULL AND gps_lon IS NOT NULL"
+        clauses.append(located if query.has_location else f"NOT ({located})")
+    if query.within is not None:
+        clause, bbox_params = _bbox_sql(query.within)
+        clauses.append(clause)
+        params.extend(bbox_params)
+    if query.collection is not None:
+        clauses.append(
+            "file_hash IN (SELECT file_hash FROM collection_photos WHERE collection = ?)"
+        )
+        params.append(query.collection)
+    if query.rating is not None:
+        clauses.append("rating = ?")
+        params.append(query.rating)
+    if query.flagged is not None:
+        clauses.append("flagged = ?")
+        params.append(1 if query.flagged else 0)
+    if query.tags:
+        placeholders = ", ".join("?" for _ in query.tags)
+        clauses.append(
+            f"file_hash IN (SELECT file_hash FROM photo_labels WHERE label IN "
+            f"({placeholders}) GROUP BY file_hash HAVING COUNT(DISTINCT label) = ?)"
+        )
+        params.extend(query.tags)
+        params.append(len(set(query.tags)))
+    if query.search_term:
+        term = f"%{_escape_like(query.search_term)}%"
+        clauses.append(
+            "(name LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\' OR "
+            "camera_make LIKE ? ESCAPE '\\' OR camera_model LIKE ? ESCAPE '\\' OR "
+            "file_hash IN (SELECT file_hash FROM photo_labels WHERE label LIKE ? ESCAPE '\\'))"
+        )
+        params.extend([term, term, term, term, term])
+
+    return (f"WHERE {' AND '.join(clauses)}" if clauses else ""), params
+
 
 
 def _bbox_sql(bbox: BoundingBox) -> tuple[str, list[float]]:

@@ -109,6 +109,7 @@ class TestDesktopSettings:
             db_path=tmp_path / "photos.db",
             cache_dir=tmp_path / "thumbnails",
             log_dir=tmp_path / "logs",
+            model_dir=tmp_path / "models",
         )
 
     def test_environment_applies_when_no_flag_is_given(self, tmp_path, monkeypatch):

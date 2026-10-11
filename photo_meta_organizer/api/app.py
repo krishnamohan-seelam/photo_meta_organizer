@@ -34,6 +34,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from photo_meta_organizer import __version__
 from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticated
 from photo_meta_organizer.api.dependencies import Services
+from photo_meta_organizer.api.routes.analysis_router import ai_tags_router, analysis_router
 from photo_meta_organizer.api.routes.config_router import config_router
 from photo_meta_organizer.api.routes.export_router import export_router
 from photo_meta_organizer.api.routes.photos_router import (
@@ -44,16 +45,19 @@ from photo_meta_organizer.api.routes.photos_router import (
     search_router,
     sync_router,
 )
+from photo_meta_organizer.application import composition
 from photo_meta_organizer.application.composition import (
     build_collection_repository,
     build_repository,
 )
+from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.settings import (  # noqa: F401 (re-exported)
     DEFAULT_ALLOWED_HOSTS,
     DEFAULT_CORS_ORIGINS,
     Settings,
 )
+from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
 from photo_meta_organizer.infrastructure.geo.offline_place_namer import OfflinePlaceNamer
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
@@ -75,6 +79,8 @@ def create_app(
     settings: "Settings | None" = None,
     cache_dir: "str | Path | None" = None,
     frontend_dist: "str | Path | None" = None,
+    model_store: "ModelStore | None" = None,
+    embedder: "ImageEmbedder | None" = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -90,6 +96,8 @@ def create_app(
         cache_dir: Thumbnail cache directory (default ``.cache/thumbnails``).
         frontend_dist: The built UI to serve at ``/``. Defaults to
                  :func:`default_frontend_dist`.
+        model_store: The AI model's home (default: built from the settings). A seam for tests.
+        embedder: The AI embedder (default: CLIP over ``model_store``). A seam for tests.
 
     Returns:
         A fully configured FastAPI application instance with all routes mounted.
@@ -147,6 +155,8 @@ def create_app(
     if db != ":memory:":
         settings.db_path.parent.mkdir(parents=True, exist_ok=True)
     repository = build_repository(db)
+    store = model_store or composition.build_model_store(settings)
+    ai_embedder = embedder or composition.build_embedder(store)
     app.state.services = Services(
         settings=settings,
         repository=repository,
@@ -157,6 +167,10 @@ def create_app(
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
         ),
         places=OfflinePlaceNamer(),
+        analysis=composition.build_analysis_repository(repository),
+        model_store=store,
+        embedder=ai_embedder,
+        tagger=composition.build_tagger(settings, ai_embedder),
     )
 
     # Mount routers
@@ -168,6 +182,8 @@ def create_app(
     app.include_router(jobs_router)
     app.include_router(export_router)
     app.include_router(config_router)
+    app.include_router(analysis_router)
+    app.include_router(ai_tags_router)
 
     frontend_dist = Path(frontend_dist) if frontend_dist is not None else default_frontend_dist()
     assets_dir = frontend_dist / "assets"

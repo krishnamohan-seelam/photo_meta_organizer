@@ -17,11 +17,17 @@ dependencies = [
     "tinydb>=4.8",          # read-only: importing a legacy metadata.json (ADR-001)
     "pillow-heif>=1.0",     # HEIC/HEIF decoding (PMO-23)
     "rawpy>=0.25",          # camera RAW: embedded preview + dimensions (PMO-23)
+    "numpy>=2.0",
 ]
 
 [project.optional-dependencies]
 # S3ImageRetriever exists but is not wired into the CLI or API yet (Phase 6).
 s3 = ["boto3>=1.35"]
+# Phase 5: `uv sync --extra ai`. A plain `uv sync` removes these (exact sync).
+ai = [
+    "onnxruntime>=1.20",
+    "tokenizers>=0.21",
+]
 
 [project.scripts]
 photo-meta-organizer = "photo_meta_organizer.main:main"

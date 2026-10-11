@@ -10,15 +10,23 @@ stays cheap and the application layer keeps no import-time dependency on it.
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 from photo_meta_organizer.application.interfaces import ImageRetriever
+from photo_meta_organizer.application.interfaces.analysis_repository import AnalysisRepository
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
 )
+from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
+from photo_meta_organizer.application.settings import Settings
+from photo_meta_organizer.application.zero_shot_tagger import ZeroShotTagger
 from photo_meta_organizer.domain.formats import IMAGE_EXTENSIONS
+
+if TYPE_CHECKING:  # infrastructure is imported lazily inside the factories
+    from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +44,7 @@ def build_local_retriever(path: str) -> ImageRetriever:
         LocalDiskRetriever,
     )
 
-    return ExtensionFilteredRetriever(
-        LocalDiskRetriever(base_path=path), set(IMAGE_EXTENSIONS)
-    )
+    return ExtensionFilteredRetriever(LocalDiskRetriever(base_path=path), set(IMAGE_EXTENSIONS))
 
 
 def _is_legacy_json(db_path: str) -> bool:
@@ -102,6 +108,39 @@ def build_collection_repository(
 
     if isinstance(repository, SqliteRepository):
         return SqliteCollectionRepository(repository.connection, repository.lock)
-    raise TypeError(
-        f"unsupported repository type for collections: {type(repository)!r}"
+    raise TypeError(f"unsupported repository type for collections: {type(repository)!r}")
+
+
+def build_analysis_repository(repository: ImageMetadataRepository) -> AnalysisRepository:
+    """Build the analysis repository (embeddings, suggested tags) sharing storage with
+    ``repository``, the same way :func:`build_collection_repository` does."""
+    from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
+        SqliteAnalysisRepository,
     )
+    from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+        SqliteRepository,
+    )
+
+    if isinstance(repository, SqliteRepository):
+        return SqliteAnalysisRepository(repository.connection, repository.lock)
+    raise TypeError(f"unsupported repository type for analysis: {type(repository)!r}")
+
+
+def build_model_store(settings: Settings) -> "ModelStore":
+    """The on-disk home (and downloader) of the AI model named by the manifest."""
+    from photo_meta_organizer.infrastructure.analysis.model_manifest import CLIP_VIT_B32_FP16
+    from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
+
+    return ModelStore(settings.models_dir, CLIP_VIT_B32_FP16)
+
+
+def build_embedder(store: "ModelStore") -> ImageEmbedder:
+    """The CLIP embedder over ``store``. Cheap: nothing loads until the first vector."""
+    from photo_meta_organizer.infrastructure.analysis.clip_onnx_embedder import ClipOnnxEmbedder
+
+    return ClipOnnxEmbedder(store)
+
+
+def build_tagger(settings: Settings, embedder: ImageEmbedder) -> ZeroShotTagger:
+    """The zero-shot tagger over the shipped vocabulary, caching its label vectors on disk."""
+    return ZeroShotTagger(embedder, cache_dir=settings.models_dir / "label-vectors")

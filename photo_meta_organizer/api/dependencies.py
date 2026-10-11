@@ -10,15 +10,19 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
+from photo_meta_organizer.application.interfaces.analysis_repository import AnalysisRepository
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
 )
+from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
 from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
 from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.settings import Settings
+from photo_meta_organizer.application.zero_shot_tagger import ZeroShotTagger
+from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 
@@ -30,6 +34,10 @@ class Services:
     jobs: JobManager
     thumbnails: ThumbnailService
     places: PlaceNamer
+    analysis: AnalysisRepository
+    model_store: ModelStore
+    embedder: ImageEmbedder
+    tagger: ZeroShotTagger
 
 
 def get_services(request: Request) -> Services:

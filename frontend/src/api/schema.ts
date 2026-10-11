@@ -24,6 +24,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggested labels and their photo counts
+         * @description Each label and how many photos carry it in ``status``, most common first.
+         */
+        get: operations["ai_tag_counts_api_ai_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-tags/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept or reject suggestions across many photos
+         * @description Without ``labels`` this takes every open suggestion of the selected photos; with them,
+         *     exactly those labels. Unknown photos are skipped.
+         */
+        post: operations["resolve_ai_tags_batch_api_ai_tags_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/model/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download the AI model (needs explicit consent)
+         * @description Start the one-time model download as a job (progress is in bytes).
+         *
+         *     The body must say ``{"accept": true}``: the UI sends it only after telling the user what is
+         *     fetched (size, source, licence). Only the model is downloaded; no photo data is sent.
+         */
+        post: operations["download_model_api_analysis_model_download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze the library: embeddings and suggested tags
+         * @description Analyze every photo that has no embedding from the current model, as a job.
+         *
+         *     Incremental and safe to repeat. ``reanalyze`` redoes everything; ``limit`` caps one run.
+         *     Refused with 503 without the ``ai`` extra and 409 without the model or while another AI job
+         *     runs. Suggestions never change the user's labels until accepted.
+         */
+        post: operations["run_analysis_api_analysis_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the AI features need and how far along analysis is */
+        get: operations["analysis_status_api_analysis_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/collections": {
         parameters: {
             query?: never;
@@ -302,6 +407,31 @@ export interface paths {
         patch: operations["patch_photo_api_photos__file_hash__patch"];
         trace?: never;
     };
+    "/api/photos/{file_hash}/ai-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A photo's AI tag suggestions
+         * @description Every suggestion for the photo in any status, most confident first.
+         */
+        get: operations["list_photo_ai_tags_api_photos__file_hash__ai_tags_get"];
+        put?: never;
+        /**
+         * Accept, reject or reopen one suggestion
+         * @description ``accept`` adds the label to the photo (an ordinary label from then on); ``reject`` keeps
+         *     it from being suggested again; ``reset`` reopens a decided suggestion. None removes a label.
+         */
+        post: operations["resolve_photo_ai_tag_api_photos__file_hash__ai_tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/photos/{file_hash}/preview": {
         parameters: {
             query?: never;
@@ -405,6 +535,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/search/semantic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find photos by meaning, or like another photo
+         * @description Rank analysed photos by similarity to ``text`` (or to the photo ``like_hash``).
+         *
+         *     The usual search filters apply and decide who competes. Returns the ``k`` best matches,
+         *     best first. 409 if nothing (or that photo) has been analysed yet.
+         */
+        post: operations["semantic_search_api_search_semantic_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sync": {
         parameters: {
             query?: never;
@@ -456,6 +609,111 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AiTagBatchRequest */
+        AiTagBatchRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "accept" | "reject";
+            /**
+             * Labels
+             * @description Only these labels; omit for every open suggestion
+             */
+            labels?: string[] | null;
+            /** Photo Hashes */
+            photo_hashes: string[];
+        };
+        /** AiTagBatchResponse */
+        AiTagBatchResponse: {
+            /** Photos Changed */
+            photos_changed: number;
+            /** Tags Changed */
+            tags_changed: number;
+        };
+        /**
+         * AiTagSchema
+         * @description A label the model suggests for a photo.
+         */
+        AiTagSchema: {
+            /** Confidence */
+            confidence: number;
+            /** Label */
+            label: string;
+            /** Model Id */
+            model_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "suggested" | "accepted" | "rejected";
+        };
+        /**
+         * AiTagStatus
+         * @description Where a suggestion stands. Rejected ones are remembered so they are not suggested again.
+         * @enum {string}
+         */
+        AiTagStatus: "suggested" | "accepted" | "rejected";
+        /**
+         * AnalysisStatusResponse
+         * @description What the AI features need and how far along they are (Phase 5).
+         */
+        AnalysisStatusResponse: {
+            /**
+             * Active Job Id
+             * @description A running model download or analysis
+             */
+            active_job_id: string | null;
+            /** Active Job Kind */
+            active_job_kind: string | null;
+            /**
+             * Analyzed Photos
+             * @description Photos with an embedding from this model
+             */
+            analyzed_photos: number;
+            /**
+             * Download Bytes
+             * @description Bytes still to download (0 once installed)
+             */
+            download_bytes: number;
+            /** Model Id */
+            model_id: string;
+            /** Model Installed */
+            model_installed: boolean;
+            /** Model Licence */
+            model_licence: string;
+            /** Model Source */
+            model_source: string;
+            /** Pending Photos */
+            pending_photos: number;
+            /**
+             * Runtime Installed
+             * @description The optional 'ai' extra can be imported
+             */
+            runtime_installed: boolean;
+            /** Total Photos */
+            total_photos: number;
+        };
+        /** AnalyzeRequest */
+        AnalyzeRequest: {
+            /**
+             * Limit
+             * @description Analyze at most this many photos
+             */
+            limit?: number | null;
+            /**
+             * Reanalyze
+             * @description Redo every photo, not only new ones
+             * @default false
+             */
+            reanalyze?: boolean;
+            /**
+             * Tags
+             * @description Also suggest tags
+             * @default true
+             */
+            tags?: boolean;
+        };
         /**
          * AppConfigResponse
          * @description Deployment settings the UI needs.
@@ -912,6 +1170,18 @@ export interface components {
             undated_count: number;
         };
         /**
+         * ModelDownloadRequest
+         * @description The explicit consent the download needs: the UI sends it after showing what is fetched.
+         */
+        ModelDownloadRequest: {
+            /**
+             * Accept
+             * @description Must be true: you agree to download the model
+             * @constant
+             */
+            accept: true;
+        };
+        /**
          * PaginatedPhotosResponse
          * @description Paginated list of photo metadata.
          */
@@ -977,6 +1247,17 @@ export interface components {
             labels: string[];
             /** Rating */
             rating: number | null;
+        };
+        /** ResolveAiTagRequest */
+        ResolveAiTagRequest: {
+            /**
+             * Action
+             * @description accept adds the label to the photo; reject hides the suggestion; reset reopens a decided one. None of them removes a label.
+             * @enum {string}
+             */
+            action: "accept" | "reject" | "reset";
+            /** Label */
+            label: string;
         };
         /**
          * SearchRequest
@@ -1049,6 +1330,106 @@ export interface components {
             tags?: string[] | null;
             /** @description Only photos inside this map area */
             within?: components["schemas"]["BoundingBoxSchema"] | null;
+        };
+        /** SemanticHitSchema */
+        SemanticHitSchema: {
+            photo: components["schemas"]["PhotoMetadataResponse"];
+            /**
+             * Score
+             * @description Cosine similarity, -1 to 1; higher is closer
+             */
+            score: number;
+        };
+        /**
+         * SemanticSearchRequest
+         * @description Search by meaning: free text, or "photos like this one", plus the usual filters.
+         *
+         *     Exactly one of ``text`` and ``like_hash``. Sorting and paging fields are ignored: the
+         *     result is the ``k`` best matches, best first.
+         */
+        SemanticSearchRequest: {
+            /** Camera Make */
+            camera_make?: string | null;
+            /**
+             * Camera Makes
+             * @description Any of these makes, matched exactly (camera checkboxes)
+             */
+            camera_makes?: string[] | null;
+            /** Camera Model */
+            camera_model?: string | null;
+            /**
+             * Collection
+             * @description Members of this collection
+             */
+            collection?: string | null;
+            /** Date End */
+            date_end?: string | null;
+            /** Date Start */
+            date_start?: string | null;
+            /** Flagged */
+            flagged?: boolean | null;
+            /**
+             * Has Capture Date
+             * @description false: only photos with an unknown capture date
+             */
+            has_capture_date?: boolean | null;
+            /**
+             * Has Location
+             * @description Only (un)geotagged photos
+             */
+            has_location?: boolean | null;
+            /**
+             * K
+             * @default 50
+             */
+            k?: number;
+            /** Like Hash */
+            like_hash?: string | null;
+            /** Location Lat */
+            location_lat?: number | null;
+            /** Location Lon */
+            location_lon?: number | null;
+            /**
+             * Page
+             * @default 1
+             */
+            page?: number;
+            /**
+             * Page Size
+             * @default 50
+             */
+            page_size?: number;
+            /** Radius Km */
+            radius_km?: number | null;
+            /** Rating */
+            rating?: number | null;
+            /** Search Term */
+            search_term?: string | null;
+            /**
+             * Sort By
+             * @default captured_at
+             * @enum {string}
+             */
+            sort_by?: "captured_at" | "size_bytes" | "camera_model" | "file_name";
+            /**
+             * Sort Order
+             * @default asc
+             * @enum {string}
+             */
+            sort_order?: "asc" | "desc";
+            /** Tags */
+            tags?: string[] | null;
+            /** Text */
+            text?: string | null;
+            /** @description Only photos inside this map area */
+            within?: components["schemas"]["BoundingBoxSchema"] | null;
+        };
+        /** SemanticSearchResponse */
+        SemanticSearchResponse: {
+            /** Items */
+            items: components["schemas"]["SemanticHitSchema"][];
+            /** Model Id */
+            model_id: string;
         };
         /**
          * SyncFolderRequest
@@ -1138,6 +1519,156 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+        };
+    };
+    ai_tag_counts_api_ai_tags_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["AiTagStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FacetCountSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_ai_tags_batch_api_ai_tags_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiTagBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiTagBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_model_api_analysis_model_download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDownloadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_analysis_api_analysis_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analysis_status_api_analysis_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisStatusResponse"];
                 };
             };
         };
@@ -1617,6 +2148,72 @@ export interface operations {
             };
         };
     };
+    list_photo_ai_tags_api_photos__file_hash__ai_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiTagSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_photo_ai_tag_api_photos__file_hash__ai_tags_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveAiTagRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiTagSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_photo_preview_api_photos__file_hash__preview_get: {
         parameters: {
             query?: never;
@@ -1768,6 +2365,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PhotoIdSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    semantic_search_api_search_semantic_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticSearchResponse"];
                 };
             };
             /** @description Validation Error */

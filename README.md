@@ -51,6 +51,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 - **Export**: `POST /api/export/zip` streams a ZIP of the selected originals (skipped files are listed in an `export_report.txt` inside it); `POST /api/export/json` exports metadata for a selection or the whole library.
 - **Asynchronous Index & Sync Jobs**: `POST /api/index` and `POST /api/sync` return `202` plus a job id; `GET /api/jobs/{id}` reports progress and errors, and a job can be cancelled mid-run. The frontend shows a progress bar and an in-app folder dialog (`FolderJobDialog`) instead of `window.prompt`. Only image files are indexed, exactly as with the CLI.
 - **Curation & Batch REST API**: `PATCH /api/photos/{hash}` for rating, flag, and tags, and `POST /api/photos/batch` for `add_tag`, `remove_tag`, `set_rating`, `set_flag`, and `delete`. Input is validated (rating 1-5 or `null`, non-empty tags, real booleans); bad input returns `422` and nothing is written.
+- **AI analysis API** (Phase 5): `GET /api/analysis/status`; `POST /api/analysis/model/download` (needs `{"accept": true}`, runs as a job with byte progress); `POST /api/analysis/run` (embeddings and suggested tags, a job); `POST /api/search/semantic` (free text or `like_hash`, with every normal search filter); `GET`/`POST /api/photos/{hash}/ai-tags` and `POST /api/ai-tags/batch` to accept, reject or reopen suggestions; `GET /api/ai-tags` for counts. Suggestions become labels only when accepted. Without the optional `ai` extra these answer `503`; without the model, `409`. See [AI analysis](#ai-analysis-phase-5-command-line-only-so-far).
 - **Curated Collections API**: `GET/POST /api/collections` for named photo sets, used by the frontend's Library panel and selection dock.
 - **Search & Facets API**: `POST /api/search` filters, sorts and pages in SQL; `POST /api/search/ids` returns every match for Select All; `GET /api/facets` returns camera/tag/year/ISO counts, GPS bounds and library stats. The frontend uses all three.
 - **Generated API types**: the frontend's TypeScript types are generated from the API's OpenAPI schema, and a test on each side fails when they drift (see [Run Tests](#run-tests)).
@@ -173,6 +174,7 @@ An explicit flag or argument wins, then the environment, then the development de
 | `PMO_DATA_DIR` | Base directory for the three paths below | (unset) |
 | `PMO_DB` | SQLite database file | `<data dir>/photos.db`, else `photos.db` |
 | `PMO_CACHE_DIR` | Thumbnail cache | `<data dir>/thumbnails`, else `.cache/thumbnails` |
+| `PMO_MODEL_DIR` | Where the downloaded AI model lives | `<data dir>/models`, else `.cache/models` |
 | `PMO_LOG_DIR` | Directory for a rotating log (CLI: `photo_meta_organizer.log`, also `--log-dir`; desktop backend: `backend.log`) | `<data dir>/logs`, else no log file |
 | `PMO_THUMBNAIL_CACHE_MB` | Size budget of the thumbnail cache | `1024` |
 | `PMO_ALLOWED_HOSTS` | Host names the API accepts | `localhost,127.0.0.1` |
@@ -252,6 +254,23 @@ python -m photo_meta_organizer.main sync --path /photos --db photos.db --cleanup
 # Preview changes without writing to the DB
 python -m photo_meta_organizer.main sync --path /photos --db photos.db --dry-run
 ```
+
+### AI analysis (Phase 5, command line only so far)
+
+`analyze` computes an AI embedding for every photo and suggests tags from a fixed vocabulary of about 540 labels. It needs the optional `ai` extra and a one-time model download (about 305 MB, OpenAI's CLIP ViT-B/32 under the MIT licence). Everything runs on your computer; only the model is downloaded, and your photos never leave it.
+
+```bash
+uv sync --extra ai     # a plain `uv sync` removes the extra
+
+# First time: shows what will be downloaded and asks before doing it (--yes agrees up front)
+python -m photo_meta_organizer.main analyze --db photos.db --download
+
+# Afterwards: only photos with no embedding yet are processed, so it is safe to interrupt and re-run
+python -m photo_meta_organizer.main analyze --db photos.db
+python -m photo_meta_organizer.main analyze --db photos.db --no-tags --limit 500 --reanalyze
+```
+
+Suggested tags never touch your own tags until you accept them, and a rejected suggestion is not suggested for that photo again. A modified file is analysed again on the next run. Expect roughly 10 photos a second (about 35 minutes for 20,000), once. The same work is available over the API (see Features): download the model, run the analysis, search by meaning and review tags, all as jobs and requests. The web UI for it comes in the next step; until then use the CLI or `/docs`.
 
 ### Prune Non-Image Records
 
@@ -390,7 +409,7 @@ These are open, documented gaps. The full analysis and work plan are tracked in 
 | **Phase 3** | ✅ Complete | Search & indexing + FastAPI REST API + CLI search & stats |
 | **Phase 4** | ✅ Complete | React 19 Studio UI, WebP thumbnail cache, curation API, Electron shell |
 | **Hardening** | ✅ Complete | Correctness, security, scale (SQLite), packaging, server-driven UI, generated API types and tests |
-| **Phase 5** | 🔲 Planned | AI Tagging, Neural Image Embeddings & Semantic Search |
+| **Phase 5** | 🚧 In progress | AI Tagging, Neural Image Embeddings & Semantic Search: storage, model, `analyze` command and API done; web UI to come |
 | **Phase 6** | 🔲 Planned | Cloud S3 / MinIO Blob Storage & Distributed MongoDB Scale-Out |
 
 *Numbering note:* an internal design doc calls the Electron desktop app "Phase 5"; in this table it is part of Phase 4 and "Phase 5" means AI tagging.

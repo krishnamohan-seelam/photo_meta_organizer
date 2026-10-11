@@ -1,6 +1,222 @@
 {
   "components": {
     "schemas": {
+      "AiTagBatchRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "accept",
+              "reject"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only these labels; omit for every open suggestion",
+            "title": "Labels"
+          },
+          "photo_hashes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Photo Hashes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "photo_hashes",
+          "action"
+        ],
+        "title": "AiTagBatchRequest",
+        "type": "object"
+      },
+      "AiTagBatchResponse": {
+        "properties": {
+          "photos_changed": {
+            "title": "Photos Changed",
+            "type": "integer"
+          },
+          "tags_changed": {
+            "title": "Tags Changed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "photos_changed",
+          "tags_changed"
+        ],
+        "title": "AiTagBatchResponse",
+        "type": "object"
+      },
+      "AiTagSchema": {
+        "description": "A label the model suggests for a photo.",
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "suggested",
+              "accepted",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "confidence",
+          "model_id",
+          "status"
+        ],
+        "title": "AiTagSchema",
+        "type": "object"
+      },
+      "AiTagStatus": {
+        "description": "Where a suggestion stands. Rejected ones are remembered so they are not suggested again.",
+        "enum": [
+          "suggested",
+          "accepted",
+          "rejected"
+        ],
+        "title": "AiTagStatus",
+        "type": "string"
+      },
+      "AnalysisStatusResponse": {
+        "description": "What the AI features need and how far along they are (Phase 5).",
+        "properties": {
+          "active_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A running model download or analysis",
+            "title": "Active Job Id"
+          },
+          "active_job_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Job Kind"
+          },
+          "analyzed_photos": {
+            "description": "Photos with an embedding from this model",
+            "title": "Analyzed Photos",
+            "type": "integer"
+          },
+          "download_bytes": {
+            "description": "Bytes still to download (0 once installed)",
+            "title": "Download Bytes",
+            "type": "integer"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "model_installed": {
+            "title": "Model Installed",
+            "type": "boolean"
+          },
+          "model_licence": {
+            "title": "Model Licence",
+            "type": "string"
+          },
+          "model_source": {
+            "title": "Model Source",
+            "type": "string"
+          },
+          "pending_photos": {
+            "title": "Pending Photos",
+            "type": "integer"
+          },
+          "runtime_installed": {
+            "description": "The optional 'ai' extra can be imported",
+            "title": "Runtime Installed",
+            "type": "boolean"
+          },
+          "total_photos": {
+            "title": "Total Photos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "runtime_installed",
+          "model_installed",
+          "model_id",
+          "model_source",
+          "model_licence",
+          "download_bytes",
+          "total_photos",
+          "analyzed_photos",
+          "pending_photos",
+          "active_job_id",
+          "active_job_kind"
+        ],
+        "title": "AnalysisStatusResponse",
+        "type": "object"
+      },
+      "AnalyzeRequest": {
+        "properties": {
+          "limit": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Analyze at most this many photos",
+            "title": "Limit"
+          },
+          "reanalyze": {
+            "default": false,
+            "description": "Redo every photo, not only new ones",
+            "title": "Reanalyze",
+            "type": "boolean"
+          },
+          "tags": {
+            "default": true,
+            "description": "Also suggest tags",
+            "title": "Tags",
+            "type": "boolean"
+          }
+        },
+        "title": "AnalyzeRequest",
+        "type": "object"
+      },
       "AppConfigResponse": {
         "description": "Deployment settings the UI needs.",
         "properties": {
@@ -1150,6 +1366,22 @@
         "title": "LibraryStatsSchema",
         "type": "object"
       },
+      "ModelDownloadRequest": {
+        "description": "The explicit consent the download needs: the UI sends it after showing what is fetched.",
+        "properties": {
+          "accept": {
+            "const": true,
+            "description": "Must be true: you agree to download the model",
+            "title": "Accept",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accept"
+        ],
+        "title": "ModelDownloadRequest",
+        "type": "object"
+      },
       "PaginatedPhotosResponse": {
         "description": "Paginated list of photo metadata.",
         "properties": {
@@ -1335,6 +1567,31 @@
           "added_at"
         ],
         "title": "PhotoMetadataResponse",
+        "type": "object"
+      },
+      "ResolveAiTagRequest": {
+        "properties": {
+          "action": {
+            "description": "accept adds the label to the photo; reject hides the suggestion; reset reopens a decided one. None of them removes a label.",
+            "enum": [
+              "accept",
+              "reject",
+              "reset"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "action"
+        ],
+        "title": "ResolveAiTagRequest",
         "type": "object"
       },
       "SearchRequest": {
@@ -1565,6 +1822,303 @@
         "title": "SearchRequest",
         "type": "object"
       },
+      "SemanticHitSchema": {
+        "properties": {
+          "photo": {
+            "$ref": "#/components/schemas/PhotoMetadataResponse"
+          },
+          "score": {
+            "description": "Cosine similarity, -1 to 1; higher is closer",
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "photo",
+          "score"
+        ],
+        "title": "SemanticHitSchema",
+        "type": "object"
+      },
+      "SemanticSearchRequest": {
+        "description": "Search by meaning: free text, or \"photos like this one\", plus the usual filters.\n\nExactly one of ``text`` and ``like_hash``. Sorting and paging fields are ignored: the\nresult is the ``k`` best matches, best first.",
+        "properties": {
+          "camera_make": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Make"
+          },
+          "camera_makes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Any of these makes, matched exactly (camera checkboxes)",
+            "title": "Camera Makes"
+          },
+          "camera_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Model"
+          },
+          "collection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Members of this collection",
+            "title": "Collection"
+          },
+          "date_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date End"
+          },
+          "date_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Start"
+          },
+          "flagged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flagged"
+          },
+          "has_capture_date": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "false: only photos with an unknown capture date",
+            "title": "Has Capture Date"
+          },
+          "has_location": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only (un)geotagged photos",
+            "title": "Has Location"
+          },
+          "k": {
+            "default": 50,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "like_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Like Hash"
+          },
+          "location_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Lat"
+          },
+          "location_lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Lon"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 50,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "radius_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radius Km"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "search_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Term"
+          },
+          "sort_by": {
+            "default": "captured_at",
+            "enum": [
+              "captured_at",
+              "size_bytes",
+              "camera_model",
+              "file_name"
+            ],
+            "title": "Sort By",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": "asc",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Sort Order",
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "within": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundingBoxSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only photos inside this map area"
+          }
+        },
+        "title": "SemanticSearchRequest",
+        "type": "object"
+      },
+      "SemanticSearchResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SemanticHitSchema"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "model_id"
+        ],
+        "title": "SemanticSearchResponse",
+        "type": "object"
+      },
       "SyncFolderRequest": {
         "description": "Request schema for an incremental sync of one folder (PMO-19).\n\nOnly records under ``folder_path`` take part, so syncing one folder never\ntouches photos indexed from another.",
         "properties": {
@@ -1684,6 +2238,200 @@
         "summary": "Serve Frontend",
         "tags": [
           "frontend"
+        ]
+      }
+    },
+    "/api/ai-tags": {
+      "get": {
+        "description": "Each label and how many photos carry it in ``status``, most common first.",
+        "operationId": "ai_tag_counts_api_ai_tags_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AiTagStatus",
+              "default": "suggested"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FacetCountSchema"
+                  },
+                  "title": "Response Ai Tag Counts Api Ai Tags Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggested labels and their photo counts",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai-tags/batch": {
+      "post": {
+        "description": "Without ``labels`` this takes every open suggestion of the selected photos; with them,\nexactly those labels. Unknown photos are skipped.",
+        "operationId": "resolve_ai_tags_batch_api_ai_tags_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiTagBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiTagBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept or reject suggestions across many photos",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/analysis/model/download": {
+      "post": {
+        "description": "Start the one-time model download as a job (progress is in bytes).\n\nThe body must say ``{\"accept\": true}``: the UI sends it only after telling the user what is\nfetched (size, source, licence). Only the model is downloaded; no photo data is sent.",
+        "operationId": "download_model_api_analysis_model_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the AI model (needs explicit consent)",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/analysis/run": {
+      "post": {
+        "description": "Analyze every photo that has no embedding from the current model, as a job.\n\nIncremental and safe to repeat. ``reanalyze`` redoes everything; ``limit`` caps one run.\nRefused with 503 without the ``ai`` extra and 409 without the model or while another AI job\nruns. Suggestions never change the user's labels until accepted.",
+        "operationId": "run_analysis_api_analysis_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analyze the library: embeddings and suggested tags",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/analysis/status": {
+      "get": {
+        "operationId": "analysis_status_api_analysis_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "What the AI features need and how far along analysis is",
+        "tags": [
+          "ai"
         ]
       }
     },
@@ -2335,6 +3083,108 @@
         ]
       }
     },
+    "/api/photos/{file_hash}/ai-tags": {
+      "get": {
+        "description": "Every suggestion for the photo in any status, most confident first.",
+        "operationId": "list_photo_ai_tags_api_photos__file_hash__ai_tags_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AiTagSchema"
+                  },
+                  "title": "Response List Photo Ai Tags Api Photos  File Hash  Ai Tags Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A photo's AI tag suggestions",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "description": "``accept`` adds the label to the photo (an ordinary label from then on); ``reject`` keeps\nit from being suggested again; ``reset`` reopens a decided suggestion. None removes a label.",
+        "operationId": "resolve_photo_ai_tag_api_photos__file_hash__ai_tags_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_hash",
+            "required": true,
+            "schema": {
+              "title": "File Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAiTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AiTagSchema"
+                  },
+                  "title": "Response Resolve Photo Ai Tag Api Photos  File Hash  Ai Tags Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept, reject or reopen one suggestion",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/photos/{file_hash}/preview": {
       "get": {
         "description": "A browser-renderable image of any indexed format (HEIC and RAW included, PMO-23).\n\nUp to 2048 px on the long edge, upright, cached like thumbnails. ``/raw`` returns\nthe original bytes, which a browser cannot show for HEIC or RAW.",
@@ -2571,6 +3421,48 @@
         "summary": "Every photo matching a search (hash and size only)",
         "tags": [
           "search"
+        ]
+      }
+    },
+    "/api/search/semantic": {
+      "post": {
+        "description": "Rank analysed photos by similarity to ``text`` (or to the photo ``like_hash``).\n\nThe usual search filters apply and decide who competes. Returns the ``k`` best matches,\nbest first. 409 if nothing (or that photo) has been analysed yet.",
+        "operationId": "semantic_search_api_search_semantic_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SemanticSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SemanticSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Find photos by meaning, or like another photo",
+        "tags": [
+          "ai"
         ]
       }
     },

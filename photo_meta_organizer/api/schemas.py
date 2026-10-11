@@ -281,6 +281,102 @@ class AppConfigResponse(ResponseModel):
     map_tiles_attribution: str | None
 
 
+class AnalysisStatusResponse(ResponseModel):
+    """What the AI features need and how far along they are (Phase 5)."""
+
+    runtime_installed: bool = Field(description="The optional 'ai' extra can be imported")
+    model_installed: bool
+    model_id: str
+    model_source: str
+    model_licence: str
+    download_bytes: int = Field(description="Bytes still to download (0 once installed)")
+    total_photos: int
+    analyzed_photos: int = Field(description="Photos with an embedding from this model")
+    pending_photos: int
+    active_job_id: str | None = Field(description="A running model download or analysis")
+    active_job_kind: str | None
+
+
+class ModelDownloadRequest(BaseModel):
+    """The explicit consent the download needs: the UI sends it after showing what is fetched."""
+
+    accept: Literal[True] = Field(description="Must be true: you agree to download the model")
+
+
+class AnalyzeRequest(BaseModel):
+    reanalyze: bool = Field(default=False, description="Redo every photo, not only new ones")
+    limit: int | None = Field(default=None, ge=1, description="Analyze at most this many photos")
+    tags: bool = Field(default=True, description="Also suggest tags")
+
+
+class SemanticSearchRequest(SearchRequest):
+    """Search by meaning: free text, or "photos like this one", plus the usual filters.
+
+    Exactly one of ``text`` and ``like_hash``. Sorting and paging fields are ignored: the
+    result is the ``k`` best matches, best first.
+    """
+
+    text: str | None = Field(default=None, max_length=500)
+    like_hash: str | None = None
+    k: int = Field(default=50, ge=1, le=200)
+
+    @model_validator(mode="after")
+    def _exactly_one_query(self) -> "SemanticSearchRequest":
+        if self.text is not None:
+            self.text = self.text.strip()
+        if (self.text or None) is None and self.like_hash is None:
+            raise ValueError("give either a non-empty text or a like_hash")
+        if self.text and self.like_hash is not None:
+            raise ValueError("give text or like_hash, not both")
+        return self
+
+
+class SemanticHitSchema(ResponseModel):
+    photo: PhotoMetadataResponse
+    score: float = Field(description="Cosine similarity, -1 to 1; higher is closer")
+
+
+class SemanticSearchResponse(ResponseModel):
+    items: list[SemanticHitSchema]
+    model_id: str
+
+
+class AiTagSchema(ResponseModel):
+    """A label the model suggests for a photo."""
+
+    label: str
+    confidence: float
+    model_id: str
+    status: Literal["suggested", "accepted", "rejected"]
+
+
+class ResolveAiTagRequest(BaseModel):
+    label: str = Field(min_length=1)
+    action: Literal["accept", "reject", "reset"] = Field(
+        description="accept adds the label to the photo; reject hides the suggestion; "
+        "reset reopens a decided one. None of them removes a label."
+    )
+
+
+class AiTagBatchRequest(BaseModel):
+    photo_hashes: list[str] = Field(min_length=1)
+    labels: list[str] | None = Field(
+        default=None, description="Only these labels; omit for every open suggestion"
+    )
+    action: Literal["accept", "reject"]
+
+    @model_validator(mode="after")
+    def _labels_are_real(self) -> "AiTagBatchRequest":
+        if self.labels is not None:
+            self.labels = [validate_tag(label) for label in self.labels]
+        return self
+
+
+class AiTagBatchResponse(ResponseModel):
+    photos_changed: int
+    tags_changed: int
+
+
 class GeoClusterSchema(ResponseModel):
     """Geotagged photos in one map grid cell."""
 

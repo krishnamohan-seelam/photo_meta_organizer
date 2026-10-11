@@ -103,3 +103,24 @@ class TestMapTiles:
     def test_rejects_urls_that_are_not_http_tile_templates(self, url: str) -> None:
         with pytest.raises(ValueError, match="PMO_MAP_TILES_URL"):
             Settings.from_env({"PMO_MAP_TILES_URL": url})
+
+
+class TestModelDir:
+    """Where the downloaded AI model lives (PMO_MODEL_DIR)."""
+
+    def test_default_is_under_the_dev_cache(self) -> None:
+        assert Settings.from_env({}).models_dir == Path(".cache") / "models"
+
+    def test_environment(self, tmp_path) -> None:
+        settings = Settings.from_env({"PMO_MODEL_DIR": str(tmp_path / "m")})
+        assert settings.models_dir == tmp_path / "m"
+
+    def test_data_dir_supplies_it(self, tmp_path) -> None:
+        settings = Settings.from_env({"PMO_DATA_DIR": str(tmp_path)})
+        assert settings.models_dir == tmp_path / "models"
+
+    def test_specific_variable_beats_data_dir_and_flag_beats_both(self, tmp_path) -> None:
+        env = {"PMO_DATA_DIR": str(tmp_path), "PMO_MODEL_DIR": str(tmp_path / "env")}
+        assert Settings.from_env(env).models_dir == tmp_path / "env"
+        flagged = Settings.from_env(env, model_dir=tmp_path / "flag")
+        assert flagged.models_dir == tmp_path / "flag"

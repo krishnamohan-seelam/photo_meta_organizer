@@ -16,6 +16,7 @@ Example:
 import argparse
 import logging
 import sys
+from typing import TYPE_CHECKING
 
 from photo_meta_organizer import __version__
 from photo_meta_organizer.application.interfaces import (
@@ -24,6 +25,9 @@ from photo_meta_organizer.application.interfaces import (
     ImageRetriever,
 )
 from photo_meta_organizer.application.settings import Settings
+
+if TYPE_CHECKING:
+    from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -431,6 +435,117 @@ def handle_prune_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _install_model(store: "ModelStore", args: argparse.Namespace) -> bool:
+    """Download the AI model if the user agrees. Returns whether it is now installed."""
+    from tqdm import tqdm
+
+    manifest = store.manifest
+    print(
+        f"The AI features need a one-time download of {store.missing_bytes() / 1e6:.0f} MB:\n"
+        f"  model:   {manifest.source}\n"
+        f"  licence: {manifest.licence}\n"
+        f"  into:    {store.directory}\n"
+        "Only the model is downloaded (its server sees your IP address); your photos and "
+        "library never leave this computer, and analysis runs offline afterwards."
+    )
+    if not args.download:
+        print("Run again with --download to install it.")
+        return False
+    if not args.yes:
+        if not sys.stdin.isatty():
+            print(
+                "Refusing to download without confirmation: pass --yes to agree.",
+                file=sys.stderr,
+            )
+            return False
+        if input("Download now? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("Cancelled; nothing was downloaded.")
+            return False
+
+    with tqdm(
+        total=store.missing_bytes(), unit="B", unit_scale=True, desc="Downloading", disable=None
+    ) as bar:
+        last = 0
+
+        def on_progress(done: int, total: int) -> None:
+            nonlocal last
+            bar.update(done - last)
+            last = done
+
+        before = store.manifest.total_bytes - store.missing_bytes()
+        last = before
+        store.download(progress=on_progress)
+    return True
+
+
+def handle_analyze_command(args: argparse.Namespace) -> int:
+    """Handle 'analyze' command: embed photos with the AI model and suggest tags.
+
+    Incremental: only photos with no embedding from the current model are processed, so it is
+    safe to interrupt and re-run. Exit code: 0 = success, 1 = could not start (model missing,
+    not agreed, extra not installed), 2 = some files failed (listed on stdout).
+    """
+    from tqdm import tqdm
+
+    from photo_meta_organizer.application import composition
+    from photo_meta_organizer.application.use_cases.analyze_photos_use_case import (
+        AnalyzePhotosUseCase,
+        AnalyzeProgress,
+    )
+    from photo_meta_organizer.infrastructure.analysis.model_store import ModelUnavailableError
+
+    settings = Settings.from_env(model_dir=getattr(args, "model_dir", None))
+    store = composition.build_model_store(settings)
+    try:
+        if not store.is_installed() and not _install_model(store, args):
+            return 1
+        embedder = composition.build_embedder(store)
+        tagger = None if args.no_tags else composition.build_tagger(settings, embedder)
+        repository = build_repository(args)
+        analysis = composition.build_analysis_repository(repository)
+        use_case = AnalyzePhotosUseCase(
+            analysis,
+            embedder,
+            tagger,
+            workers=args.workers,
+            tag_threshold=args.threshold,
+        )
+
+        bar: "tqdm | None" = None
+        last = 0
+
+        def on_progress(p: AnalyzeProgress) -> None:
+            nonlocal bar, last
+            if bar is None:
+                bar = tqdm(total=p.total, unit="photo", desc="Analyzing", disable=None)
+            bar.update(p.processed - last)
+            last = p.processed
+
+        try:
+            report = use_case.run(reanalyze=args.reanalyze, limit=args.limit, progress=on_progress)
+        finally:
+            if bar is not None:
+                bar.close()
+    except ModelUnavailableError as err:
+        print(f"Error: {err}", file=sys.stderr)
+        return 1
+
+    if report.total == 0:
+        print("Nothing to analyze: every photo already has an embedding from this model.")
+        return 0
+    print(
+        f"Analyzed {report.analyzed} photo(s) with {embedder.model_id}"
+        + (f"; suggested tags for {report.tagged}." if tagger else ".")
+    )
+    if report.errors:
+        print(f"Errors ({len(report.errors)}):")
+        for err in report.errors:
+            # ASCII only: a redirected Windows console cannot encode a cross mark.
+            print(f"  x {err}")
+        return 2
+    return 0
+
+
 # ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
@@ -646,6 +761,55 @@ def main() -> int:
         help="Actually merge (default: dry run)",
     )
     dedupe_parser.set_defaults(func=handle_dedupe_command)
+
+    # Analyze command (Phase 5, ADR-002)
+    analyze_parser = subparsers.add_parser(
+        "analyze",
+        help="Embed photos with the AI model and suggest tags (Phase 5)",
+        description=(
+            "Computes an AI embedding for every photo that has none from the current model and "
+            "suggests tags from a fixed vocabulary. Suggestions never change your own tags until "
+            "you accept them. Runs on this computer; the model (about 305 MB) is downloaded once, "
+            "and only with --download and your confirmation. Safe to interrupt and re-run."
+        ),
+    )
+    analyze_parser.add_argument("--db", default=None, help=DB_HELP)
+    analyze_parser.add_argument(
+        "--model-dir",
+        default=None,
+        help="Where the model is stored (default: $PMO_MODEL_DIR, else .cache/models)",
+    )
+    analyze_parser.add_argument(
+        "--download",
+        action="store_true",
+        default=False,
+        help="Download the model if it is not installed (asks first unless --yes)",
+    )
+    analyze_parser.add_argument(
+        "--yes", action="store_true", default=False, help="Agree to the download without asking"
+    )
+    analyze_parser.add_argument(
+        "--reanalyze",
+        action="store_true",
+        default=False,
+        help="Redo every photo, not just those without an embedding",
+    )
+    analyze_parser.add_argument(
+        "--no-tags", action="store_true", default=False, help="Embeddings only; suggest no tags"
+    )
+    analyze_parser.add_argument(
+        "--limit", type=int, default=None, help="Analyze at most this many photos in this run"
+    )
+    analyze_parser.add_argument(
+        "--workers", type=int, default=2, help="Photos decoded in parallel (default: 2)"
+    )
+    analyze_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.05,
+        help="Least confidence (0-1) for a suggested tag (default: 0.05)",
+    )
+    analyze_parser.set_defaults(func=handle_analyze_command)
 
     # Stats command (Phase 2)
     stats_parser = subparsers.add_parser(

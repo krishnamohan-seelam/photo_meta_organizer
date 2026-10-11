@@ -94,3 +94,23 @@ class TestPruneNonImages:
         repo = _FakeRepo([_record("h1", "a.jpg")])
         result = PruneNonImagesUseCase(repo).execute(apply=True)
         assert result.candidates == [] and result.removed == 0
+
+
+class TestBuildAnalysisRepository:
+    def test_shares_the_metadata_repositorys_storage(self, tmp_path):
+        from photo_meta_organizer.application.composition import (
+            build_analysis_repository,
+            build_repository,
+        )
+        from photo_meta_organizer.application.interfaces import AnalysisRepository
+
+        repository = build_repository(str(tmp_path / "a.db"))
+        analysis = build_analysis_repository(repository)
+        assert isinstance(analysis, AnalysisRepository)
+        assert analysis.count_embeddings("m") == 0  # tables exist in the same database
+
+    def test_refuses_a_repository_it_cannot_share_storage_with(self):
+        from photo_meta_organizer.application.composition import build_analysis_repository
+
+        with pytest.raises(TypeError):
+            build_analysis_repository(object())  # type: ignore[arg-type]

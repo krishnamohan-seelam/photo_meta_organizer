@@ -12,6 +12,7 @@ Environment variables:
     PMO_THUMBNAIL_CACHE_MB  size budget of the thumbnail cache (default 1024); least
                        recently used thumbnails are evicted beyond it
     PMO_LOG_DIR        log directory
+    PMO_MODEL_DIR      where the downloaded AI model lives (default <data dir>/models)
     PMO_ALLOWED_HOSTS  comma-separated Host header names the API accepts
     PMO_CORS_ORIGINS   comma-separated origins granted CORS
     PMO_MAP_TILES_URL  opt-in online map tiles, a template with {z}/{x}/{y}. Unset: the Map
@@ -74,6 +75,7 @@ class Settings:
     db_path: Path = Path("photos.db")
     cache_dir: Path | None = None
     log_dir: Path | None = None
+    model_dir: Path | None = None
     thumbnail_cache_mb: int = 1024
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
@@ -86,6 +88,11 @@ class Settings:
         """Where thumbnails are cached (``.cache/thumbnails`` in the dev layout)."""
         return self.cache_dir if self.cache_dir is not None else Path(".cache") / "thumbnails"
 
+    @property
+    def models_dir(self) -> Path:
+        """Where the AI model is stored (``.cache/models`` in the dev layout)."""
+        return self.model_dir if self.model_dir is not None else Path(".cache") / "models"
+
     @classmethod
     def from_env(
         cls,
@@ -95,6 +102,7 @@ class Settings:
         db_path: "str | Path | None" = None,
         cache_dir: "str | Path | None" = None,
         log_dir: "str | Path | None" = None,
+        model_dir: "str | Path | None" = None,
         thumbnail_cache_mb: int | None = None,
         allowed_hosts: Iterable[str] | None = None,
         cors_origins: Iterable[str] | None = None,
@@ -119,6 +127,7 @@ class Settings:
             or Path("photos.db"),
             cache_dir=pick(cache_dir, "PMO_CACHE_DIR", base / "thumbnails" if base else None),
             log_dir=pick(log_dir, "PMO_LOG_DIR", base / "logs" if base else None),
+            model_dir=pick(model_dir, "PMO_MODEL_DIR", base / "models" if base else None),
             thumbnail_cache_mb=(
                 thumbnail_cache_mb
                 if thumbnail_cache_mb is not None
