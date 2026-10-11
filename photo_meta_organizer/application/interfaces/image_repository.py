@@ -11,8 +11,9 @@ The repository pattern provides:
 - Query capabilities for metadata
 """
 
+from collections.abc import Sequence
 from datetime import datetime
-from typing import List, Optional, Protocol, Sequence, Tuple, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from photo_meta_organizer.application.interfaces.search_types import (
     BoundingBox,
@@ -67,8 +68,8 @@ class ImageMetadataRepository(Protocol):
         ...
 
     def geo_clusters(
-        self, query: SearchQuery, bbox: Optional[BoundingBox], cell_degrees: float
-    ) -> List[GeoCluster]:
+        self, query: SearchQuery, bbox: BoundingBox | None, cell_degrees: float
+    ) -> list[GeoCluster]:
         """Group the geotagged records matching ``query`` into square grid cells.
 
         Only the filters of ``query`` apply (paging, sort and the radius filter are
@@ -76,7 +77,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def apply(self, file_hash: str, command: CurationCommand) -> Optional[ImageMetadata]:
+    def apply(self, file_hash: str, command: CurationCommand) -> ImageMetadata | None:
         """Apply one typed curation command to a single record.
 
         Returns:
@@ -121,7 +122,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def refresh_fingerprints(self, updates: Sequence[Tuple[str, int, datetime]]) -> int:
+    def refresh_fingerprints(self, updates: Sequence[tuple[str, int, datetime]]) -> int:
         """Record ``(file_hash, size_bytes, modified_time)`` on existing records.
 
         Sync bookkeeping only; nothing else on the record changes. Returns the number
@@ -129,7 +130,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def get_by_filehash(self, file_hash: str) -> Optional[ImageMetadata]:
+    def get_by_filehash(self, file_hash: str) -> ImageMetadata | None:
         """Retrieve metadata by file hash (for duplicate detection).
 
         Args:
@@ -140,7 +141,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def get_by_path(self, file_path: str) -> Optional[ImageMetadata]:
+    def get_by_path(self, file_path: str) -> ImageMetadata | None:
         """Retrieve metadata by file path.
 
         Args:
@@ -151,7 +152,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def list_all(self) -> List[ImageMetadata]:
+    def list_all(self) -> list[ImageMetadata]:
         """Retrieve all stored image metadata.
 
         Returns:
@@ -185,7 +186,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def find_by_paths(self, paths: List[str]) -> List[ImageMetadata]:
+    def find_by_paths(self, paths: list[str]) -> list[ImageMetadata]:
         """Find multiple records by their file paths.
 
         Args:
@@ -205,7 +206,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def update_metadata(self, file_hash: str, updates: dict) -> Optional[ImageMetadata]:
+    def update_metadata(self, file_hash: str, updates: dict) -> ImageMetadata | None:
         """Update specific fields of an ImageMetadata entity (e.g. rating, flagged, labels).
 
         Deprecated: superseded by :meth:`apply`, which takes a typed
@@ -221,7 +222,7 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
-    def batch_update(self, file_hashes: List[str], updates: dict) -> int:
+    def batch_update(self, file_hashes: list[str], updates: dict) -> int:
         """Apply batch updates across multiple image records atomically.
 
         Deprecated: superseded by :meth:`apply_batch`. Kept only until callers

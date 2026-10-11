@@ -62,9 +62,7 @@ def _dedupe_by_path(records: list[ImageMetadata]) -> tuple[list[ImageMetadata], 
         if len(group) == 1:
             survivors.append(group[0])
             continue
-        ranked = sorted(
-            enumerate(group), key=lambda ir: (ir[1].added_at, ir[0]), reverse=True
-        )
+        ranked = sorted(enumerate(group), key=lambda ir: (ir[1].added_at, ir[0]), reverse=True)
         ordered = [record for _, record in ranked]
         survivors.append(carry_over_curation(ordered[0], *ordered[1:]))
         merged_count += len(ordered) - 1
@@ -90,9 +88,7 @@ def import_legacy_json(json_path: str, sqlite_path: str) -> ImportResult:
             result.imported_count = target.count()
 
             source_collections = TinyDBCollectionRepository(source.db)
-            target_collections = SqliteCollectionRepository(
-                target.connection, target.lock
-            )
+            target_collections = SqliteCollectionRepository(target.connection, target.lock)
             valid_hashes = {m.file_hash for m in survivors}
             for collection in source_collections.list_all():
                 hashes = [h for h in collection.photo_hashes if h in valid_hashes]

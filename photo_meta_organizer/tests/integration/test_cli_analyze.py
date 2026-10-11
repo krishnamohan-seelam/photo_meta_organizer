@@ -209,3 +209,27 @@ class TestAnalysis:
         monkeypatch.setattr(composition, "build_embedder", broken)
         assert _run(monkeypatch, "analyze", "--db", env.db) == 1
         assert "'ai' extra" in capsys.readouterr().err
+
+
+class TestRetag:
+    def test_recomputes_tags_without_embedding_again(self, env, monkeypatch, capsys):
+        assert _run(monkeypatch, "analyze", "--db", env.db, "--download", "--yes") == 0
+        capsys.readouterr()
+        calls = []
+        real = env.embedder.embed_image
+        monkeypatch.setattr(
+            env.embedder, "embed_image", lambda *a, **k: calls.append(1) or real(*a, **k)
+        )
+        assert _run(monkeypatch, "analyze", "--db", env.db, "--retag", "--threshold", "0") == 0
+        assert calls == []
+        assert _tags(env, "h-a.jpg")
+
+    def test_with_nothing_analysed_says_so(self, env, monkeypatch, capsys):
+        env.store.download()
+        assert _run(monkeypatch, "analyze", "--db", env.db, "--retag") == 0
+        assert "Nothing to retag" in capsys.readouterr().out
+
+    def test_cannot_be_combined_with_no_tags(self, env, monkeypatch, capsys):
+        env.store.download()
+        assert _run(monkeypatch, "analyze", "--db", env.db, "--retag", "--no-tags") == 1
+        assert "--no-tags" in capsys.readouterr().err

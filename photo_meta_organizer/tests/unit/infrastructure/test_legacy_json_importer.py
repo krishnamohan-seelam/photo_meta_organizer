@@ -22,14 +22,10 @@ from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
 )
 
 
-def _photo(
-    hash_: str, path: str, added_at: datetime, rating=None, flagged=False
-) -> ImageMetadata:
+def _photo(hash_: str, path: str, added_at: datetime, rating=None, flagged=False) -> ImageMetadata:
     return ImageMetadata(
         file_hash=hash_,
-        file_info=ImageFileInfo(
-            name="a.jpg", path=path, size_bytes=1, mime_type="image/jpeg"
-        ),
+        file_info=ImageFileInfo(name="a.jpg", path=path, size_bytes=1, mime_type="image/jpeg"),
         dimensions=ImageDimensions(width=1, height=1),
         exif=ImageExifData(camera_make="Sony"),
         rating=rating,

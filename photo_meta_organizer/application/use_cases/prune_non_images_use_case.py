@@ -9,7 +9,6 @@ any storage engine. Dry-run is the default: nothing is deleted unless ``apply=Tr
 """
 
 from dataclasses import dataclass, field
-from typing import List
 
 from photo_meta_organizer.application.interfaces import ImageMetadataRepository
 from photo_meta_organizer.domain.formats import is_image_filename
@@ -20,7 +19,7 @@ from photo_meta_organizer.domain.models import ImageMetadata
 class PruneResult:
     """Outcome of a prune run."""
 
-    candidates: List[ImageMetadata] = field(default_factory=list)
+    candidates: list[ImageMetadata] = field(default_factory=list)
     removed: int = 0
 
 

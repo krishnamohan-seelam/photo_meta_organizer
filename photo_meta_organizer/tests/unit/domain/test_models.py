@@ -329,9 +329,7 @@ class TestImageMetadata:
         )
         assert metadata.labels == []
 
-    def test_metadata_with_minimal_exif(
-        self, sample_image_metadata_minimal: ImageMetadata
-    ) -> None:
+    def test_metadata_with_minimal_exif(self, sample_image_metadata_minimal: ImageMetadata) -> None:
         """Test creating metadata for image with no EXIF data."""
         assert sample_image_metadata_minimal.exif.camera_make is None
         assert sample_image_metadata_minimal.exif.captured_at is None
@@ -365,9 +363,7 @@ class TestImageMetadata:
         )
         assert metadata1 == metadata2
 
-    def test_different_metadata_not_equal(
-        self, sample_image_metadata: ImageMetadata
-    ) -> None:
+    def test_different_metadata_not_equal(self, sample_image_metadata: ImageMetadata) -> None:
         """Test that metadata with different hashes are not equal."""
         other_metadata = ImageMetadata(
             file_hash="different_hash",

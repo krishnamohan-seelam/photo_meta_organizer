@@ -100,7 +100,11 @@ def sync_work(
 
 
 def analyze_work(
-    use_case: AnalyzePhotosUseCase, *, reanalyze: bool = False, limit: int | None = None
+    use_case: AnalyzePhotosUseCase,
+    *,
+    reanalyze: bool = False,
+    limit: int | None = None,
+    retag: bool = False,
 ) -> Work:
     """Run AI analysis of the library as a job: progress per photo, cooperative cancel."""
 
@@ -108,12 +112,15 @@ def analyze_work(
         def on_progress(p: AnalyzeProgress) -> None:
             ctx.report_progress(total=p.total, processed=p.processed, failed=p.failed)
 
-        report = use_case.run(
-            reanalyze=reanalyze,
-            limit=limit,
-            progress=on_progress,
-            should_cancel=ctx.cancel_requested,
-        )
+        if retag:
+            report = use_case.retag(progress=on_progress, should_cancel=ctx.cancel_requested)
+        else:
+            report = use_case.run(
+                reanalyze=reanalyze,
+                limit=limit,
+                progress=on_progress,
+                should_cancel=ctx.cancel_requested,
+            )
         failed = len(report.errors)
         verb = "Cancelled after analysing" if report.cancelled else "Analysed"
         message = f"{verb} {report.analyzed} photo(s)."

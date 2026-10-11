@@ -152,7 +152,7 @@ class _Sink(io.RawIOBase):
     def writable(self) -> bool:
         return True
 
-    def write(self, data) -> int:  # type: ignore[override]
+    def write(self, data: bytes | bytearray | memoryview) -> int:  # type: ignore[override]
         self._chunks.append(bytes(data))
         return len(data)
 

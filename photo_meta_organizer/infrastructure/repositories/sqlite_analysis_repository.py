@@ -43,12 +43,17 @@ class SqliteAnalysisRepository:
     def __init__(self, connection: sqlite3.Connection, lock: threading.RLock) -> None:
         self._conn = connection
         self._lock = lock
+        # (model_id, dim) -> (signature, hashes, matrix): the embeddings of one model as one
+        # matrix, so a search is a matrix-vector product, not a table read.
+        self._version = 0
+        self._matrices: dict[tuple[str, int], tuple[tuple[object, ...], list[str], np.ndarray]] = {}
 
     # =========================================================================
     # Embeddings
     # =========================================================================
 
     def save_embeddings(self, items: Sequence[Embedding]) -> int:
+        self._version += 1
         saved = 0
         now = utc_now_naive().isoformat()
         with self._lock, self._conn:
@@ -89,6 +94,14 @@ class SqliteAnalysisRepository:
             file_hash=file_hash, model_id=model_id, vector=tuple(float(x) for x in vector)
         )
 
+    def embedded_hashes(self, model_id: str) -> list[str]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT file_hash FROM photo_embeddings WHERE model_id = ? ORDER BY file_hash",
+                (model_id,),
+            ).fetchall()
+        return [r["file_hash"] for r in rows]
+
     def pending_photos(self, model_id: str, limit: int | None = None) -> list[PendingPhoto]:
         sql = (
             "SELECT p.file_hash, p.path FROM photos p WHERE NOT EXISTS ("
@@ -111,6 +124,7 @@ class SqliteAnalysisRepository:
         return int(row[0])
 
     def clear_embeddings(self, model_id: str | None = None) -> int:
+        self._version += 1
         with self._lock, self._conn:
             if model_id is None:
                 return self._conn.execute("DELETE FROM photo_embeddings").rowcount
@@ -131,30 +145,70 @@ class SqliteAnalysisRepository:
         unit = np.asarray(normalize(vector), dtype=_FLOAT32)
         dim = unit.shape[0]
 
-        sql = "SELECT file_hash, vector FROM photo_embeddings WHERE model_id = ? AND dim = ?"
-        params: list[object] = [model_id, dim]
-        if exclude_hash is not None:
-            sql += " AND file_hash != ?"
-            params.append(exclude_hash)
-        where_sql, where_params = search_where(query) if query is not None else ("", [])
-        if where_sql:
-            # Unqualified columns inside the subquery resolve to ``photos``.
-            sql += f" AND file_hash IN (SELECT file_hash FROM photos {where_sql})"
-            params.extend(where_params)
-        # Hash order makes the stable sort below break ties by hash.
-        sql += " ORDER BY file_hash"
-
         with self._lock:
-            rows = self._conn.execute(sql, params).fetchall()
-        if not rows:
+            hashes, matrix = self._matrix(model_id, dim)
+            allowed: set[str] | None = None
+            where_sql, where_params = search_where(query) if query is not None else ("", [])
+            if where_sql:
+                allowed = {
+                    r[0]
+                    for r in self._conn.execute(
+                        f"SELECT file_hash FROM photos {where_sql}", where_params
+                    )
+                }
+        if not hashes:
             return []
-
-        matrix = np.frombuffer(b"".join(r["vector"] for r in rows), dtype=_FLOAT32).reshape(
-            len(rows), dim
-        )
-        scores = matrix @ unit
+        if allowed is None and exclude_hash is None:
+            rows = np.arange(len(hashes))
+        else:
+            rows = np.fromiter(
+                (
+                    i
+                    for i, h in enumerate(hashes)
+                    if h != exclude_hash and (allowed is None or h in allowed)
+                ),
+                dtype=np.int64,
+            )
+        if rows.size == 0:
+            return []
+        scores = matrix[rows] @ unit if rows.size < len(hashes) else matrix @ unit
+        # ``rows`` is in hash order, so the stable sort breaks ties by hash.
         best = np.argsort(-scores, kind="stable")[:k]
-        return [ScoredPhoto(file_hash=rows[i]["file_hash"], score=float(scores[i])) for i in best]
+        return [ScoredPhoto(file_hash=hashes[rows[i]], score=float(scores[i])) for i in best]
+
+    def _matrix(self, model_id: str, dim: int) -> tuple[list[str], np.ndarray]:
+        """The model's embeddings as (hashes in hash order, matrix), rebuilt only on change.
+
+        The signature is cheap: a counter bumped by this repository's own writes, SQLite's
+        ``data_version`` (writes from another connection) and the row count (a cascade delete
+        from the photos table). Caller holds the lock.
+        """
+        key = (model_id, dim)
+        count = self._conn.execute(
+            "SELECT COUNT(*) FROM photo_embeddings WHERE model_id = ? AND dim = ?",
+            (model_id, dim),
+        ).fetchone()[0]
+        data_version = self._conn.execute("PRAGMA data_version").fetchone()[0]
+        signature = (self._version, data_version, count)
+        cached = self._matrices.get(key)
+        if cached is not None and cached[0] == signature:
+            return cached[1], cached[2]
+        rows = self._conn.execute(
+            "SELECT file_hash, vector FROM photo_embeddings WHERE model_id = ? AND dim = ?",
+            (model_id, dim),
+        ).fetchall()
+        # Sorted here, not in SQL: with the model index the planner would sort the blobs.
+        rows.sort(key=lambda r: r["file_hash"])
+        hashes = [r["file_hash"] for r in rows]
+        matrix = (
+            np.frombuffer(b"".join(r["vector"] for r in rows), dtype=_FLOAT32).reshape(
+                len(rows), dim
+            )
+            if rows
+            else np.empty((0, dim), dtype=_FLOAT32)
+        )
+        self._matrices[key] = (signature, hashes, matrix)
+        return hashes, matrix
 
     # =========================================================================
     # Suggested tags

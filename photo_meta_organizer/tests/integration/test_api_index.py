@@ -5,9 +5,9 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from tests.conftest import wait_for_job
 
 from photo_meta_organizer.api.app import create_app
-from tests.conftest import wait_for_job
 
 
 @pytest.fixture

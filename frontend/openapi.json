@@ -207,6 +207,12 @@
             "title": "Reanalyze",
             "type": "boolean"
           },
+          "retag": {
+            "default": false,
+            "description": "Only recompute suggested tags from the stored embeddings (no photo is opened)",
+            "title": "Retag",
+            "type": "boolean"
+          },
           "tags": {
             "default": true,
             "description": "Also suggest tags",
@@ -839,6 +845,18 @@
       "GeoClustersRequest": {
         "description": "Search filters plus the map viewport: clusters of the geotagged photos that match.",
         "properties": {
+          "ai_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Photos with an open AI suggestion of this label",
+            "title": "Ai Tag"
+          },
           "bbox": {
             "anyOf": [
               {
@@ -1597,6 +1615,18 @@
       "SearchRequest": {
         "description": "Advanced search request body schema.",
         "properties": {
+          "ai_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Photos with an open AI suggestion of this label",
+            "title": "Ai Tag"
+          },
           "camera_make": {
             "anyOf": [
               {
@@ -1843,6 +1873,18 @@
       "SemanticSearchRequest": {
         "description": "Search by meaning: free text, or \"photos like this one\", plus the usual filters.\n\nExactly one of ``text`` and ``like_hash``. Sorting and paging fields are ignored: the\nresult is the ``k`` best matches, best first.",
         "properties": {
+          "ai_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Photos with an open AI suggestion of this label",
+            "title": "Ai Tag"
+          },
           "camera_make": {
             "anyOf": [
               {
@@ -3516,7 +3558,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Check Health Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"

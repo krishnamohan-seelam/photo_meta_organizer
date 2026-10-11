@@ -6,16 +6,18 @@ Supports recursive directory traversal for comprehensive file discovery.
 """
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO, Generator
+from typing import BinaryIO
 
 from photo_meta_organizer.application.interfaces.image_retriever import (
     RemoteFileHandle,
 )
 
 logger = logging.getLogger(__name__)
+
 
 class LocalDiskRetriever:
     """Retrieves image files from the local file system.
@@ -79,9 +81,7 @@ class LocalDiskRetriever:
             )
 
     @contextmanager
-    def get_file_stream(
-        self, file_handle: RemoteFileHandle
-    ) -> Generator[BinaryIO, None, None]:
+    def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:
         """Retrieve a binary stream for a specific file.
 
         Args:

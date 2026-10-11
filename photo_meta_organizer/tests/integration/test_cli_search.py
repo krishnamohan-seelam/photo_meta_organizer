@@ -1,7 +1,8 @@
 """Integration tests for CLI search and stats subcommands in main.py."""
 
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import pytest
 
 from photo_meta_organizer.domain.models import (
@@ -15,8 +16,6 @@ from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
 )
 from photo_meta_organizer.main import (
-    handle_search_command,
-    handle_stats_command,
     main,
 )
 
@@ -38,7 +37,7 @@ def temp_db_path(tmp_path):
         exif=ImageExifData(
             camera_make="Sony",
             camera_model="A7IV",
-            captured_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+            captured_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC),
             location=GpsCoordinates(latitude=37.7749, longitude=-122.4194),
         ),
         labels=["vacation", "beach"],
@@ -56,7 +55,7 @@ def temp_db_path(tmp_path):
         exif=ImageExifData(
             camera_make="Canon",
             camera_model="EOS R5",
-            captured_at=datetime(2024, 3, 20, 15, 30, 0, tzinfo=timezone.utc),
+            captured_at=datetime(2024, 3, 20, 15, 30, 0, tzinfo=UTC),
         ),
         labels=["landscape"],
     )

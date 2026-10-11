@@ -7,8 +7,7 @@ convention by *dropping* the tzinfo without shifting the clock, so comparisons a
 sorting never mix naive and aware values.
 """
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 
 def utc_now_naive() -> datetime:
@@ -17,10 +16,10 @@ def utc_now_naive() -> datetime:
     Bookkeeping stamps (``added_at``, a collection's ``updated_at``) have always been
     naive UTC; this keeps them so without the call deprecated in Python 3.12.
     """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
-def to_naive(value: Optional[datetime]) -> Optional[datetime]:
+def to_naive(value: datetime | None) -> datetime | None:
     """Return ``value`` as a naive datetime (tzinfo dropped, wall clock unchanged)."""
     if value is None or value.tzinfo is None:
         return value

@@ -14,7 +14,9 @@ from photo_meta_organizer.domain.models import (
 def _rec(file_hash="h", rating=None, flagged=False, labels=()):
     return ImageMetadata(
         file_hash=file_hash,
-        file_info=ImageFileInfo(name="a.jpg", path="/p/a.jpg", size_bytes=1, mime_type="image/jpeg"),
+        file_info=ImageFileInfo(
+            name="a.jpg", path="/p/a.jpg", size_bytes=1, mime_type="image/jpeg"
+        ),
         dimensions=ImageDimensions(width=1, height=1),
         exif=ImageExifData(),
         labels=list(labels),
@@ -45,8 +47,8 @@ def test_earlier_source_wins_the_rating_and_labels_are_unioned_in_order():
 
     merged = carry_over_curation(_rec("t"), newest, older, oldest)
 
-    assert merged.rating == 3          # first non-None in priority order
-    assert merged.flagged is True      # flagged if any source was
+    assert merged.rating == 3  # first non-None in priority order
+    assert merged.flagged is True  # flagged if any source was
     assert merged.labels == ["x", "y", "z"]
 
 

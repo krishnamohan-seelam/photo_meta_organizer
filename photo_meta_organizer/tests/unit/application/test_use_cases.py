@@ -5,15 +5,14 @@ the ExtractorOrchestrator and repository for the full pipeline.
 """
 
 import pytest
-from typing import List
-
-from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
-from photo_meta_organizer.domain.models import ImageMetadata
 from tests.conftest import (
     MockImageMetadataRepository,
     MockImageRetriever,
     MockMetadataExtractor,
 )
+
+from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
+from photo_meta_organizer.domain.models import ImageMetadata
 
 
 @pytest.mark.unit

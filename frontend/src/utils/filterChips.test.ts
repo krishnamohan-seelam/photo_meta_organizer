@@ -18,6 +18,12 @@ const base: LibraryFilters = {
 }
 
 describe('filterChips (FR-1d.4)', () => {
+  it('shows an AI-suggested label as a removable chip', () => {
+    expect(filterChips({ ...base, filterAiTag: 'beach' })).toEqual([
+      { id: 'aitag', kind: 'aitag', value: 'beach', label: '✨ beach' },
+    ])
+  })
+
   it('has no chips when nothing is filtered', () => {
     expect(filterChips(base)).toEqual([])
   })

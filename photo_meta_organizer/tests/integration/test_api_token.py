@@ -3,11 +3,11 @@
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from tests.conftest import wait_for_job
 
 from photo_meta_organizer.api.app import create_app
 from photo_meta_organizer.api.auth import TOKEN_COOKIE
 from photo_meta_organizer.application.settings import Settings
-from tests.conftest import wait_for_job
 
 TOKEN = "s3cret-per-launch-token"
 
@@ -42,7 +42,10 @@ def test_requests_without_the_cookie_get_401(app, path):
 def test_writes_without_the_cookie_get_401(app, tmp_path):
     client = _anon(app)
     assert client.post("/api/index", json={"folder_path": str(tmp_path)}).status_code == 401
-    assert client.post("/api/photos/batch", json={"photo_hashes": [], "action": "delete"}).status_code == 401
+    assert (
+        client.post("/api/photos/batch", json={"photo_hashes": [], "action": "delete"}).status_code
+        == 401
+    )
 
 
 def test_wrong_token_gets_401(app):
@@ -53,7 +56,9 @@ def test_wrong_token_gets_401(app):
 def test_token_in_header_or_query_is_not_accepted(app):
     client = _anon(app)
     assert client.get(f"/api/photos?token={TOKEN}").status_code == 401
-    assert client.get("/api/photos", headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 401
+    assert (
+        client.get("/api/photos", headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 401
+    )
 
 
 def test_health_stays_open_for_the_shell_startup_probe(app):

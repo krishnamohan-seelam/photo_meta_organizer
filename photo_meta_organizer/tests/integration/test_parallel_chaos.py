@@ -4,24 +4,23 @@ Simulates parallel execution with corrupted image files, zero-byte streams,
 unreadable binary files, and missing headers to verify system resilience.
 """
 
-import pytest
-import io
-import tempfile
 from pathlib import Path
+
+import pytest
 from PIL import Image
 
 from photo_meta_organizer.application.use_cases import ParallelIndexPhotosUseCase
-from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
-    LocalDiskRetriever,
-)
-from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
-    ExtensionFilteredRetriever,
-)
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
 )
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
+)
+from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
+    ExtensionFilteredRetriever,
+)
+from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
+    LocalDiskRetriever,
 )
 
 
@@ -47,9 +46,7 @@ class TestParallelChaosIndexing:
 
         # 3. Create corrupted JPEG (garbage bytes)
         corrupt_jpg_path = photos_dir / "corrupt_image.jpg"
-        corrupt_jpg_path.write_bytes(
-            b"\xff\xd8\xff\xe0" + b"GARBAGE_EXIF_DATA_CORRUPT" * 20
-        )
+        corrupt_jpg_path.write_bytes(b"\xff\xd8\xff\xe0" + b"GARBAGE_EXIF_DATA_CORRUPT" * 20)
 
         # 4. Create zero-byte JPEG file
         empty_jpg_path = photos_dir / "empty_image.jpg"
@@ -66,13 +63,11 @@ class TestParallelChaosIndexing:
         chaos_directory: Path,
         tmp_path: Path,
     ) -> None:
-        """Pipeline must complete cleanly without crashing, saving valid files and recording errors."""
+        """Pipeline completes cleanly: valid files are saved and errors are recorded."""
         db_file = tmp_path / "chaos_metadata.db"
 
         base_retriever = LocalDiskRetriever(base_path=str(chaos_directory))
-        retriever = ExtensionFilteredRetriever(
-            base_retriever, extensions={".jpg", ".png"}
-        )
+        retriever = ExtensionFilteredRetriever(base_retriever, extensions={".jpg", ".png"})
         extractor = DiskMetaDataExtractor()
         repository = SqliteRepository(db_path=str(db_file))
 

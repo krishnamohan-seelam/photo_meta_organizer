@@ -6,6 +6,7 @@ import type {
   BatchPhotoResponse,
   AppConfig,
   Collection,
+  FacetCount,
   Facets,
   GeoClustersRequest,
   GeoClustersResponse,
@@ -216,6 +217,10 @@ export function startAnalysisApi(options: { reanalyze?: boolean } = {}): Promise
 
 export function semanticSearchApi(body: SemanticSearchRequest): Promise<SemanticSearchResponse> {
   return request('/search/semantic', 'Searching by meaning', jsonInit('POST', body))
+}
+
+export function fetchAiTagCountsApi(): Promise<FacetCount[]> {
+  return request('/ai-tags', 'Loading suggested labels')
 }
 
 export function fetchAiTagsApi(fileHash: string): Promise<AiTag[]> {

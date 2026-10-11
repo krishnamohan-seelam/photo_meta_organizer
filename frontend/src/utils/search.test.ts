@@ -17,6 +17,11 @@ const base: LibraryFilters = {
 }
 
 describe('toSearchRequest (PMO-27)', () => {
+  it('sends an AI-suggested label as `ai_tag`', () => {
+    expect(toSearchRequest({ ...base, filterAiTag: 'beach' }).ai_tag).toBe('beach')
+    expect(toSearchRequest({ ...base, filterAiTag: null })).not.toHaveProperty('ai_tag')
+  })
+
   it('sends the map area as `within`', () => {
     const area = { south: 30, west: 130, north: 40, east: 145 }
     expect(toSearchRequest({ ...base, filterArea: area }).within).toEqual(area)

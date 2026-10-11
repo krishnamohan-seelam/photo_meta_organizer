@@ -1,7 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   errorMessage,
+  fetchAiTagCountsApi,
   fetchAiTagsApi,
   fetchAnalysisStatusApi,
   resolveAiTagApi,
@@ -90,6 +91,26 @@ export function useSemanticSearch(semantic: SemanticQuery | null, k: number = SE
   })
 }
 
+/** Suggested labels and how many photos carry each as an open suggestion. */
+export function useAiTagCounts(enabled: boolean) {
+  return useQuery({
+    queryKey: [...analysisKey, 'counts'],
+    queryFn: fetchAiTagCountsApi,
+    enabled: enabled && !isDemoMode(),
+    retry: false,
+  })
+}
+
+/** The photos of the active search by meaning (empty when none), in rank order. */
+export function useSemanticPhotos() {
+  const semantic = useUiStore((s) => s.semantic)
+  const limit = useUiStore((s) => s.semanticLimit)
+  const query = useSemanticSearch(semantic, limit)
+  const hits = query.data?.items
+  const photos = useMemo(() => (semantic ? (hits ?? []).map((h) => h.photo) : []), [semantic, hits])
+  return { semantic, limit, query, hits: hits ?? [], photos }
+}
+
 /** A photo's suggested tags (any status). */
 export function usePhotoAiTags(hash: string, enabled: boolean = true) {
   return useQuery({
@@ -109,7 +130,8 @@ export function useResolveAiTag(hash: string) {
       resolveAiTagApi(hash, label, action),
     onSuccess: (tags: AiTag[], { action }) => {
       qc.setQueryData([...analysisKey, 'tags', hash], tags)
-      if (action === 'accept') {
+      void qc.invalidateQueries({ queryKey: [...analysisKey, 'counts'] })
+      if (action === 'accept' || useUiStore.getState().filterAiTag) {
         void qc.invalidateQueries({ queryKey: photosKey })
         void qc.invalidateQueries({ queryKey: ['facets'] })
       }

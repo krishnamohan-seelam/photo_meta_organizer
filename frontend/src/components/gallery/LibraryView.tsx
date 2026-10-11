@@ -103,7 +103,7 @@ export const LibraryView: React.FC = () => {
   return (
     <main className="gallery-pane" aria-label="Library">
       <GalleryToolbar />
-      {semantic ? <SemanticResults query={semantic} /> : layout === 'grid' ? <PhotoGallery /> : <PhotoTable />}
+      {semantic ? <SemanticResults /> : layout === 'grid' ? <PhotoGallery /> : <PhotoTable />}
     </main>
   )
 }

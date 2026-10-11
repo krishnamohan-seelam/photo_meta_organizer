@@ -16,11 +16,15 @@ from photo_meta_organizer.domain.models import (
 
 
 class TestImageFormats:
-    @pytest.mark.parametrize("name", ["a.jpg", "A.JPG", "b.jpeg", "c.PNG", "d.heic", "e.NEF", "x.tif"])
+    @pytest.mark.parametrize(
+        "name", ["a.jpg", "A.JPG", "b.jpeg", "c.PNG", "d.heic", "e.NEF", "x.tif"]
+    )
     def test_images(self, name):
         assert is_image_filename(name)
 
-    @pytest.mark.parametrize("name", ["notes.txt", "clip.mp4", "Thumbs.db", "doc.pdf", "noext", ".DS_Store"])
+    @pytest.mark.parametrize(
+        "name", ["notes.txt", "clip.mp4", "Thumbs.db", "doc.pdf", "noext", ".DS_Store"]
+    )
     def test_non_images(self, name):
         assert not is_image_filename(name)
 
@@ -68,7 +72,12 @@ class _FakeRepo:
 class TestPruneNonImages:
     def _repo(self):
         return _FakeRepo(
-            [_record("h1", "a.jpg"), _record("h2", "notes.txt"), _record("h3", "clip.MP4"), _record("h4", "b.PNG")]
+            [
+                _record("h1", "a.jpg"),
+                _record("h2", "notes.txt"),
+                _record("h3", "clip.MP4"),
+                _record("h4", "b.PNG"),
+            ]
         )
 
     def test_dry_run_reports_candidates_and_deletes_nothing(self):

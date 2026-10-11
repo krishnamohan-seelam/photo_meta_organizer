@@ -5,9 +5,9 @@ import sys
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from tests.conftest import wait_for_job
 
 from photo_meta_organizer.api.app import create_app
-from tests.conftest import wait_for_job
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
 )
@@ -27,15 +27,11 @@ def mixed_folder(tmp_path):
 
 def test_api_index_skips_non_image_files(tmp_path, mixed_folder):
     client = TestClient(create_app(db_path=str(tmp_path / "api.db")))
-    resp = client.post(
-        "/api/index", json={"folder_path": mixed_folder, "num_workers": 2}
-    )
+    resp = client.post("/api/index", json={"folder_path": mixed_folder, "num_workers": 2})
     assert resp.status_code == 202
     assert wait_for_job(client, resp.json())["counts"]["indexed"] == 2
 
-    names = sorted(
-        p["file_info"]["name"] for p in client.get("/api/photos").json()["items"]
-    )
+    names = sorted(p["file_info"]["name"] for p in client.get("/api/photos").json()["items"])
     assert names == ["UPPER.PNG", "photo.jpg"]
 
 
@@ -100,9 +96,7 @@ class TestPruneCommand:
     def test_apply_removes_only_non_images(self, polluted_db, monkeypatch):
         from photo_meta_organizer.main import main
 
-        monkeypatch.setattr(
-            sys, "argv", ["prog", "prune", "--db", polluted_db, "--apply"]
-        )
+        monkeypatch.setattr(sys, "argv", ["prog", "prune", "--db", polluted_db, "--apply"])
         assert main() == 0
         repo = SqliteRepository(polluted_db)
         assert sorted(m.file_info.name for m in repo.list_all()) == [

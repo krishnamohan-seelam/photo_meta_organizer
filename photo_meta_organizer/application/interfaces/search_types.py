@@ -5,9 +5,10 @@ to live in the search use case: filtering, sorting, and paging now happen inside
 the repository implementation (``query()``), not in application-layer Python.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Generic, Iterator, List, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from photo_meta_organizer.domain.datetimes import to_naive
 
@@ -39,27 +40,30 @@ class SearchQuery:
     ``date_start``/``date_end`` are normalised to naive local time (ADR D3).
     ``camera_make`` is a case-insensitive substring (CLI search); ``camera_makes`` is
     "any of these makes", matched exactly (the UI's camera checkboxes, PMO-27).
+    ``ai_tag`` selects photos the AI model currently suggests that label for (an open
+    suggestion; accepted ones are ordinary labels, rejected ones are gone).
     ``has_capture_date=False`` selects photos with an unknown date (PMO-24),
-    ``has_location`` geotagged (or not) photos, ``within`` photos inside a map area, ``collection`` a named collection's
-    members.
+    ``has_location`` geotagged (or not) photos, ``within`` photos inside a map area,
+    ``collection`` a named collection's members.
     """
 
-    search_term: Optional[str] = None
-    date_start: Optional[datetime] = None
-    date_end: Optional[datetime] = None
-    camera_make: Optional[str] = None
-    camera_model: Optional[str] = None
-    camera_makes: Optional[List[str]] = None
-    has_capture_date: Optional[bool] = None
-    has_location: Optional[bool] = None
-    within: Optional[BoundingBox] = None
-    collection: Optional[str] = None
-    location_lat: Optional[float] = None
-    location_lon: Optional[float] = None
-    radius_km: Optional[float] = None
-    tags: Optional[List[str]] = None
-    rating: Optional[int] = None
-    flagged: Optional[bool] = None
+    search_term: str | None = None
+    date_start: datetime | None = None
+    date_end: datetime | None = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    camera_makes: list[str] | None = None
+    has_capture_date: bool | None = None
+    has_location: bool | None = None
+    within: BoundingBox | None = None
+    collection: str | None = None
+    ai_tag: str | None = None
+    location_lat: float | None = None
+    location_lon: float | None = None
+    radius_km: float | None = None
+    tags: list[str] | None = None
+    rating: int | None = None
+    flagged: bool | None = None
     sort_by: str = "captured_at"  # captured_at, size_bytes, camera_model, file_name
     sort_order: str = "asc"  # asc, desc
     page: int = 1
@@ -74,7 +78,7 @@ class SearchQuery:
 class Page(Generic[T]):
     """One page of results plus enough metadata to render pagination controls."""
 
-    items: List[T]
+    items: list[T]
     total_count: int
     page: int
     page_size: int
@@ -135,9 +139,9 @@ class LibraryStats:
 class Facets:
     """Aggregate counts used to populate filter UIs."""
 
-    cameras: List[FacetCount] = field(default_factory=list)
-    tags: List[FacetCount] = field(default_factory=list)
-    years: List[FacetCount] = field(default_factory=list)
-    gps_bounds: Optional[GpsBounds] = None
-    isos: List[FacetCount] = field(default_factory=list)
+    cameras: list[FacetCount] = field(default_factory=list)
+    tags: list[FacetCount] = field(default_factory=list)
+    years: list[FacetCount] = field(default_factory=list)
+    gps_bounds: GpsBounds | None = None
+    isos: list[FacetCount] = field(default_factory=list)
     stats: LibraryStats = field(default_factory=LibraryStats)

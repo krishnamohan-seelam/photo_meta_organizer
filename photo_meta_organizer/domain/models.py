@@ -21,7 +21,7 @@ convention with ``domain.datetimes.to_naive`` at the boundaries. See ADR D3.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from photo_meta_organizer.domain.datetimes import utc_now_naive
 
@@ -72,7 +72,7 @@ class ImageFileInfo:
     path: str
     size_bytes: int
     mime_type: str
-    modified_time: Optional[datetime] = None
+    modified_time: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -109,16 +109,14 @@ class GpsCoordinates:
 
     latitude: float
     longitude: float
-    altitude: Optional[float] = None
+    altitude: float | None = None
     datum: str = "WGS84"
 
     def __post_init__(self) -> None:
         if not -90 <= self.latitude <= 90:
             raise ValueError(f"Latitude {self.latitude} out of range [-90, 90]")
         if not -180 <= self.longitude <= 180:
-            raise ValueError(
-                f"Longitude {self.longitude} out of range [-180, 180]"
-            )
+            raise ValueError(f"Longitude {self.longitude} out of range [-180, 180]")
 
 
 # Backward-compatible alias for migration
@@ -154,26 +152,26 @@ class ImageExifData:
     """
 
     # Tier 1: Universal fields (>95% of images)
-    camera_make: Optional[str] = None
-    camera_model: Optional[str] = None
-    f_stop: Optional[float] = None
-    exposure_time: Optional[str] = None
-    iso: Optional[int] = None
-    focal_length: Optional[str] = None
-    captured_at: Optional[datetime] = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    f_stop: float | None = None
+    exposure_time: str | None = None
+    iso: int | None = None
+    focal_length: str | None = None
+    captured_at: datetime | None = None
 
     # Tier 2: Common fields with stable semantics
     camera_profile: CameraProfile = CameraProfile.UNKNOWN
-    location: Optional[GpsCoordinates] = None
-    flash_fired: Optional[bool] = None
-    focal_length_35mm: Optional[str] = None
-    white_balance_mode: Optional[str] = None
-    exposure_program: Optional[str] = None
-    metering_mode: Optional[str] = None
-    orientation: Optional[int] = None
+    location: GpsCoordinates | None = None
+    flash_fired: bool | None = None
+    focal_length_35mm: str | None = None
+    white_balance_mode: str | None = None
+    exposure_program: str | None = None
+    metering_mode: str | None = None
+    orientation: int | None = None
 
     # Tier 3: Camera-specific fields
-    raw_tags: Dict[str, Any] = field(default_factory=dict)
+    raw_tags: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -229,7 +227,7 @@ class ImageMetadata:
     dimensions: ImageDimensions
     exif: ImageExifData
     labels: list[str] = field(default_factory=list)
-    rating: Optional[int] = None
+    rating: int | None = None
     flagged: bool = False
     added_at: datetime = field(default_factory=utc_now_naive)
 
@@ -255,7 +253,7 @@ class FileInfo:
 
     path: str
     size_bytes: int
-    modified_time: Optional[datetime]
+    modified_time: datetime | None
 
 
 @dataclass(frozen=True)
@@ -280,10 +278,10 @@ class FileState:
 
     file_path: str
     state: Literal["NEW", "MODIFIED", "UNCHANGED", "DELETED"]
-    file_hash: Optional[str] = None
-    size_bytes: Optional[int] = None
-    last_modified: Optional[datetime] = None
-    previous_hash: Optional[str] = None  # Only set for MODIFIED
+    file_hash: str | None = None
+    size_bytes: int | None = None
+    last_modified: datetime | None = None
+    previous_hash: str | None = None  # Only set for MODIFIED
     refresh_fingerprint: bool = False  # Only meaningful for UNCHANGED
 
 
@@ -308,7 +306,7 @@ class SyncResult:
     deleted_entries: int = 0
     unchanged_files: int = 0
     fingerprints_refreshed: int = 0
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     duration_seconds: float = 0.0
     cancelled: bool = False
 

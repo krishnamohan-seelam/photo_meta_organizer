@@ -2392,3 +2392,13 @@ dl.kv dd.hash button:hover {
   object-fit: cover;
   display: block;
 }
+.semantic-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+.pill-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

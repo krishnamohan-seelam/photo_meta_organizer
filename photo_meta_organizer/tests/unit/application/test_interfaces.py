@@ -7,21 +7,19 @@ These tests verify that:
 4. ExtractorOrchestrator coordinates components properly
 """
 
-import pytest
 from io import BytesIO
 
-from photo_meta_organizer.application.interfaces import (
-    ImageMetadataExtractor,
-    ImageMetadataRepository,
-    ImageRetriever,
-    RemoteFileHandle,
-)
-from photo_meta_organizer.domain.models import ImageMetadata
+import pytest
 from tests.conftest import (
     MockImageMetadataRepository,
     MockImageRetriever,
     MockMetadataExtractor,
 )
+
+from photo_meta_organizer.application.interfaces import (
+    RemoteFileHandle,
+)
+from photo_meta_organizer.domain.models import ImageMetadata
 
 
 @pytest.mark.unit
@@ -121,7 +119,7 @@ class TestImageMetadataExtractorDependencyInjection:
         metadata2 = mock_extractor.extract(sample_file_handle, stream2)
 
         # Both produce same metadata structure (implementation doesn't care about source)
-        assert type(metadata1) == type(metadata2)
+        assert type(metadata1) is type(metadata2)
         assert metadata1.file_hash == metadata2.file_hash  # Same file handle = same hash (mock)
 
 
@@ -281,10 +279,9 @@ class TestDependencyInjectionComposition:
         Without injected dependencies, multiple extractor instances can
         safely process different files in parallel threads/processes.
         """
-        from io import BytesIO
 
         retriever = MockImageRetriever(files=[sample_file_handle])
-        repository = MockImageMetadataRepository()
+        MockImageMetadataRepository()
 
         # Multiple stateless extractor instances (no shared state)
         extractor1 = MockMetadataExtractor()  # No dependencies
@@ -332,4 +329,4 @@ class TestDependencyInjectionComposition:
         ftp_metadata = extractor.extract(file_handle, ftp_stream)
 
         # Same processing logic for all sources
-        assert type(local_metadata) == type(s3_metadata) == type(ftp_metadata)
+        assert type(local_metadata) is type(s3_metadata) is type(ftp_metadata)

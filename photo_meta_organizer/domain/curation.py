@@ -5,7 +5,7 @@ schema, the repository and the CLI all share them.
 """
 
 from dataclasses import dataclass, field, replace
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from photo_meta_organizer.domain.models import ImageMetadata
 
@@ -13,7 +13,7 @@ MIN_RATING = 1
 MAX_RATING = 5
 
 
-def validate_rating(value: Any) -> Optional[int]:
+def validate_rating(value: Any) -> int | None:
     """Return ``value`` if it is a legal rating (an int in 1..5) or ``None`` (unrated).
 
     ``bool`` is rejected explicitly: ``True`` is an ``int`` in Python but is not a rating.
@@ -94,7 +94,7 @@ def carry_over_curation(target: ImageMetadata, *sources: ImageMetadata) -> Image
 class SetRating:
     """Set (or clear, with ``value=None``) a photo's rating."""
 
-    value: Optional[int]
+    value: int | None
 
     def __post_init__(self) -> None:
         validate_rating(self.value)
@@ -135,10 +135,10 @@ class RemoveTag:
 class SetLabels:
     """Replace a photo's whole label list."""
 
-    value: List[str] = field(default_factory=list)
+    value: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "value", [validate_tag(t) for t in self.value])
 
 
-CurationCommand = Union[SetRating, SetFlag, AddTag, RemoveTag, SetLabels]
+CurationCommand = SetRating | SetFlag | AddTag | RemoveTag | SetLabels

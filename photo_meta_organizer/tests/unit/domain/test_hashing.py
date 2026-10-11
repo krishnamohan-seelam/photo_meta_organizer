@@ -4,6 +4,7 @@ import hashlib
 import io
 
 import pytest
+
 from photo_meta_organizer.domain.hashing import HASH_CHUNK_BYTES, sha256_of_stream
 
 

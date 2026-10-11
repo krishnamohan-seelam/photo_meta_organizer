@@ -708,6 +708,12 @@ export interface components {
              */
             reanalyze?: boolean;
             /**
+             * Retag
+             * @description Only recompute suggested tags from the stored embeddings (no photo is opened)
+             * @default false
+             */
+            retag?: boolean;
+            /**
              * Tags
              * @description Also suggest tags
              * @default true
@@ -954,6 +960,11 @@ export interface components {
          * @description Search filters plus the map viewport: clusters of the geotagged photos that match.
          */
         GeoClustersRequest: {
+            /**
+             * Ai Tag
+             * @description Photos with an open AI suggestion of this label
+             */
+            ai_tag?: string | null;
             /** @description Visible map area */
             bbox?: components["schemas"]["BoundingBoxSchema"] | null;
             /** Camera Make */
@@ -1264,6 +1275,11 @@ export interface components {
          * @description Advanced search request body schema.
          */
         SearchRequest: {
+            /**
+             * Ai Tag
+             * @description Photos with an open AI suggestion of this label
+             */
+            ai_tag?: string | null;
             /** Camera Make */
             camera_make?: string | null;
             /**
@@ -1348,6 +1364,11 @@ export interface components {
          *     result is the ``k`` best matches, best first.
          */
         SemanticSearchRequest: {
+            /**
+             * Ai Tag
+             * @description Photos with an open AI suggestion of this label
+             */
+            ai_tag?: string | null;
             /** Camera Make */
             camera_make?: string | null;
             /**
@@ -2459,7 +2480,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

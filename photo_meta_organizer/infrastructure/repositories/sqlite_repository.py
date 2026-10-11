@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS photo_embeddings (
     created_at TEXT NOT NULL,
     PRIMARY KEY (file_hash, model_id)
 );
+-- Counting a model's embeddings must not read the vectors (the search cache checks it).
+CREATE INDEX IF NOT EXISTS idx_photo_embeddings_model ON photo_embeddings(model_id, dim);
 
 CREATE TABLE IF NOT EXISTS photo_ai_tags (
     file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
@@ -313,7 +315,7 @@ class SqliteRepository:
 
     def count(self) -> int:
         with self.lock:
-            return self.connection.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+            return int(self.connection.execute("SELECT COUNT(*) FROM photos").fetchone()[0])
 
     def _labels_for(self, file_hashes: Sequence[str]) -> dict[str, list[str]]:
         if not file_hashes:
@@ -418,14 +420,18 @@ class SqliteRepository:
             "SELECT AVG(gps_lat) AS lat, AVG(gps_lon) AS lon, COUNT(*) AS n, file_hash, "
             "MAX(COALESCE(captured_at, '')) AS newest FROM photos "
             f"{where_sql} "
-            "GROUP BY CAST((gps_lat + 90.0) / ? AS INTEGER), CAST((gps_lon + 180.0) / ? AS INTEGER) "
+            "GROUP BY CAST((gps_lat + 90.0) / ? AS INTEGER), "
+            "CAST((gps_lon + 180.0) / ? AS INTEGER) "
             "ORDER BY n DESC, file_hash"
         )
         with self.lock:
             rows = self.connection.execute(sql, [*params, cell_degrees, cell_degrees]).fetchall()
         return [
             GeoCluster(
-                latitude=r["lat"], longitude=r["lon"], count=r["n"], representative_hash=r["file_hash"]
+                latitude=r["lat"],
+                longitude=r["lon"],
+                count=r["n"],
+                representative_hash=r["file_hash"],
             )
             for r in rows
         ]
@@ -607,13 +613,13 @@ class SqliteRepository:
 
         command: CurationCommand
         if action == "add_tag":
-            command = AddTag(value)
+            command = AddTag(str(value))
         elif action == "remove_tag":
-            command = RemoveTag(value)
+            command = RemoveTag(str(value))
         elif action == "set_rating":
             command = SetRating(value)
         else:
-            command = SetFlag(value)
+            command = SetFlag(bool(value))
         return self.apply_batch(file_hashes, command)
 
 
@@ -654,6 +660,12 @@ def search_where(query: SearchQuery) -> tuple[str, list[Any]]:
             "file_hash IN (SELECT file_hash FROM collection_photos WHERE collection = ?)"
         )
         params.append(query.collection)
+    if query.ai_tag is not None:
+        clauses.append(
+            "file_hash IN (SELECT file_hash FROM photo_ai_tags WHERE label = ? "
+            "AND status = 'suggested')"
+        )
+        params.append(query.ai_tag)
     if query.rating is not None:
         clauses.append("rating = ?")
         params.append(query.rating)
@@ -678,7 +690,6 @@ def search_where(query: SearchQuery) -> tuple[str, list[Any]]:
         params.extend([term, term, term, term, term])
 
     return (f"WHERE {' AND '.join(clauses)}" if clauses else ""), params
-
 
 
 def _bbox_sql(bbox: BoundingBox) -> tuple[str, list[float]]:

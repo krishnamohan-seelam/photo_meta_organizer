@@ -35,8 +35,7 @@ The Protocol is designed for flexible composition:
     ...     metadata = extractor.extract(file_handle, stream)
 """
 
-from io import BytesIO
-from typing import Protocol
+from typing import BinaryIO, Protocol
 
 from photo_meta_organizer.application.interfaces.image_retriever import (
     RemoteFileHandle,
@@ -62,7 +61,7 @@ class ImageMetadataExtractor(Protocol):
         extract: Extract metadata from a file stream.
     """
 
-    def extract(self, file_handle: RemoteFileHandle, stream: BytesIO) -> ImageMetadata:
+    def extract(self, file_handle: RemoteFileHandle, stream: BinaryIO) -> ImageMetadata:
         """Extract metadata from an image file stream.
 
         This method is completely stateless. It receives both the file handle

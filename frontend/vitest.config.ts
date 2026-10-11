@@ -11,5 +11,8 @@ export default defineConfig({
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
     unstubGlobals: true,
+    // A loaded machine (editor, browser, other test runs) can make a first render slow; 5 s was flaky.
+    testTimeout: 20000,
+    hookTimeout: 20000,
   },
 })

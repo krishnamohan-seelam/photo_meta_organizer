@@ -4,15 +4,17 @@ Tests multi-threaded parallel extraction pipeline, worker thread pool execution,
 poison pill shutdown, DB writer thread operations, and error resilience.
 """
 
-import pytest
 from unittest.mock import MagicMock
-from photo_meta_organizer.application.use_cases import ParallelIndexPhotosUseCase
-from photo_meta_organizer.domain.models import ImageMetadata
+
+import pytest
 from tests.conftest import (
     MockImageMetadataRepository,
     MockImageRetriever,
     MockMetadataExtractor,
 )
+
+from photo_meta_organizer.application.use_cases import ParallelIndexPhotosUseCase
+from photo_meta_organizer.domain.models import ImageMetadata
 
 
 @pytest.mark.unit

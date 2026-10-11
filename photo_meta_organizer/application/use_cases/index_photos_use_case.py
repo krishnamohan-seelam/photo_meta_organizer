@@ -20,7 +20,6 @@ Example:
 """
 
 import logging
-from typing import List
 
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
@@ -64,7 +63,7 @@ class IndexPhotosUseCase:
         self._orchestrator = ExtractorOrchestrator(extractor, retriever)
         self._repository = repository
 
-    def execute(self) -> List[ImageMetadata]:
+    def execute(self) -> list[ImageMetadata]:
         """Run the full indexing pipeline.
 
         Flow:

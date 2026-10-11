@@ -17,10 +17,10 @@ Example:
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 from pathlib import PurePath
-from typing import Callable, List, Optional
 
 from photo_meta_organizer.application.interfaces.image_extractor import (
     ImageMetadataExtractor,
@@ -88,7 +88,7 @@ class ExtractorOrchestrator:
         self._extractor = extractor
         self._retriever = retriever
 
-    def extract_all(self) -> List[ImageMetadata]:
+    def extract_all(self) -> list[ImageMetadata]:
         """Extract metadata from all files discovered by the retriever.
 
         Iterates through all files returned by the retriever, fetches their
@@ -113,7 +113,7 @@ class ExtractorOrchestrator:
             For large file collections, consider using extract_streaming()
             (when available) to avoid loading all results in memory.
         """
-        results: List[ImageMetadata] = []
+        results: list[ImageMetadata] = []
         for file_handle in self._retriever.list_files():
             with self._retriever.get_file_stream(file_handle) as stream:
                 metadata = self._extractor.extract(file_handle, stream)
@@ -167,12 +167,12 @@ class SyncOrchestrator:
 
     def sync(
         self,
-        file_states: List[FileState],
+        file_states: list[FileState],
         cleanup_deleted: bool = False,
         reprocess_modified: bool = True,
         index_new: bool = True,
-        progress: Optional[Callable[[int, int], None]] = None,
-        should_cancel: Optional[Callable[[], bool]] = None,
+        progress: Callable[[int, int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> SyncResult:
         """Apply sync changes to the repository.
 
@@ -200,9 +200,7 @@ class SyncOrchestrator:
             if fs.state == "UNCHANGED":
                 result.unchanged_files += 1
                 if fs.refresh_fingerprint and fs.file_hash and fs.last_modified:
-                    stale_fingerprints.append(
-                        (fs.file_hash, fs.size_bytes or 0, fs.last_modified)
-                    )
+                    stale_fingerprints.append((fs.file_hash, fs.size_bytes or 0, fs.last_modified))
             else:
                 acts = (
                     (fs.state == "DELETED" and cleanup_deleted)
@@ -278,9 +276,7 @@ class SyncOrchestrator:
                 metadata, file_info=replace(metadata.file_info, modified_time=fs.last_modified)
             )
 
-        previous = (
-            self._repository.get_by_filehash(fs.previous_hash) if fs.previous_hash else None
-        )
+        previous = self._repository.get_by_filehash(fs.previous_hash) if fs.previous_hash else None
         same_content = self._repository.get_by_filehash(metadata.file_hash)
         sources = [r for r in (previous, same_content) if r is not None]
         metadata = carry_over_curation(metadata, *sources)

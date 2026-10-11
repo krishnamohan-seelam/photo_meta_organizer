@@ -1,7 +1,7 @@
 import { UNKNOWN_DATE } from './captureDate'
 import type { LibraryFilters } from './search'
 
-export type ChipKind = 'search' | 'camera' | 'model' | 'tag' | 'rating' | 'collection' | 'year' | 'date' | 'geo' | 'area'
+export type ChipKind = 'search' | 'camera' | 'model' | 'tag' | 'rating' | 'collection' | 'year' | 'date' | 'geo' | 'area' | 'aitag'
 
 export interface FilterChip {
   id: string
@@ -41,6 +41,7 @@ export function filterChips(f: LibraryFilters): FilterChip[] {
     chips.push({ id: 'geo', kind: 'geo', value: String(f.filterHasLocation), label: f.filterHasLocation ? 'Geotagged' : 'No location' })
   }
   if (f.filterArea) chips.push({ id: 'area', kind: 'area', value: 'area', label: 'Map area' })
+  if (f.filterAiTag) chips.push({ id: 'aitag', kind: 'aitag', value: f.filterAiTag, label: `✨ ${f.filterAiTag}` })
   return chips
 }
 

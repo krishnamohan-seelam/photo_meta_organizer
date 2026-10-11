@@ -194,6 +194,60 @@ class TestNearest:
         assert [h.file_hash for h in analysis.nearest([1.0, 0.0], k=2, model_id=M)] == ["a", "b"]
 
 
+class TestSearchMatrixCache:
+    """``nearest`` keeps the embeddings in memory; it must never serve a stale answer."""
+
+    def test_sees_embeddings_saved_after_a_search(self, photos, analysis):
+        photos.save_many([_photo("a"), _photo("b")])
+        analysis.save_embeddings([_emb("a", 1.0, 0.0)])
+        assert [h.file_hash for h in analysis.nearest([1.0, 0.0], 5, M)] == ["a"]
+        analysis.save_embeddings([_emb("b", 1.0, 0.1)])
+        assert {h.file_hash for h in analysis.nearest([1.0, 0.0], 5, M)} == {"a", "b"}
+
+    def test_sees_a_replaced_vector(self, photos, analysis):
+        photos.save_many([_photo("a"), _photo("b")])
+        analysis.save_embeddings([_emb("a", 1.0, 0.0), _emb("b", 0.0, 1.0)])
+        assert analysis.nearest([1.0, 0.0], 1, M)[0].file_hash == "a"
+        analysis.save_embeddings([_emb("a", 0.0, 1.0), _emb("b", 1.0, 0.0)])
+        assert analysis.nearest([1.0, 0.0], 1, M)[0].file_hash == "b"
+
+    def test_forgets_a_deleted_photo_and_cleared_embeddings(self, photos, analysis):
+        photos.save_many([_photo("a"), _photo("b")])
+        analysis.save_embeddings([_emb("a", 1.0, 0.0), _emb("b", 0.9, 0.1)])
+        analysis.nearest([1.0, 0.0], 5, M)
+        photos.delete("a")
+        assert [h.file_hash for h in analysis.nearest([1.0, 0.0], 5, M)] == ["b"]
+        analysis.clear_embeddings(M)
+        assert analysis.nearest([1.0, 0.0], 5, M) == []
+
+
+class TestEmbeddedHashes:
+    def test_lists_this_models_photos_in_hash_order(self, photos, analysis):
+        photos.save_many([_photo("b"), _photo("a"), _photo("c")])
+        analysis.save_embeddings([_emb("b", 1.0, 0.0), _emb("a", 1.0, 0.0)])
+        analysis.save_embeddings([_emb("c", 1.0, 0.0, model="other")])
+        assert analysis.embedded_hashes(M) == ["a", "b"]
+        assert analysis.embedded_hashes("none") == []
+
+
+class TestAiTagFilter:
+    def test_search_finds_photos_with_an_open_suggestion_only(self, photos, analysis):
+        photos.save_many([_photo("a"), _photo("b"), _photo("c")])
+        analysis.save_ai_tags("a", [AiTag("beach", 0.5, M)])
+        analysis.save_ai_tags("b", [AiTag("beach", 0.4, M)])
+        analysis.save_ai_tags("c", [AiTag("dog", 0.9, M)])
+        analysis.set_ai_tag_status("b", "beach", AiTagStatus.REJECTED)
+        hits = photos.query(SearchQuery(ai_tag="beach"))
+        assert [p.file_hash for p in hits.items] == ["a"]
+
+    def test_combines_with_other_filters(self, photos, analysis):
+        photos.save_many([_photo("a", make="Sony"), _photo("b", make="Canon")])
+        analysis.save_ai_tags("a", [AiTag("beach", 0.5, M)])
+        analysis.save_ai_tags("b", [AiTag("beach", 0.5, M)])
+        hits = photos.query(SearchQuery(ai_tag="beach", camera_make="Canon"))
+        assert [p.file_hash for p in hits.items] == ["b"]
+
+
 class TestLifecycle:
     """Results belong to a photo's content: they go with it, and only with it."""
 

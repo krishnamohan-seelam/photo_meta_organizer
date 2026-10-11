@@ -1,7 +1,8 @@
 """Unit and performance tests for TinyDBRepository indexing."""
 
-from datetime import datetime, timezone
 import time
+from datetime import UTC, datetime
+
 import pytest
 
 from photo_meta_organizer.domain.models import (
@@ -48,7 +49,7 @@ def create_sample_metadata(i: int, size: int, dt: datetime) -> ImageMetadata:
 
 
 def test_hash_index_fast_lookup(repo):
-    item = create_sample_metadata(1, 1024, datetime(2024, 1, 1, tzinfo=timezone.utc))
+    item = create_sample_metadata(1, 1024, datetime(2024, 1, 1, tzinfo=UTC))
     repo.save(item)
 
     # Hash lookup
@@ -62,7 +63,7 @@ def test_hash_index_fast_lookup(repo):
 
 
 def test_path_index_lookup(repo):
-    item = create_sample_metadata(2, 2048, datetime(2024, 1, 2, tzinfo=timezone.utc))
+    item = create_sample_metadata(2, 2048, datetime(2024, 1, 2, tzinfo=UTC))
     repo.save(item)
 
     retrieved = repo.get_by_path("/photos/img_0002.jpg")
@@ -73,24 +74,24 @@ def test_path_index_lookup(repo):
 
 
 def test_date_range_indexed_search(repo):
-    d1 = datetime(2024, 1, 10, tzinfo=timezone.utc)
-    d2 = datetime(2024, 2, 10, tzinfo=timezone.utc)
-    d3 = datetime(2024, 3, 10, tzinfo=timezone.utc)
+    d1 = datetime(2024, 1, 10, tzinfo=UTC)
+    d2 = datetime(2024, 2, 10, tzinfo=UTC)
+    d3 = datetime(2024, 3, 10, tzinfo=UTC)
 
     repo.save(create_sample_metadata(10, 1000, d1))
     repo.save(create_sample_metadata(20, 2000, d2))
     repo.save(create_sample_metadata(30, 3000, d3))
 
     results = repo.find_by_date_range(
-        date_start=datetime(2024, 2, 1, tzinfo=timezone.utc),
-        date_end=datetime(2024, 2, 28, tzinfo=timezone.utc),
+        date_start=datetime(2024, 2, 1, tzinfo=UTC),
+        date_end=datetime(2024, 2, 28, tzinfo=UTC),
     )
     assert len(results) == 1
     assert results[0].file_hash == "hash_0020"
 
 
 def test_size_range_indexed_search(repo):
-    d = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    d = datetime(2024, 1, 1, tzinfo=UTC)
     repo.save(create_sample_metadata(1, 500, d))
     repo.save(create_sample_metadata(2, 1500, d))
     repo.save(create_sample_metadata(3, 5000, d))
@@ -101,7 +102,7 @@ def test_size_range_indexed_search(repo):
 
 
 def test_index_cleanup_on_delete(repo):
-    item = create_sample_metadata(1, 1024, datetime(2024, 1, 1, tzinfo=timezone.utc))
+    item = create_sample_metadata(1, 1024, datetime(2024, 1, 1, tzinfo=UTC))
     repo.save(item)
 
     assert repo.get_by_filehash("hash_0001") is not None
@@ -112,7 +113,7 @@ def test_index_cleanup_on_delete(repo):
 
 
 def test_index_cleanup_on_delete_by_path(repo):
-    item = create_sample_metadata(1, 1024, datetime(2024, 1, 1, tzinfo=timezone.utc))
+    item = create_sample_metadata(1, 1024, datetime(2024, 1, 1, tzinfo=UTC))
     repo.save(item)
 
     deleted = repo.delete_by_path("/photos/img_0001.jpg")
@@ -124,7 +125,7 @@ def test_index_cleanup_on_delete_by_path(repo):
 def test_indexing_performance_benchmark(temp_db_path):
     # Benchmark O(1) hash lookup with 200 items vs unindexed scan
     repo = TinyDBRepository(db_path=temp_db_path)
-    dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    dt = datetime(2024, 1, 1, tzinfo=UTC)
 
     items = [create_sample_metadata(i, 1000 + i, dt) for i in range(200)]
     for item in items:

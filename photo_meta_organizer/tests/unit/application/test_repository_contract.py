@@ -8,6 +8,7 @@ backend to ``BACKENDS`` and these same test bodies must pass unchanged.
 from datetime import datetime
 
 import pytest
+
 from photo_meta_organizer.application.interfaces.search_types import BoundingBox, SearchQuery
 from photo_meta_organizer.domain.curation import AddTag, RemoveTag, SetFlag, SetLabels, SetRating
 from photo_meta_organizer.domain.models import (

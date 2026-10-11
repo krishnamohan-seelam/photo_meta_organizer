@@ -32,6 +32,49 @@ function renderPanel(seed?: Facets) {
 beforeEach(() => useUiStore.setState({ ...initial, sidebarOpen: true }))
 afterEach(() => vi.unstubAllGlobals())
 
+const aiStatus = {
+  runtime_installed: true,
+  model_installed: true,
+  model_id: 'm',
+  model_source: 's',
+  model_licence: 'l',
+  download_bytes: 0,
+  total_photos: 10,
+  analyzed_photos: 10,
+  pending_photos: 0,
+  active_job_id: null,
+  active_job_kind: null,
+}
+
+describe('LibraryPanel: suggested by AI', () => {
+  function renderWithAi(status: typeof aiStatus | null) {
+    const qc = testQueryClient()
+    qc.setQueryData(['facets'], facets)
+    qc.setQueryData(['collections'], [])
+    if (status) qc.setQueryData(['analysis', 'status'], status)
+    qc.setQueryData(['analysis', 'counts'], [
+      { name: 'beach', count: 4 },
+      { name: 'dog', count: 2 },
+    ])
+    return renderWithQuery(<LibraryPanel />, qc)
+  }
+
+  it('is absent until photos are analysed', () => {
+    renderWithAi({ ...aiStatus, analyzed_photos: 0 })
+    expect(screen.queryByRole('region', { name: 'Suggested by AI' })).toBeNull()
+  })
+
+  it('lists suggested labels with counts and filters by one', () => {
+    renderWithAi(aiStatus)
+    const region = screen.getByRole('region', { name: 'Suggested by AI' })
+    expect(region.textContent).toContain('beach')
+    fireEvent.click(screen.getByRole('button', { name: /beach/ }))
+    expect(useUiStore.getState().filterAiTag).toBe('beach')
+    fireEvent.click(screen.getByRole('button', { name: /beach/ }))
+    expect(useUiStore.getState().filterAiTag).toBeNull()
+  })
+})
+
 describe('LibraryPanel (FR-1d)', () => {
   it('renders every section with no facets at all (AC-1d.2)', () => {
     renderPanel()

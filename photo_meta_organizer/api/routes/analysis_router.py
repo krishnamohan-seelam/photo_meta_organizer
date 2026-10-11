@@ -172,9 +172,13 @@ def run_analysis(
     _require_runtime()
     _require_model(services)
     use_case = AnalyzePhotosUseCase(
-        services.analysis, services.embedder, services.tagger if request.tags else None
+        services.analysis,
+        services.embedder,
+        services.tagger if (request.tags or request.retag) else None,
     )
-    work = analyze_work(use_case, reanalyze=request.reanalyze, limit=request.limit)
+    work = analyze_work(
+        use_case, reanalyze=request.reanalyze, limit=request.limit, retag=request.retag
+    )
     return _submit(services.jobs, "analyze", _job_folder(services), work)
 
 

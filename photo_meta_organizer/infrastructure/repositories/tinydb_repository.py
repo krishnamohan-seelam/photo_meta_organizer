@@ -19,7 +19,7 @@ import json
 import logging
 import math
 import os
-from collections.abc import Sequence
+from collections.abc import MutableMapping, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -27,9 +27,9 @@ from tinydb import Query, TinyDB
 
 from photo_meta_organizer.application.interfaces.search_types import (
     BoundingBox,
-    GeoCluster,
     FacetCount,
     Facets,
+    GeoCluster,
     GpsBounds,
     LibraryStats,
     Page,
@@ -143,7 +143,8 @@ class TinyDBRepository:
             if captured_at_str:
                 try:
                     captured_at_dt = to_naive(datetime.fromisoformat(captured_at_str))
-                    self._captured_at_index.append((captured_at_dt, doc))
+                    if captured_at_dt is not None:
+                        self._captured_at_index.append((captured_at_dt, doc))
                 except (ValueError, TypeError):
                     pass
 
@@ -211,7 +212,7 @@ class TinyDBRepository:
     def _repoint_collections(self, old_hash: str, new_hash: str) -> None:
         """Swap ``old_hash`` for ``new_hash`` in every collection, keeping its position."""
 
-        def swap(doc: dict[str, Any]) -> None:
+        def swap(doc: MutableMapping[Any, Any]) -> None:
             swapped: list[str] = []
             for h in doc.get("photo_hashes", []):
                 h = new_hash if h == old_hash else h
@@ -239,7 +240,7 @@ class TinyDBRepository:
             return 0
         touched = 0
 
-        def apply(doc: dict[str, Any]) -> None:
+        def apply(doc: MutableMapping[Any, Any]) -> None:
             nonlocal touched
             size, mtime = wanted[doc["file_hash"]]
             doc["file_info"]["size_bytes"] = size
@@ -468,9 +469,7 @@ class TinyDBRepository:
             (exif.captured_at is not None) != query.has_capture_date
         ):
             return False
-        if query.has_location is not None and (
-            (exif.location is not None) != query.has_location
-        ):
+        if query.has_location is not None and ((exif.location is not None) != query.has_location):
             return False
         if query.within is not None and (
             exif.location is None
@@ -527,7 +526,7 @@ class TinyDBRepository:
     ) -> list[ImageMetadata]:
         reverse = sort_order.lower() == "desc"
 
-        def get_sort_key(record: ImageMetadata):
+        def get_sort_key(record: ImageMetadata) -> Any:
             if sort_by == "size_bytes":
                 return record.file_info.size_bytes or 0
             elif sort_by == "camera_model":
@@ -845,7 +844,7 @@ class TinyDBRepository:
                 count += 1
                 continue
             if action == "add_tag":
-                doc["labels"] = merge_labels(doc.get("labels", []), [value])
+                doc["labels"] = merge_labels(doc.get("labels", []), [str(value)])
             elif action == "remove_tag":
                 doc["labels"] = [t for t in doc.get("labels", []) if t != value]
             elif action == "set_rating":

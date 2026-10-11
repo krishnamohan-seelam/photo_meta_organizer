@@ -9,6 +9,7 @@ import argparse
 from datetime import UTC, datetime
 
 import pytest
+
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,

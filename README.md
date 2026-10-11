@@ -268,9 +268,13 @@ python -m photo_meta_organizer.main analyze --db photos.db --download
 # Afterwards: only photos with no embedding yet are processed, so it is safe to interrupt and re-run
 python -m photo_meta_organizer.main analyze --db photos.db
 python -m photo_meta_organizer.main analyze --db photos.db --no-tags --limit 500 --reanalyze
+
+# After changing --threshold (or the vocabulary): recompute only the suggested tags from the stored
+# embeddings. No photo is opened, so it takes seconds; accepted and rejected tags are kept.
+python -m photo_meta_organizer.main analyze --db photos.db --retag --threshold 0.03
 ```
 
-Suggested tags never touch your own tags until you accept them, and a rejected suggestion is not suggested for that photo again. A modified file is analysed again on the next run. Expect roughly 10 photos a second (about 35 minutes for 20,000), once. The same work is available over the API (see Features): download the model, run the analysis, search by meaning and review tags, all as jobs and requests. The app has the same flow: the sparkle button in the top bar walks through the consent, the download and the analysis, with progress in the job pill.
+Suggested tags never touch your own tags until you accept them, and a rejected suggestion is not suggested for that photo again. A modified file is analysed again on the next run. Expect roughly 10 photos a second (about 35 minutes for 20,000), once. The same work is available over the API (see Features): download the model, run the analysis, search by meaning and review tags, all as jobs and requests. In the app the Library panel lists “Suggested by AI” labels with counts (click one to filter), and a search by meaning has “Show more”, opens in the viewer and takes the grid's keys. The app has the same flow: the sparkle button in the top bar walks through the consent, the download and the analysis, with progress in the job pill.
 
 ### Prune Non-Image Records
 

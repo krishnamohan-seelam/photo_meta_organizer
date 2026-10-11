@@ -20,7 +20,9 @@ def repo(tmp_path):
     repository.save(
         ImageMetadata(
             file_hash="h1",
-            file_info=ImageFileInfo(name="a.jpg", path="/a.jpg", size_bytes=1, mime_type="image/jpeg"),
+            file_info=ImageFileInfo(
+                name="a.jpg", path="/a.jpg", size_bytes=1, mime_type="image/jpeg"
+            ),
             dimensions=ImageDimensions(width=1, height=1),
             exif=ImageExifData(captured_at=datetime(2026, 1, 1)),
             rating=2,

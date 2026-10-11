@@ -198,6 +198,15 @@ class TestRunAnalysis:
         assert job["counts"]["analyzed"] == 2 and job["failed_count"] == 1
         assert "beach.jpg" in job["errors"][0]
 
+    def test_retag_recomputes_from_stored_embeddings(self, api):
+        _install(api)
+        _analyze(api)
+        api.analysis.save_ai_tags("h-tiger", [])  # nothing to start from
+        job = _analyze(api, retag=True)
+        assert job["status"] == "succeeded", job
+        assert job["counts"]["analyzed"] == 3
+        assert job["counts"]["total"] == 3
+
     def test_rejects_a_nonsense_limit(self, api):
         _install(api)
         assert api.client.post("/api/analysis/run", json={"limit": 0}).status_code == 422
@@ -391,6 +400,15 @@ class TestAiTags:
         api.client.post("/api/photos/h-tiger/ai-tags", json={"label": "zoo", "action": "accept"})
         accepted = api.client.get("/api/ai-tags", params={"status": "accepted"}).json()
         assert accepted == [{"name": "zoo", "count": 1}]
+
+    def test_search_can_filter_by_an_open_suggestion(self, api):
+        found = api.client.post("/api/search", json={"ai_tag": "zoo"}).json()
+        assert {p["file_hash"] for p in found["items"]} == {"h-tiger", "h-beach"}
+        api.client.post("/api/photos/h-beach/ai-tags", json={"label": "zoo", "action": "reject"})
+        found = api.client.post("/api/search", json={"ai_tag": "zoo"}).json()
+        assert [p["file_hash"] for p in found["items"]] == ["h-tiger"]
+        both = api.client.post("/api/search", json={"ai_tag": "zoo", "camera_makes": ["Canon"]})
+        assert both.json()["items"] == []
 
     def test_an_unknown_status_filter_is_422(self, api):
         assert api.client.get("/api/ai-tags", params={"status": "maybe"}).status_code == 422

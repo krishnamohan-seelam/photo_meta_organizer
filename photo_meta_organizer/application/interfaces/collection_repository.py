@@ -7,7 +7,7 @@ photo referenced by a collection is deleted.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class CollectionRecord:
 
     name: str
     description: str = ""
-    photo_hashes: List[str] = field(default_factory=list)
+    photo_hashes: list[str] = field(default_factory=list)
     updated_at: str = ""
 
 
@@ -24,15 +24,15 @@ class CollectionRecord:
 class CollectionRepository(Protocol):
     """Protocol defining the contract for collection persistence."""
 
-    def list_all(self) -> List[CollectionRecord]:
+    def list_all(self) -> list[CollectionRecord]:
         """Return every stored collection."""
         ...
 
-    def get(self, name: str) -> Optional[CollectionRecord]:
+    def get(self, name: str) -> CollectionRecord | None:
         """Return the collection named ``name``, or ``None``."""
         ...
 
-    def save(self, name: str, photo_hashes: List[str], description: str = "") -> CollectionRecord:
+    def save(self, name: str, photo_hashes: list[str], description: str = "") -> CollectionRecord:
         """Create or update a named collection (upsert semantics)."""
         ...
 

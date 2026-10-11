@@ -3,6 +3,7 @@
 import threading
 
 import pytest
+
 from photo_meta_organizer.application.jobs import (
     JobConflictError,
     JobManager,

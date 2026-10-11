@@ -23,8 +23,10 @@ Security model (local application):
 
 import dataclasses
 import sys
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -103,7 +105,7 @@ def create_app(
         A fully configured FastAPI application instance with all routes mounted.
     """
     base = settings or Settings.from_env()
-    overrides = {
+    overrides: dict[str, Any] = {
         "db_path": Path(db_path) if db_path is not None else None,
         "cache_dir": Path(cache_dir) if cache_dir is not None else None,
         "allowed_hosts": tuple(allowed_hosts) if allowed_hosts is not None else None,
@@ -114,7 +116,7 @@ def create_app(
     job_manager = JobManager()
 
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
         # Stop background jobs cleanly so none is killed mid-write at exit.
         job_manager.shutdown()
@@ -199,9 +201,9 @@ def create_app(
             _captured_path = str(_path)  # capture for closure
             _captured_name = _static_file
 
-            def _make_static_route(file_path: str, file_name: str):
+            def _make_static_route(file_path: str, file_name: str) -> Callable[[str], FileResponse]:
                 @app.get(f"/{file_name}", tags=["frontend"], include_in_schema=False)
-                def _static_route(fp=file_path):
+                def _static_route(fp: str = file_path) -> FileResponse:
                     return FileResponse(fp)
 
                 return _static_route
@@ -209,7 +211,7 @@ def create_app(
             _make_static_route(_captured_path, _captured_name)
 
     @app.get("/health", tags=["health"])
-    def health_check(request: Request):
+    def health_check(request: Request) -> dict[str, Any]:
         """Health check endpoint (open even with a launch token; then the photo count
         is reported only to requests that carry the token cookie)."""
         if settings.api_token and not is_authenticated(request.scope, settings.api_token):
@@ -217,7 +219,7 @@ def create_app(
         return {"status": "ok", "photo_count": repository.count()}
 
     @app.get("/", tags=["frontend"], response_class=HTMLResponse)
-    def serve_frontend():
+    def serve_frontend() -> HTMLResponse:
         """Serve Phase 4 Production React Frontend application."""
         index_html = frontend_dist / "index.html"
         if index_html.exists():

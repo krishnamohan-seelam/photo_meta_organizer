@@ -5,12 +5,12 @@ error accumulation, and SyncResult population.  All I/O is mocked.
 """
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock
 
 import pytest
 
+from photo_meta_organizer.application.use_cases import SynchronizeMetadataUseCase
 from photo_meta_organizer.domain.models import (
-    FileInfo,
     FileState,
     ImageDimensions,
     ImageExifData,
@@ -18,9 +18,7 @@ from photo_meta_organizer.domain.models import (
     ImageMetadata,
     SyncResult,
 )
-from photo_meta_organizer.application.use_cases import SynchronizeMetadataUseCase
 from photo_meta_organizer.domain.services import MetadataStateAnalyzer
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -89,7 +87,9 @@ class TestSynchronizeMetadataUseCaseFlags:
             analyzer=analyzer,
         )
 
-    def test_dry_run_does_not_write(self, mock_retriever, mock_extractor, mock_repository, mock_analyzer, tmp_path):
+    def test_dry_run_does_not_write(
+        self, mock_retriever, mock_extractor, mock_repository, mock_analyzer, tmp_path
+    ):
         """In dry_run mode, no save/delete should be called on the repository."""
         mock_retriever.list_files.return_value = iter([])
         mock_analyzer.analyze_changes.return_value = [
@@ -97,7 +97,9 @@ class TestSynchronizeMetadataUseCaseFlags:
             FileState(file_path="/b.jpg", state="DELETED", file_hash=HASH_B),
         ]
 
-        use_case = self._make_use_case(mock_retriever, mock_extractor, mock_repository, mock_analyzer)
+        use_case = self._make_use_case(
+            mock_retriever, mock_extractor, mock_repository, mock_analyzer
+        )
         result = use_case.execute(
             cleanup_deleted=True, reprocess_modified=True, index_new=True, dry_run=True
         )
@@ -110,19 +112,27 @@ class TestSynchronizeMetadataUseCaseFlags:
         assert result.new_files == 1
         assert result.deleted_entries == 1
 
-    def test_returns_sync_result_type(self, mock_retriever, mock_extractor, mock_repository, mock_analyzer):
+    def test_returns_sync_result_type(
+        self, mock_retriever, mock_extractor, mock_repository, mock_analyzer
+    ):
         mock_retriever.list_files.return_value = iter([])
         mock_analyzer.analyze_changes.return_value = []
 
-        use_case = self._make_use_case(mock_retriever, mock_extractor, mock_repository, mock_analyzer)
+        use_case = self._make_use_case(
+            mock_retriever, mock_extractor, mock_repository, mock_analyzer
+        )
         result = use_case.execute()
         assert isinstance(result, SyncResult)
 
-    def test_duration_seconds_set(self, mock_retriever, mock_extractor, mock_repository, mock_analyzer):
+    def test_duration_seconds_set(
+        self, mock_retriever, mock_extractor, mock_repository, mock_analyzer
+    ):
         mock_retriever.list_files.return_value = iter([])
         mock_analyzer.analyze_changes.return_value = []
 
-        use_case = self._make_use_case(mock_retriever, mock_extractor, mock_repository, mock_analyzer)
+        use_case = self._make_use_case(
+            mock_retriever, mock_extractor, mock_repository, mock_analyzer
+        )
         result = use_case.execute()
         assert result.duration_seconds >= 0.0
 
@@ -130,7 +140,6 @@ class TestSynchronizeMetadataUseCaseFlags:
         self, mock_extractor, mock_repository, mock_analyzer
     ):
         """PMO-22: no Path.stat() in the use case; the handle carries size and mtime."""
-        from datetime import datetime
 
         from photo_meta_organizer.application.interfaces.image_retriever import RemoteFileHandle
 
@@ -157,14 +166,18 @@ class TestSynchronizeMetadataUseCaseFlags:
         # Unknown mtime is passed on as unknown; the analyzer then verifies by hash.
         assert disk_files["/nowhere/b.jpg"].modified_time is None
 
-    def test_unchanged_count_populated(self, mock_retriever, mock_extractor, mock_repository, mock_analyzer):
+    def test_unchanged_count_populated(
+        self, mock_retriever, mock_extractor, mock_repository, mock_analyzer
+    ):
         mock_retriever.list_files.return_value = iter([])
         mock_analyzer.analyze_changes.return_value = [
             FileState(file_path="/a.jpg", state="UNCHANGED", file_hash=HASH_A, size_bytes=100),
             FileState(file_path="/b.jpg", state="UNCHANGED", file_hash=HASH_B, size_bytes=200),
         ]
 
-        use_case = self._make_use_case(mock_retriever, mock_extractor, mock_repository, mock_analyzer)
+        use_case = self._make_use_case(
+            mock_retriever, mock_extractor, mock_repository, mock_analyzer
+        )
         result = use_case.execute()
         assert result.unchanged_files == 2
 

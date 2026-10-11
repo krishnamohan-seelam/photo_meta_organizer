@@ -12,7 +12,6 @@ Example:
     $ python -m photo_meta_organizer.main index --path /photos --db photos.db
 """
 
-
 import argparse
 import logging
 import sys
@@ -131,7 +130,7 @@ def handle_index_command(args: argparse.Namespace) -> int:
         if report.errors:
             print(f"Errors ({len(report.errors)}):")
             for err in report.errors:
-                print(f"  ✗ {err}")
+                print(f"  x {err}")
         return 0 if not report.errors else 2
 
     from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
@@ -208,7 +207,8 @@ def handle_search_command(args: argparse.Namespace) -> int:
     result = use_case.execute(query)
 
     print(
-        f"\nSearch Results (Page {result.page} of {result.total_pages} | Total: {result.total_count}):\n"
+        f"\nSearch Results (Page {result.page} of {result.total_pages} | "
+        f"Total: {result.total_count}):\n"
     )
 
     if not result.items:
@@ -272,8 +272,8 @@ def handle_stats_command(args: argparse.Namespace) -> int:
         total_photos = len(all_metadata)
 
         total_bytes = 0
-        mime_counts = Counter()
-        camera_counts = Counter()
+        mime_counts: Counter[str] = Counter()
+        camera_counts: Counter[str] = Counter()
         dates = []
 
         for item in all_metadata:
@@ -382,7 +382,7 @@ def handle_sync_command(args: argparse.Namespace) -> int:
     if result.errors:
         print(f"Errors ({len(result.errors)}):")
         for err in result.errors:
-            print(f"  ✗ {err}")
+            print(f"  x {err}")
     return 0 if not result.errors else 2
 
 
@@ -511,7 +511,7 @@ def handle_analyze_command(args: argparse.Namespace) -> int:
             tag_threshold=args.threshold,
         )
 
-        bar: "tqdm | None" = None
+        bar: tqdm | None = None
         last = 0
 
         def on_progress(p: AnalyzeProgress) -> None:
@@ -522,7 +522,15 @@ def handle_analyze_command(args: argparse.Namespace) -> int:
             last = p.processed
 
         try:
-            report = use_case.run(reanalyze=args.reanalyze, limit=args.limit, progress=on_progress)
+            if args.retag:
+                if tagger is None:
+                    print("Error: --retag cannot be combined with --no-tags.", file=sys.stderr)
+                    return 1
+                report = use_case.retag(progress=on_progress)
+            else:
+                report = use_case.run(
+                    reanalyze=args.reanalyze, limit=args.limit, progress=on_progress
+                )
         finally:
             if bar is not None:
                 bar.close()
@@ -530,6 +538,9 @@ def handle_analyze_command(args: argparse.Namespace) -> int:
         print(f"Error: {err}", file=sys.stderr)
         return 1
 
+    if report.total == 0 and args.retag:
+        print("Nothing to retag: no photo has been analyzed yet.")
+        return 0
     if report.total == 0:
         print("Nothing to analyze: every photo already has an embedding from this model.")
         return 0
@@ -539,9 +550,9 @@ def handle_analyze_command(args: argparse.Namespace) -> int:
     )
     if report.errors:
         print(f"Errors ({len(report.errors)}):")
-        for err in report.errors:
+        for failure in report.errors:
             # ASCII only: a redirected Windows console cannot encode a cross mark.
-            print(f"  x {err}")
+            print(f"  x {failure}")
         return 2
     return 0
 
@@ -795,6 +806,12 @@ def main() -> int:
         help="Redo every photo, not just those without an embedding",
     )
     analyze_parser.add_argument(
+        "--retag",
+        action="store_true",
+        default=False,
+        help="Only recompute suggested tags from the stored embeddings (fast; opens no photos)",
+    )
+    analyze_parser.add_argument(
         "--no-tags", action="store_true", default=False, help="Embeddings only; suggest no tags"
     )
     analyze_parser.add_argument(
@@ -838,7 +855,7 @@ def main() -> int:
 
         # Dispatch to command handler
         logger.debug("Executing command: %s", args.command)
-        return args.func(args)
+        return int(args.func(args))
 
     except Exception as e:
         logger.exception("Unexpected error: %s", e)

@@ -5,9 +5,10 @@ ImageRetriever implementation. It's an example of the Decorator pattern
 in action, allowing composition of retriever capabilities.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import BinaryIO, Generator
+from typing import BinaryIO
 
 from photo_meta_organizer.application.interfaces.image_retriever import (
     ImageRetriever,
@@ -65,9 +66,7 @@ class ExtensionFilteredRetriever:
                 yield handle
 
     @contextmanager
-    def get_file_stream(
-        self, file_handle: RemoteFileHandle
-    ) -> Generator[BinaryIO, None, None]:
+    def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:
         """Retrieve a file stream from the underlying retriever.
 
         Args:

@@ -5,10 +5,11 @@ for discovering and accessing image files stored in Amazon S3 buckets.
 Supports pagination to handle large buckets efficiently.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import PurePosixPath
-from typing import Any, BinaryIO, Generator, Optional
+from typing import Any, BinaryIO
 
 import boto3
 
@@ -17,11 +18,12 @@ from photo_meta_organizer.application.interfaces.image_retriever import (
 )
 
 
-def _local_naive(value: Optional[datetime]) -> Optional[datetime]:
+def _local_naive(value: datetime | None) -> datetime | None:
     """S3's LastModified (aware UTC) as naive local time, the stored convention (ADR D3)."""
     if value is None:
         return None
     return value.astimezone().replace(tzinfo=None) if value.tzinfo else value
+
 
 class S3ImageRetriever:
     """Retrieves image files from Amazon S3 buckets.
@@ -85,9 +87,7 @@ class S3ImageRetriever:
                 )
 
     @contextmanager
-    def get_file_stream(
-        self, file_handle: RemoteFileHandle
-    ) -> Generator[BinaryIO, None, None]:
+    def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:
         """Retrieve a binary stream for a specific S3 object.
 
         Args:

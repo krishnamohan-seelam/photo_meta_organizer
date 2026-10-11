@@ -5,13 +5,13 @@ with 1, 2, 4, 8 worker threads, measures throughput (images/min), execution time
 and peak memory consumption using tracemalloc.
 """
 
-import os
-import sys
-import time
 import shutil
+import sys
 import tempfile
+import time
 import tracemalloc
 from pathlib import Path
+
 from PIL import Image
 
 # Ensure package is on sys.path when running script directly
@@ -23,17 +23,17 @@ from photo_meta_organizer.application.use_cases import (
     IndexPhotosUseCase,
     ParallelIndexPhotosUseCase,
 )
-from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
-    LocalDiskRetriever,
-)
-from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
-    ExtensionFilteredRetriever,
-)
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
 )
 from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
     TinyDBRepository,
+)
+from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
+    ExtensionFilteredRetriever,
+)
+from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
+    LocalDiskRetriever,
 )
 
 
@@ -41,7 +41,7 @@ def generate_synthetic_images(target_dir: Path, count: int = 100) -> None:
     """Generate synthetic JPEG image files for benchmarking."""
     print(f"Generating {count} synthetic test images in {target_dir}...")
     target_dir.mkdir(parents=True, exist_ok=True)
-    
+
     colors = ["red", "green", "blue", "yellow", "purple", "cyan"]
     for i in range(count):
         filename = target_dir / f"bench_img_{i:04d}.jpg"
@@ -64,6 +64,7 @@ def run_benchmark_for_workers(photos_dir: Path, db_dir: Path, workers: int) -> d
     tracemalloc.start()
     start_time = time.time()
 
+    use_case: IndexPhotosUseCase | ParallelIndexPhotosUseCase
     if workers == 1:
         use_case = IndexPhotosUseCase(
             retriever=retriever,
@@ -84,7 +85,9 @@ def run_benchmark_for_workers(photos_dir: Path, db_dir: Path, workers: int) -> d
     tracemalloc.stop()
 
     processed_count = len(results)
-    throughput_imgs_per_min = (processed_count / elapsed_seconds) * 60.0 if elapsed_seconds > 0 else 0.0
+    throughput_imgs_per_min = (
+        (processed_count / elapsed_seconds) * 60.0 if elapsed_seconds > 0 else 0.0
+    )
 
     return {
         "workers": workers,
@@ -95,7 +98,7 @@ def run_benchmark_for_workers(photos_dir: Path, db_dir: Path, workers: int) -> d
     }
 
 
-def main():
+def main() -> None:
     temp_dir = Path(tempfile.mkdtemp(prefix="pmo_benchmark_"))
     try:
         photos_dir = temp_dir / "photos"
@@ -111,7 +114,10 @@ def main():
         print("\n=======================================================")
         print("  PHOTO META ORGANIZER - PERFORMANCE BENCHMARK SUITE   ")
         print("=======================================================\n")
-        print(f"{'Workers':<10} | {'Processed':<10} | {'Elapsed (s)':<12} | {'Imgs/Min':<12} | {'Peak RAM (MB)':<12}")
+        print(
+            f"{'Workers':<10} | {'Processed':<10} | {'Elapsed (s)':<12} | "
+            f"{'Imgs/Min':<12} | {'Peak RAM (MB)':<12}"
+        )
         print("-" * 70)
 
         for w in worker_configs:
@@ -131,11 +137,17 @@ def main():
         baseline_time = results[0]["elapsed_seconds"]
         print("\nSpeedup vs Single-Threaded:")
         for res in results:
-            speedup = round(baseline_time / res["elapsed_seconds"], 2) if res["elapsed_seconds"] > 0 else 1.0
-            print(f"  - {res['workers']} Worker(s): {speedup}x speedup ({res['throughput_imgs_per_min']} imgs/min)")
+            speedup = (
+                round(baseline_time / res["elapsed_seconds"], 2)
+                if res["elapsed_seconds"] > 0
+                else 1.0
+            )
+            print(
+                f"  - {res['workers']} Worker(s): {speedup}x speedup "
+                f"({res['throughput_imgs_per_min']} imgs/min)"
+            )
 
         print("\nBenchmark completed successfully.")
-        return results
 
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)

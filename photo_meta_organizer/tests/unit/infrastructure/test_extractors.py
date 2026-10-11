@@ -8,11 +8,11 @@ Tests for _ExifFieldMapper internal utility class including:
 - Raw tags filtering
 """
 
-import pytest
 from datetime import datetime
 from unittest.mock import Mock
 
-from photo_meta_organizer.domain.models import CameraProfile, GpsCoordinates
+import pytest
+
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     _ExifFieldMapper,
 )

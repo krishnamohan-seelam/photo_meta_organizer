@@ -6,20 +6,17 @@ the hybrid fingerprinting logic, path normalisation, and edge cases.
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
 from photo_meta_organizer.domain.models import (
     FileInfo,
-    FileState,
     ImageDimensions,
     ImageExifData,
     ImageFileInfo,
     ImageMetadata,
 )
 from photo_meta_organizer.domain.services import MetadataStateAnalyzer
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -282,8 +279,6 @@ class TestMetadataStateAnalyzerMixed:
             compute_hash=mock_hash,
         )
 
-        state_map = {s.file_path: s.state for s in states}
-
         assert any(s.state == "NEW" for s in states)
         assert any(s.state == "UNCHANGED" for s in states)
         assert any(s.state == "MODIFIED" for s in states)
@@ -389,9 +384,7 @@ class TestMtimeFingerprint:
         (tmp_path / "p.jpg").write_bytes(b"x")
         hasher = _CountingHash(HASH_A)
 
-        (state,) = analyzer.analyze_changes(
-            _disk(p), [_stored(p, HASH_A)], compute_hash=hasher
-        )
+        (state,) = analyzer.analyze_changes(_disk(p), [_stored(p, HASH_A)], compute_hash=hasher)
 
         assert state.state == "UNCHANGED"
         assert state.refresh_fingerprint is False

@@ -124,6 +124,38 @@ class AnalyzePhotosUseCase:
                     break
         return report
 
+    def retag(
+        self,
+        *,
+        progress: Callable[[AnalyzeProgress], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> AnalyzeReport:
+        """Recompute the suggested tags of every embedded photo from its stored vector.
+
+        No photo is opened and no model runs over pixels: this is for a new threshold or a new
+        vocabulary. Accepted and rejected suggestions are kept (the repository never overwrites
+        them); still-open ones are replaced.
+        """
+        if self._tagger is None:
+            raise ValueError("retag needs a tagger")
+        hashes = self._analysis.embedded_hashes(self._embedder.model_id)
+        report = AnalyzeReport(total=len(hashes))
+        for done, file_hash in enumerate(hashes, start=1):
+            if should_cancel and should_cancel():
+                report.cancelled = True
+                break
+            embedding = self._analysis.get_embedding(file_hash, self._embedder.model_id)
+            if embedding is not None:
+                tags = self._tagger.suggest(
+                    embedding.vector, limit=self._tag_limit, threshold=self._tag_threshold
+                )
+                self._analysis.save_ai_tags(file_hash, tags)
+                report.analyzed += 1
+                report.tagged += 1 if tags else 0
+            if progress:
+                progress(AnalyzeProgress(report.total, done, 0))
+        return report
+
     # ---- internals
 
     def _embed(self, photo: PendingPhoto) -> Sequence[float]:

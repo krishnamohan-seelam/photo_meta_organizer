@@ -31,14 +31,30 @@ class CameraClassifier:
 
     # Camera make patterns (all uppercase for case-insensitive matching)
     MOBILE_MAKES = {
-        "APPLE", "SAMSUNG", "XIAOMI", "HUAWEI",
-        "GOOGLE", "ONEPLUS", "OPPO", "VIVO",
+        "APPLE",
+        "SAMSUNG",
+        "XIAOMI",
+        "HUAWEI",
+        "GOOGLE",
+        "ONEPLUS",
+        "OPPO",
+        "VIVO",
     }
     DSLR_MAKES = {"SONY", "CANON", "NIKON", "PENTAX", "FUJIFILM"}
     ACTION_CAM_MAKES = {"GOPRO", "DJI", "INSTA360"}
     MIRRORLESS_PATTERNS = {
-        "EOS R", "Z5", "Z6", "Z7", "Z8", "Z9",
-        "A7", "A6", "S5", "S1", "X-T", "X-H",
+        "EOS R",
+        "Z5",
+        "Z6",
+        "Z7",
+        "Z8",
+        "Z9",
+        "A7",
+        "A6",
+        "S5",
+        "S1",
+        "X-T",
+        "X-H",
     }
 
     @staticmethod
@@ -73,10 +89,7 @@ class CameraClassifier:
         if "SCANNER" in model_upper or "FILM" in model_upper:
             return CameraProfile.FILM_SCANNER
 
-        if any(
-            pattern in model_upper
-            for pattern in CameraClassifier.MIRRORLESS_PATTERNS
-        ):
+        if any(pattern in model_upper for pattern in CameraClassifier.MIRRORLESS_PATTERNS):
             return CameraProfile.MIRRORLESS
 
         if make_upper in CameraClassifier.DSLR_MAKES and has_lens_model:

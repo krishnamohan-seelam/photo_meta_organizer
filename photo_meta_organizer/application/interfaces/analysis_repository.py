@@ -38,6 +38,10 @@ class AnalysisRepository(Protocol):
         """The stored (unit) vector of one photo for one model, or ``None``."""
         ...
 
+    def embedded_hashes(self, model_id: str) -> list[str]:
+        """Hashes of every photo that has an embedding from ``model_id``, in hash order."""
+        ...
+
     def pending_photos(self, model_id: str, limit: int | None = None) -> list[PendingPhoto]:
         """Photos with no embedding from ``model_id``, in a stable order."""
         ...

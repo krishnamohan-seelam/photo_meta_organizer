@@ -8,6 +8,8 @@ export interface LibraryFilters extends QueryFilters {
   sortOrder: 'asc' | 'desc'
   /** A map area chosen on the Map view ("Show these in Library"); not expressible in the query bar. */
   filterArea?: BoundingBox | null
+  /** An open AI suggestion of this label. */
+  filterAiTag?: string | null
 }
 
 /**
@@ -28,6 +30,7 @@ export function toSearchRequest(f: LibraryFilters): SearchRequest {
   if (model) request.camera_model = model
   if (f.filterHasLocation !== null) request.has_location = f.filterHasLocation
   if (f.filterArea) request.within = f.filterArea
+  if (f.filterAiTag) request.ai_tag = f.filterAiTag
   if (f.filterDateRange) {
     request.date_start = `${f.filterDateRange.start}T00:00:00`
     request.date_end = `${f.filterDateRange.end}T23:59:59.999999`

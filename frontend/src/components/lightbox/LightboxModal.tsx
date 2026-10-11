@@ -9,18 +9,25 @@ import { shouldIgnoreHotkey } from '../../utils/hotkeys'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { filmstripWindow } from '../../utils/filmstrip'
 import { usePhotoSearch } from '../../hooks/usePhotos'
+import { useSemanticPhotos } from '../../hooks/useAnalysis'
 import { displayTitle, exposureLine } from '../../utils/photoFormat'
 import { X, ChevronLeft, ChevronRight, Flag } from 'lucide-react'
 
 export const LightboxModal: React.FC = () => {
   const { lightboxIndex, setLightboxIndex } = useUiStore(useShallow((s) => ({ lightboxIndex: s.lightboxIndex, setLightboxIndex: s.setLightboxIndex })))
-  const { photos, totalCount, hasNextPage, isFetchingNextPage, fetchNextPage } = usePhotoSearch()
+  const library = usePhotoSearch()
+  // While a search by meaning is on screen the viewer pages through its matches, not the library.
+  const semantic = useSemanticPhotos()
+  const inSemantic = semantic.semantic !== null
+  const photos = inSemantic ? semantic.photos : library.photos
+  const totalCount = inSemantic ? semantic.photos.length : library.totalCount
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = library
   if (lightboxIndex === null || photos.length === 0) return null
   // Next on the last loaded photo asks for the index one past it: show the last one until that page arrives.
   const index = Math.min(lightboxIndex, photos.length - 1)
   const currentPhoto = photos[index]
   // Past the last loaded photo: load the next page (and stay) rather than wrap to the first.
-  const loadMore = hasNextPage ? () => { if (!isFetchingNextPage) void fetchNextPage() } : null
+  const loadMore = !inSemantic && hasNextPage ? () => { if (!isFetchingNextPage) void fetchNextPage() } : null
   return <Lightbox photos={photos} total={totalCount} index={index} currentPhoto={currentPhoto} setIndex={setLightboxIndex} loadMore={loadMore} />
 }
 

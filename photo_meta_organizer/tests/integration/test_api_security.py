@@ -58,14 +58,11 @@ class TestCors:
 
     def test_defaults_are_only_local_dev_origins(self):
         assert all(
-            o.startswith(("http://localhost:", "http://127.0.0.1:"))
-            for o in DEFAULT_CORS_ORIGINS
+            o.startswith(("http://localhost:", "http://127.0.0.1:")) for o in DEFAULT_CORS_ORIGINS
         )
 
     def test_origins_are_configurable(self, tmp_path):
-        app = create_app(
-            db_path=str(tmp_path / "s.db"), cors_origins=["http://myhost:9000"]
-        )
+        app = create_app(db_path=str(tmp_path / "s.db"), cors_origins=["http://myhost:9000"])
         client = TestClient(app)
         assert _preflight(client, "http://myhost:9000").status_code == 200
         assert _preflight(client, DEV).status_code == 400
@@ -99,13 +96,8 @@ class TestHostHeader:
     def test_hosts_are_configurable(self, tmp_path):
         app = create_app(db_path=str(tmp_path / "h.db"), allowed_hosts=["photos.lan"])
         client = TestClient(app)
-        assert (
-            client.get("/health", headers={"Host": "photos.lan:8000"}).status_code
-            == 200
-        )
-        assert (
-            client.get("/health", headers={"Host": "localhost:8000"}).status_code == 400
-        )
+        assert client.get("/health", headers={"Host": "photos.lan:8000"}).status_code == 200
+        assert client.get("/health", headers={"Host": "localhost:8000"}).status_code == 400
 
     def test_environment_override(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PMO_ALLOWED_HOSTS", "a.lan, b.lan")

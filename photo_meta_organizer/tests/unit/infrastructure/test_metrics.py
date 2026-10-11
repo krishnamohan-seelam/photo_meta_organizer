@@ -1,6 +1,7 @@
 """Unit tests for ProgressReporter and IndexingStatistics in infrastructure/metrics.py."""
 
 import pytest
+
 from photo_meta_organizer.infrastructure.metrics import (
     IndexingStatistics,
     ProgressReporter,

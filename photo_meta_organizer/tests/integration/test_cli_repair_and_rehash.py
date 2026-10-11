@@ -11,8 +11,6 @@ and the interesting case is the import itself.
 import sys
 from datetime import datetime
 
-import pytest
-
 from photo_meta_organizer.domain.models import (
     ImageDimensions,
     ImageExifData,
@@ -31,9 +29,7 @@ from photo_meta_organizer.main import main
 def _rec(file_hash, path, added, rating=None):
     return ImageMetadata(
         file_hash=file_hash,
-        file_info=ImageFileInfo(
-            name="a.jpg", path=path, size_bytes=1, mime_type="image/jpeg"
-        ),
+        file_info=ImageFileInfo(name="a.jpg", path=path, size_bytes=1, mime_type="image/jpeg"),
         dimensions=ImageDimensions(width=1, height=1),
         exif=ImageExifData(),
         rating=rating,
@@ -76,9 +72,7 @@ def test_dedupe_with_nothing_to_do(tmp_path, monkeypatch, capsys):
     assert "no duplicate" in capsys.readouterr().out.lower()
 
 
-def test_sync_accepts_rehash_and_reports_refreshed_fingerprints(
-    tmp_path, monkeypatch, capsys
-):
+def test_sync_accepts_rehash_and_reports_refreshed_fingerprints(tmp_path, monkeypatch, capsys):
     photos = tmp_path / "photos"
     photos.mkdir()
     (photos / "a.jpg").write_bytes(b"not a real jpeg")

@@ -5,7 +5,8 @@ Shares the same open ``TinyDB`` instance as a sibling ``TinyDBRepository`` (pass
 """
 
 import logging
-from typing import List, Optional
+from collections.abc import MutableMapping
+from typing import Any
 
 from tinydb import Query, TinyDB
 
@@ -30,15 +31,15 @@ class TinyDBCollectionRepository:
             updated_at=doc.get("updated_at", ""),
         )
 
-    def list_all(self) -> List[CollectionRecord]:
+    def list_all(self) -> list[CollectionRecord]:
         return [self._to_record(doc) for doc in self._table.all()]
 
-    def get(self, name: str) -> Optional[CollectionRecord]:
+    def get(self, name: str) -> CollectionRecord | None:
         q = Query()
         results = self._table.search(q.name == name)
         return self._to_record(results[0]) if results else None
 
-    def save(self, name: str, photo_hashes: List[str], description: str = "") -> CollectionRecord:
+    def save(self, name: str, photo_hashes: list[str], description: str = "") -> CollectionRecord:
         q = Query()
         doc = {
             "name": name,
@@ -58,7 +59,7 @@ class TinyDBCollectionRepository:
         """Strip ``file_hash`` from every collection that references it."""
         touched = 0
 
-        def strip(doc: dict) -> None:
+        def strip(doc: MutableMapping[Any, Any]) -> None:
             nonlocal touched
             hashes = doc.get("photo_hashes", [])
             if file_hash in hashes:

@@ -6,14 +6,12 @@ SQLite repository (ADR-001).  No mocks — only the image extractor is stubbed t
 avoid requiring actual image files with EXIF data.
 """
 
-import shutil
-from dataclasses import replace
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Generator
-from unittest.mock import MagicMock
+from typing import BinaryIO
 
 import pytest
 
@@ -25,15 +23,14 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.domain.services import MetadataStateAnalyzer
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
 )
-from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
-    LocalDiskRetriever,
-)
 from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
     ExtensionFilteredRetriever,
+)
+from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
+    LocalDiskRetriever,
 )
 
 # ---------------------------------------------------------------------------
@@ -122,9 +119,7 @@ class TestSyncIntegration:
 
     def test_initial_sync_indexes_all_new_files(self, use_case, repository):
         """First sync on an empty DB should index all photos."""
-        result = use_case.execute(
-            index_new=True, reprocess_modified=True, cleanup_deleted=False
-        )
+        result = use_case.execute(index_new=True, reprocess_modified=True, cleanup_deleted=False)
 
         assert result.new_files == 3
         assert result.modified_files == 0
@@ -189,9 +184,7 @@ class TestSyncIntegration:
         use_case.execute(index_new=True)
         (photo_dir / "photo2.jpg").write_bytes(b"different_content_here")
 
-        result = use_case.execute(
-            reprocess_modified=False, index_new=False, cleanup_deleted=False
-        )
+        result = use_case.execute(reprocess_modified=False, index_new=False, cleanup_deleted=False)
         assert result.modified_files == 0
 
     def test_dry_run_does_not_change_repository(self, use_case, repository):
@@ -214,17 +207,13 @@ class TestSyncIntegration:
         ret = ExtensionFilteredRetriever(base, IMAGE_EXTENSIONS)
         repo = SqliteRepository(db_path=db_path)
 
-        uc = SynchronizeMetadataUseCase(
-            retriever=ret, extractor=extractor, repository=repo
-        )
+        uc = SynchronizeMetadataUseCase(retriever=ret, extractor=extractor, repository=repo)
         uc.execute(index_new=True)
         assert repo.count() == 10
 
         # Delete 1 photo
         (photo_dir / "img0003.jpg").unlink()
-        result = uc.execute(
-            cleanup_deleted=True, index_new=False, reprocess_modified=False
-        )
+        result = uc.execute(cleanup_deleted=True, index_new=False, reprocess_modified=False)
 
         assert result.deleted_entries == 1
         assert result.unchanged_files == 9
@@ -290,14 +279,9 @@ class TestSyncReplacesModifiedRecord:
         assert result.modified_files == 1
         assert repository.count() == 3  # not 4: the old record is gone
         assert repository.get_by_filehash(old_hash) is None
-        assert (
-            sum(1 for r in repository.list_all() if r.file_info.name == "photo2.jpg")
-            == 1
-        )
+        assert sum(1 for r in repository.list_all() if r.file_info.name == "photo2.jpg") == 1
 
-    def test_rating_flag_and_labels_survive_the_edit(
-        self, use_case, repository, photo_dir
-    ):
+    def test_rating_flag_and_labels_survive_the_edit(self, use_case, repository, photo_dir):
         use_case.execute()
         self._curate(repository, photo_dir)
 
@@ -401,9 +385,7 @@ class TestSyncMtimeFingerprint:
         assert extractor.extracted == []
         assert second.fingerprints_refreshed == 0  # caught up
 
-    def test_legacy_records_are_backfilled_not_rehashed(
-        self, retriever, repository, photo_dir
-    ):
+    def test_legacy_records_are_backfilled_not_rehashed(self, retriever, repository, photo_dir):
         uc, extractor = self._use_case(retriever, repository)
         uc.execute()
         with repository.lock, repository.connection:  # simulate a pre-PMO-06 database
@@ -450,7 +432,6 @@ class TestSyncMtimeFingerprint:
 
         assert result.modified_files == 1
         assert repository.get_by_filehash(_sha(edited)) is not None
-
 
     def test_reextract_refreshes_unchanged_records_and_keeps_curation(
         self, retriever, repository, photo_dir

@@ -11,17 +11,15 @@ concrete classes implement the protocols and compose via dependency injection.
 """
 
 import logging
-
-import pytest
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
-from typing import BinaryIO, Generator, List, Optional
 from io import BytesIO
+from typing import BinaryIO
+
+import pytest
 
 from photo_meta_organizer.application.interfaces import (
-    ImageMetadataExtractor,
-    ImageMetadataRepository,
-    ImageRetriever,
     RemoteFileHandle,
 )
 from photo_meta_organizer.domain.models import (
@@ -30,10 +28,8 @@ from photo_meta_organizer.domain.models import (
     ImageDimensions,
     ImageExifData,
     ImageFileInfo,
-    ImageLocation,
     ImageMetadata,
 )
-
 
 # ============================================================================
 # PYTEST CONFIGURATION & MARKERS
@@ -240,7 +236,7 @@ class MockImageRetriever:
         files: List of RemoteFileHandle objects to return on list_files().
     """
 
-    def __init__(self, files: Optional[List[RemoteFileHandle]] = None):
+    def __init__(self, files: list[RemoteFileHandle] | None = None):
         """Initialize with optional list of files to discover.
 
         Args:
@@ -255,8 +251,7 @@ class MockImageRetriever:
         Yields:
             RemoteFileHandle objects for testing.
         """
-        for file_handle in self.files:
-            yield file_handle
+        yield from self.files
 
     @contextmanager
     def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:
@@ -344,7 +339,7 @@ class MockImageMetadataRepository:
         """
         self.storage[metadata.file_hash] = metadata
 
-    def get_by_filehash(self, file_hash: str) -> Optional[ImageMetadata]:
+    def get_by_filehash(self, file_hash: str) -> ImageMetadata | None:
         """Retrieve metadata by file hash.
 
         Args:
@@ -355,7 +350,7 @@ class MockImageMetadataRepository:
         """
         return self.storage.get(file_hash)
 
-    def get_by_path(self, path: str) -> Optional[ImageMetadata]:
+    def get_by_path(self, path: str) -> ImageMetadata | None:
         """Retrieve metadata by file path.
 
         Args:
@@ -369,7 +364,7 @@ class MockImageMetadataRepository:
             None,
         )
 
-    def list_all(self) -> List[ImageMetadata]:
+    def list_all(self) -> list[ImageMetadata]:
         """Retrieve all stored metadata.
 
         Returns:
@@ -391,7 +386,7 @@ class MockImageMetadataRepository:
             return True
         return False
 
-    def save_many(self, items: List[ImageMetadata]) -> None:
+    def save_many(self, items: list[ImageMetadata]) -> None:
         """Save multiple metadata objects (matches ``ImageMetadataRepository.save_many``).
 
         Args:
@@ -417,7 +412,7 @@ class MockImageMetadataRepository:
             return False
         return self.delete(metadata.file_hash)
 
-    def find_by_paths(self, paths: List[str]) -> List[ImageMetadata]:
+    def find_by_paths(self, paths: list[str]) -> list[ImageMetadata]:
         """Find multiple metadata records by file paths."""
         by_path = {m.file_info.path: m for m in self.storage.values()}
         return [by_path[p] for p in paths if p in by_path]

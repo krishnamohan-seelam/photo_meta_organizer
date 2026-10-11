@@ -9,12 +9,11 @@ and returns an ImageMetadata domain entity. All conversion logic
 in the internal _ExifFieldMapper utility class.
 """
 
-
 import logging
 import mimetypes
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, Optional
+from typing import Any, BinaryIO
 
 import exifread
 
@@ -24,6 +23,7 @@ from photo_meta_organizer.application.interfaces.image_extractor import (
 from photo_meta_organizer.application.interfaces.image_retriever import (
     RemoteFileHandle,
 )
+from photo_meta_organizer.domain.formats import image_mime_type
 from photo_meta_organizer.domain.hashing import sha256_of_stream
 from photo_meta_organizer.domain.models import (
     GpsCoordinates,
@@ -32,7 +32,6 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.domain.formats import image_mime_type
 from photo_meta_organizer.domain.services import CameraClassifier
 from photo_meta_organizer.infrastructure.image_decoding import image_size
 
@@ -44,7 +43,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def get_file_mtime(file_path: str) -> Optional[datetime]:
+def get_file_mtime(file_path: str) -> datetime | None:
     """Return the file's mtime as naive local time, or ``None`` if it cannot be read.
 
     Same conversion as the sync disk scan, so the two values compare equal.
@@ -119,7 +118,7 @@ class _ExifFieldMapper:
     }
 
     @staticmethod
-    def parse_gps_coordinates(tags: Dict[str, Any]) -> Optional[GpsCoordinates]:
+    def parse_gps_coordinates(tags: dict[str, Any]) -> GpsCoordinates | None:
         """Convert GPS tags from exifread (DMS format) to GpsCoordinates.
 
         exifread returns GPS coords as [degrees, minutes, seconds] arrays
@@ -138,24 +137,20 @@ class _ExifFieldMapper:
             gps_lon = tags.get("GPS GPSLongitude")
             gps_lon_ref = tags.get("GPS GPSLongitudeRef")
 
-            if not all([gps_lat, gps_lat_ref, gps_lon, gps_lon_ref]):
+            if gps_lat is None or gps_lon is None or not all([gps_lat_ref, gps_lon_ref]):
                 return None
 
             # Parse DMS arrays: [degrees, minutes, seconds]
             lat_values = gps_lat.values
             lat_decimal = (
-                float(lat_values[0])
-                + float(lat_values[1]) / 60
-                + float(lat_values[2]) / 3600
+                float(lat_values[0]) + float(lat_values[1]) / 60 + float(lat_values[2]) / 3600
             )
             if str(gps_lat_ref) == "S":
                 lat_decimal = -lat_decimal
 
             lon_values = gps_lon.values
             lon_decimal = (
-                float(lon_values[0])
-                + float(lon_values[1]) / 60
-                + float(lon_values[2]) / 3600
+                float(lon_values[0]) + float(lon_values[1]) / 60 + float(lon_values[2]) / 3600
             )
             if str(gps_lon_ref) == "W":
                 lon_decimal = -lon_decimal
@@ -213,7 +208,7 @@ class _ExifFieldMapper:
         return f"{exif_value:.1f}mm"
 
     @staticmethod
-    def parse_exif_datetime(datetime_str: str) -> Optional[datetime]:
+    def parse_exif_datetime(datetime_str: str) -> datetime | None:
         """Parse EXIF datetime string to Python datetime.
 
         EXIF format: "YYYY:MM:DD HH:MM:SS" or "YYYY:MM:DD HH: MM: SS"
@@ -233,7 +228,7 @@ class _ExifFieldMapper:
             return None
 
     @staticmethod
-    def get_tag_str(tags: Dict[str, Any], key: str) -> Optional[str]:
+    def get_tag_str(tags: dict[str, Any], key: str) -> str | None:
         """Safely extract a string tag value."""
         tag = tags.get(key)
         if tag is None:
@@ -241,7 +236,7 @@ class _ExifFieldMapper:
         return str(tag).strip() or None
 
     @staticmethod
-    def get_tag_int(tags: Dict[str, Any], key: str) -> Optional[int]:
+    def get_tag_int(tags: dict[str, Any], key: str) -> int | None:
         """Safely extract an integer tag value."""
         tag = tags.get(key)
         if tag is None:
@@ -258,7 +253,7 @@ class _ExifFieldMapper:
                 return None
 
     @staticmethod
-    def get_tag_float(tags: Dict[str, Any], key: str) -> Optional[float]:
+    def get_tag_float(tags: dict[str, Any], key: str) -> float | None:
         """Safely extract a float tag value."""
         tag = tags.get(key)
         if tag is None:
@@ -276,8 +271,8 @@ class _ExifFieldMapper:
 
     @staticmethod
     def collect_raw_tags(
-        exif_tags: Dict[str, Any],
-    ) -> Dict[str, str]:
+        exif_tags: dict[str, Any],
+    ) -> dict[str, str]:
         """Collect all unmapped EXIF tags into raw_tags dict.
 
         Filters out tags that have already been mapped to Tier 1/2 fields.
@@ -289,11 +284,7 @@ class _ExifFieldMapper:
         Returns:
             Dictionary of unmapped tag name → string value.
         """
-        return {
-            k: str(v)
-            for k, v in exif_tags.items()
-            if k not in _ExifFieldMapper.MAPPED_TAGS
-        }
+        return {k: str(v) for k, v in exif_tags.items() if k not in _ExifFieldMapper.MAPPED_TAGS}
 
 
 # =============================================================================
@@ -322,9 +313,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
     def __init__(self) -> None:
         super().__init__()
 
-    def extract(
-        self, file_handle: RemoteFileHandle, stream: BinaryIO
-    ) -> ImageMetadata:
+    def extract(self, file_handle: RemoteFileHandle, stream: BinaryIO) -> ImageMetadata:
         """Extract metadata from an image file stream.
 
         Implements recovery strategies:
@@ -365,9 +354,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
 
         focal_length_raw = mapper.get_tag_float(exif_tags, "EXIF FocalLength")
         focal_length = (
-            mapper.format_focal_length(focal_length_raw)
-            if focal_length_raw is not None
-            else None
+            mapper.format_focal_length(focal_length_raw) if focal_length_raw is not None else None
         )
 
         # Capture date from EXIF only. Without one it stays unknown (None): the file
@@ -381,9 +368,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
 
         # --- Camera profile inference (domain service) ---
         has_lens_model = "EXIF LensModel" in exif_tags
-        camera_profile = CameraClassifier.classify(
-            camera_make, camera_model, has_lens_model
-        )
+        camera_profile = CameraClassifier.classify(camera_make, camera_model, has_lens_model)
 
         # --- Tier 2: Common Fields ---
         location = mapper.parse_gps_coordinates(exif_tags)
@@ -398,9 +383,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
         exposure_program = mapper.get_tag_str(exif_tags, "EXIF ExposureProgram")
         metering_mode = mapper.get_tag_str(exif_tags, "EXIF MeteringMode")
 
-        focal_length_35mm_raw = mapper.get_tag_float(
-            exif_tags, "EXIF FocalLengthIn35mmFilm"
-        )
+        focal_length_35mm_raw = mapper.get_tag_float(exif_tags, "EXIF FocalLengthIn35mmFilm")
         focal_length_35mm = (
             mapper.format_focal_length(focal_length_35mm_raw)
             if focal_length_35mm_raw is not None
@@ -438,9 +421,7 @@ class DiskMetaDataExtractor(ImageMetadataExtractor):
             width, height = image_size(stream, file_handle.filename)
             dimensions = ImageDimensions(width=width, height=height)
         except Exception as e:
-            logger.warning(
-                "Failed to read dimensions for %s: %s", file_handle.filename, e
-            )
+            logger.warning("Failed to read dimensions for %s: %s", file_handle.filename, e)
             dimensions = ImageDimensions(width=0, height=0)
 
         # --- Content hash (SHA-256), chunked: memory does not grow with file size ---

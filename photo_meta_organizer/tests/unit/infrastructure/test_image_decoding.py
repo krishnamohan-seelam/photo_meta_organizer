@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 import rawpy
 from PIL import Image
+from tests.conftest import make_heic
 
 from photo_meta_organizer.domain.formats import image_mime_type, is_image_filename
 from photo_meta_organizer.infrastructure import image_decoding
 from photo_meta_organizer.infrastructure.image_decoding import image_size, open_image
-from tests.conftest import make_heic
 
 
 def _jpeg_bytes(size, orientation: int | None = None) -> bytes:

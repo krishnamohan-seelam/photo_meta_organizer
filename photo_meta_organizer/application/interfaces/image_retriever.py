@@ -20,9 +20,11 @@ Example:
     ...         data = stream.read()
 """
 
+from collections.abc import Generator
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import BinaryIO, ContextManager, Generator, Optional, Protocol
+from typing import BinaryIO, Protocol
 
 
 @dataclass(frozen=True)
@@ -44,7 +46,7 @@ class RemoteFileHandle:
     original_path: str
     filename: str
     size_bytes: int
-    modified_time: Optional[datetime] = None
+    modified_time: datetime | None = None
 
 
 class ImageRetriever(Protocol):
@@ -71,9 +73,7 @@ class ImageRetriever(Protocol):
         """
         ...
 
-    def get_file_stream(
-        self, file_handle: RemoteFileHandle
-    ) -> ContextManager[BinaryIO]:
+    def get_file_stream(self, file_handle: RemoteFileHandle) -> AbstractContextManager[BinaryIO]:
         """Retrieve a binary stream for a specific file.
 
         Args:

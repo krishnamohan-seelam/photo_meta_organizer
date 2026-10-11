@@ -13,7 +13,6 @@ older ones is merged into it. Written against the repository port only
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
 
 from photo_meta_organizer.application.interfaces import ImageMetadataRepository
 from photo_meta_organizer.domain.curation import carry_over_curation
@@ -26,14 +25,14 @@ class DuplicatePathGroup:
 
     path: str
     keep: ImageMetadata
-    drop: List[ImageMetadata]  # newest first
+    drop: list[ImageMetadata]  # newest first
 
 
 @dataclass
 class DedupeResult:
     """Outcome of a dedupe run."""
 
-    groups: List[DuplicatePathGroup] = field(default_factory=list)
+    groups: list[DuplicatePathGroup] = field(default_factory=list)
     removed: int = 0
 
 
@@ -49,7 +48,7 @@ class DedupePathsUseCase:
         self._repository = repository
 
     def execute(self, apply: bool = False) -> DedupeResult:
-        by_path: Dict[str, List[ImageMetadata]] = {}
+        by_path: dict[str, list[ImageMetadata]] = {}
         for record in self._repository.list_all():
             by_path.setdefault(_path_key(record.file_info.path), []).append(record)
 
@@ -58,11 +57,11 @@ class DedupePathsUseCase:
             if len(records) < 2:
                 continue
             # Newest first; among equal timestamps the record listed later wins.
-            ranked = sorted(enumerate(records), key=lambda ir: (ir[1].added_at, ir[0]), reverse=True)
-            ordered = [record for _, record in ranked]
-            result.groups.append(
-                DuplicatePathGroup(path=key, keep=ordered[0], drop=ordered[1:])
+            ranked = sorted(
+                enumerate(records), key=lambda ir: (ir[1].added_at, ir[0]), reverse=True
             )
+            ordered = [record for _, record in ranked]
+            result.groups.append(DuplicatePathGroup(path=key, keep=ordered[0], drop=ordered[1:]))
 
         if apply:
             for group in result.groups:

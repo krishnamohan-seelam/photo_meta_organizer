@@ -25,9 +25,7 @@ class SqliteCollectionRepository:
 
     def list_all(self) -> list[CollectionRecord]:
         with self._lock:
-            rows = self._conn.execute(
-                "SELECT name FROM collections ORDER BY name"
-            ).fetchall()
+            rows = self._conn.execute("SELECT name FROM collections ORDER BY name").fetchall()
             return [self._to_record(row["name"]) for row in rows]
 
     def get(self, name: str) -> CollectionRecord | None:
@@ -37,9 +35,7 @@ class SqliteCollectionRepository:
             ).fetchone()
             return self._to_record(row["name"]) if row else None
 
-    def save(
-        self, name: str, photo_hashes: list[str], description: str = ""
-    ) -> CollectionRecord:
+    def save(self, name: str, photo_hashes: list[str], description: str = "") -> CollectionRecord:
         updated_at = utc_now_naive().isoformat()
         with self._lock, self._conn:
             self._conn.execute(
@@ -50,9 +46,7 @@ class SqliteCollectionRepository:
                 """,
                 (name, description, updated_at),
             )
-            self._conn.execute(
-                "DELETE FROM collection_photos WHERE collection = ?", (name,)
-            )
+            self._conn.execute("DELETE FROM collection_photos WHERE collection = ?", (name,))
             for file_hash in photo_hashes:
                 self._conn.execute(
                     "INSERT OR IGNORE INTO collection_photos (collection, file_hash) "

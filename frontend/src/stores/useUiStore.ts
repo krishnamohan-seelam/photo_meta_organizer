@@ -12,6 +12,10 @@ export type LibraryLayout = 'grid' | 'table'
 /** A search by meaning: free text, or "photos like this one". Replaces the Library's list while set. */
 export type SemanticQuery = { kind: 'text'; text: string } | { kind: 'like'; hash: string; name: string }
 
+/** A search by meaning shows this many matches, and "Show more" adds this many up to the API's cap. */
+export const SEMANTIC_PAGE = 60
+export const SEMANTIC_MAX = 200
+
 /** Row height of the justified Library grid (FR-1c.5). */
 export const ROW_HEIGHT_MIN = 140
 export const ROW_HEIGHT_MAX = 340
@@ -53,6 +57,10 @@ interface UiState {
   /** The AI setup dialog (model download, analysis). */
   aiDialogOpen: boolean
   semantic: SemanticQuery | null
+  /** How many matches the search by meaning asks for; "Show more" raises it. */
+  semanticLimit: number
+  /** Photos the model currently suggests this label for (open suggestions only). */
+  filterAiTag: string | null
   searchQuery: string
   filterCameras: string[]
   filterTags: string[]
@@ -92,6 +100,8 @@ interface UiState {
   setJobDialog: (kind: JobDialogKind | null) => void
   setAiDialogOpen: (open: boolean) => void
   setSemantic: (query: SemanticQuery | null) => void
+  showMoreSemantic: () => void
+  setAiTagFilter: (label: string | null) => void
   setSearchQuery: (q: string) => void
   toggleCameraFilter: (camera: string) => void
   toggleTagFilter: (tag: string) => void
@@ -129,6 +139,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   jobDialog: null,
   aiDialogOpen: false,
   semantic: null,
+  semanticLimit: SEMANTIC_PAGE,
+  filterAiTag: null,
   searchQuery: '',
   filterCameras: [],
   filterTags: [],
@@ -178,7 +190,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
   setJobDialog: (jobDialog) => set({ jobDialog }),
   setAiDialogOpen: (aiDialogOpen) => set({ aiDialogOpen }),
-  setSemantic: (semantic) => set({ semantic }),
+  setSemantic: (semantic) => set({ semantic, semanticLimit: SEMANTIC_PAGE }),
+  showMoreSemantic: () => set((s) => ({ semanticLimit: Math.min(SEMANTIC_MAX, s.semanticLimit + SEMANTIC_PAGE) })),
+  setAiTagFilter: (filterAiTag) => set({ filterAiTag }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 
   toggleCameraFilter: (camera) =>
@@ -227,7 +241,7 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   resetFilters: () => {
     get().applyQueryFilters(EMPTY_QUERY_FILTERS)
-    set({ filterArea: null, semantic: null })
+    set({ filterArea: null, semantic: null, filterAiTag: null, semanticLimit: SEMANTIC_PAGE })
   },
 
   showToast: (toastMessage, toastKind = 'success') => {

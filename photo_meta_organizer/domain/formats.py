@@ -5,16 +5,36 @@ from pathlib import PurePath
 # Camera RAW: decoded through LibRaw (the embedded preview, or a half-size demosaic).
 RAW_EXTENSIONS: frozenset[str] = frozenset(
     {
-        ".raw", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".srf", ".sr2", ".dng",
-        ".raf", ".orf", ".rw2", ".pef", ".srw",
+        ".raw",
+        ".cr2",
+        ".cr3",
+        ".nef",
+        ".nrw",
+        ".arw",
+        ".srf",
+        ".sr2",
+        ".dng",
+        ".raf",
+        ".orf",
+        ".rw2",
+        ".pef",
+        ".srw",
     }
 )
 
 IMAGE_EXTENSIONS: frozenset[str] = (
     frozenset(
         {
-            ".jpg", ".jpeg", ".png", ".tiff", ".tif",
-            ".bmp", ".gif", ".webp", ".heic", ".heif",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".tiff",
+            ".tif",
+            ".bmp",
+            ".gif",
+            ".webp",
+            ".heic",
+            ".heif",
         }
     )
     | RAW_EXTENSIONS

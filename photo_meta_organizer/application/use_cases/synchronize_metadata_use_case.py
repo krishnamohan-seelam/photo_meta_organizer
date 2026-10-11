@@ -158,7 +158,12 @@ class SynchronizeMetadataUseCase:
         logger.info(
             "Starting metadata sync [cleanup_deleted=%s, reprocess_modified=%s, "
             "index_new=%s, dry_run=%s, rehash=%s, reextract=%s]",
-            cleanup_deleted, reprocess_modified, index_new, dry_run, rehash, reextract,
+            cleanup_deleted,
+            reprocess_modified,
+            index_new,
+            dry_run,
+            rehash,
+            reextract,
         )
 
         # ------------------------------------------------------------------
@@ -205,9 +210,11 @@ class SynchronizeMetadataUseCase:
             # Unchanged content is re-extracted in place: the orchestrator's MODIFIED
             # path replaces the record under the same hash and carries over curation.
             file_states = [
-                replace(fs, state="MODIFIED", previous_hash=fs.file_hash)
-                if fs.state == "UNCHANGED"
-                else fs
+                (
+                    replace(fs, state="MODIFIED", previous_hash=fs.file_hash)
+                    if fs.state == "UNCHANGED"
+                    else fs
+                )
                 for fs in file_states
             ]
 
@@ -217,7 +224,10 @@ class SynchronizeMetadataUseCase:
 
         logger.info(
             "Change analysis: NEW=%d, MODIFIED=%d, UNCHANGED=%d, DELETED=%d",
-            counts["NEW"], counts["MODIFIED"], counts["UNCHANGED"], counts["DELETED"],
+            counts["NEW"],
+            counts["MODIFIED"],
+            counts["UNCHANGED"],
+            counts["DELETED"],
         )
         result.unchanged_files = counts["UNCHANGED"]
         stale = sum(1 for fs in file_states if fs.refresh_fingerprint)

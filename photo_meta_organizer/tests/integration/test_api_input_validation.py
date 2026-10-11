@@ -133,9 +133,7 @@ class TestPoisonedStoreIsTolerated:
         repo = SqliteRepository(db_path)
         with pytest.raises(sqlite3.IntegrityError):
             with repo.lock, repo.connection:
-                repo.connection.execute(
-                    "UPDATE photos SET rating = 'abc' WHERE file_hash = 'h1'"
-                )
+                repo.connection.execute("UPDATE photos SET rating = 'abc' WHERE file_hash = 'h1'")
         repo.close()
 
         client = TestClient(create_app(db_path=db_path))
@@ -145,20 +143,18 @@ class TestPoisonedStoreIsTolerated:
         assert ratings["h1"] == 3  # untouched: the bad write never landed
         assert ratings["h2"] == 3
 
-    def test_a_rating_already_poisoned_before_import_does_not_break_the_import(
-        self, tmp_path
-    ):
+    def test_a_rating_already_poisoned_before_import_does_not_break_the_import(self, tmp_path):
         """A rating poisoned by an older TinyDB-era bug, seen only through the legacy
         JSON importer (PMO-08), must be dropped rather than aborting the whole import.
         """
+        from tinydb import Query
+
         from photo_meta_organizer.infrastructure.importers.legacy_json_importer import (
             import_legacy_json,
         )
         from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
             TinyDBRepository,
         )
-
-        from tinydb import Query
 
         json_path = str(tmp_path / "legacy.json")
         legacy = TinyDBRepository(json_path)

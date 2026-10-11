@@ -221,3 +221,47 @@ class TestProgressAndCancel:
         assert analysis.count_embeddings(embedder.model_id) == report.analyzed
         # ...and a later run finishes the rest
         assert _use_case(analysis, embedder).run().analyzed == 10 - report.analyzed
+
+
+class TestRetag:
+    def test_recomputes_open_suggestions_without_opening_any_photo(
+        self, photos, analysis, embedder, tmp_path
+    ):
+        _add(photos, tmp_path, "a.jpg")
+        tagger = ZeroShotTagger(embedder, ["alpha", "beta", "gamma"])
+        strict = _use_case(analysis, embedder, tagger=tagger, tag_threshold=0.9)
+        strict.run()
+        before = {t.label for t in analysis.list_ai_tags("hash-a.jpg")}
+
+        def no_open(path):
+            raise AssertionError("retag must not open photos")
+
+        loose = _use_case(analysis, embedder, tagger=tagger, tag_threshold=0.0, open_stream=no_open)
+        report = loose.retag()
+        after = {t.label for t in analysis.list_ai_tags("hash-a.jpg")}
+        assert report.total == 1 and report.analyzed == 1
+        assert before < after == {"alpha", "beta", "gamma"}
+
+    def test_keeps_what_the_user_decided(self, photos, analysis, embedder, tmp_path):
+        _add(photos, tmp_path, "a.jpg")
+        tagger = ZeroShotTagger(embedder, ["alpha", "beta", "gamma"])
+        use_case = _use_case(analysis, embedder, tagger=tagger, tag_threshold=0.0)
+        use_case.run()
+        first = analysis.list_ai_tags("hash-a.jpg")[0].label
+        analysis.set_ai_tag_status("hash-a.jpg", first, AiTagStatus.REJECTED)
+        use_case.retag()
+        statuses = {t.label: t.status for t in analysis.list_ai_tags("hash-a.jpg")}
+        assert statuses[first] is AiTagStatus.REJECTED
+
+    def test_needs_a_tagger(self, photos, analysis, embedder):
+        with pytest.raises(ValueError, match="tagger"):
+            _use_case(analysis, embedder).retag()
+
+    def test_can_be_cancelled(self, photos, analysis, embedder, tmp_path):
+        for n in "abc":
+            _add(photos, tmp_path, f"{n}.jpg")
+        tagger = ZeroShotTagger(embedder, ["alpha", "beta"])
+        use_case = _use_case(analysis, embedder, tagger=tagger, tag_threshold=0.0)
+        use_case.run()
+        report = use_case.retag(should_cancel=lambda: True)
+        assert report.cancelled and report.analyzed == 0

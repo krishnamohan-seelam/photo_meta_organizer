@@ -1,10 +1,11 @@
-"""Integration tests for photo streaming, thumbnail caching, batch mutations, and collections endpoints."""
+"""Integration tests: photo streaming, thumbnail caching, batch mutations and collections."""
 
 import os
-from datetime import datetime, timezone
-from PIL import Image
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from photo_meta_organizer.api.app import create_app
 from photo_meta_organizer.domain.models import (
@@ -49,7 +50,7 @@ def sample_metadata(test_image_file):
             exif=ImageExifData(
                 camera_make="Sony",
                 camera_model="A7IV",
-                captured_at=datetime(2026, 5, 14, 12, 0, 0, tzinfo=timezone.utc),
+                captured_at=datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC),
                 location=GpsCoordinates(latitude=35.6895, longitude=139.6917),
             ),
             labels=["travel", "tokyo"],
@@ -68,7 +69,7 @@ def sample_metadata(test_image_file):
             exif=ImageExifData(
                 camera_make="Canon",
                 camera_model="EOS R5",
-                captured_at=datetime(2026, 6, 1, 10, 0, 0, tzinfo=timezone.utc),
+                captured_at=datetime(2026, 6, 1, 10, 0, 0, tzinfo=UTC),
             ),
             labels=["landscape"],
             rating=2,

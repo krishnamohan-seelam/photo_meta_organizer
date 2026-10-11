@@ -51,8 +51,8 @@ from photo_meta_organizer.api.schemas import (
     GpsBoundsSchema,
     GpsCoordinatesSchema,
     IndexFolderRequest,
-    LibraryStatsSchema,
     JobResponse,
+    LibraryStatsSchema,
     PaginatedPhotosResponse,
     PatchPhotoRequest,
     PhotoIdSchema,
@@ -62,16 +62,16 @@ from photo_meta_organizer.api.schemas import (
 )
 from photo_meta_organizer.application.composition import build_local_retriever
 from photo_meta_organizer.application.geo import cell_degrees_for_zoom, place_scope_for_zoom
-from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
-from photo_meta_organizer.application.interfaces.search_types import BoundingBox
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
 )
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
+from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
+from photo_meta_organizer.application.interfaces.search_types import BoundingBox
 from photo_meta_organizer.application.job_work import index_work, sync_work
-from photo_meta_organizer.application.jobs import Job, JobConflictError, JobManager
+from photo_meta_organizer.application.jobs import Job, JobConflictError, JobManager, Work
 from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
     ParallelIndexPhotosUseCase,
 )
@@ -103,6 +103,7 @@ search_router = APIRouter(prefix="/api", tags=["search"])
 index_router = APIRouter(prefix="/api/index", tags=["indexing"])
 jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 sync_router = APIRouter(prefix="/api/sync", tags=["indexing"])
+
 
 def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
     """Convert domain ImageMetadata to PhotoMetadataResponse schema."""
@@ -243,7 +244,7 @@ def get_photo_thumbnail(
     h: int = Query(default=320, ge=64, le=1200, description="Thumbnail height in pixels"),
     repository: ImageMetadataRepository = Depends(get_repository),
     thumbnails: ThumbnailService = Depends(get_thumbnail_service),
-):
+) -> Response:
     """Stream an optimized WebP thumbnail for the specified photo."""
     metadata = repository.get_by_filehash(file_hash)
     if metadata is None:
@@ -264,7 +265,7 @@ def get_photo_preview(
     file_hash: str,
     repository: ImageMetadataRepository = Depends(get_repository),
     thumbnails: ThumbnailService = Depends(get_thumbnail_service),
-):
+) -> Response:
     """A browser-renderable image of any indexed format (HEIC and RAW included, PMO-23).
 
     Up to 2048 px on the long edge, upright, cached like thumbnails. ``/raw`` returns
@@ -307,7 +308,7 @@ def _webp_response(
 def get_photo_raw(
     file_hash: str,
     repository: ImageMetadataRepository = Depends(get_repository),
-):
+) -> Response:
     """Stream the full-resolution original image from storage."""
     metadata = repository.get_by_filehash(file_hash)
     if metadata is None:
@@ -359,12 +360,14 @@ def patch_photo(
     for tag in updates.get("remove_tags", []):
         commands.append(RemoveTag(tag))
 
-    updated = existing
+    updated: ImageMetadata | None = existing
     try:
         for command in commands:
             updated = repository.apply(file_hash, command)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
     return _to_response(updated)
 
 
@@ -547,6 +550,7 @@ def _search_query(request: SearchRequest) -> SearchPhotosQuery:
         has_location=request.has_location,
         within=_to_box(request.within),
         collection=request.collection,
+        ai_tag=request.ai_tag,
         location_lat=request.location_lat,
         location_lon=request.location_lon,
         radius_km=request.radius_km,
@@ -590,7 +594,7 @@ def _existing_directory(folder_path: str) -> str:
     return absolute
 
 
-def _submit(jobs: JobManager, kind: str, folder_path: str, work) -> JobResponse:
+def _submit(jobs: JobManager, kind: str, folder_path: str, work: Work) -> JobResponse:
     try:
         return _job_response(jobs.submit(kind, folder_path, work))
     except JobConflictError as exc:

@@ -13,6 +13,7 @@ import io
 import logging
 from typing import BinaryIO
 
+import numpy as np
 import pillow_heif
 import rawpy
 from PIL import Image, ImageOps
@@ -74,11 +75,11 @@ def _open_raw(source: str | BinaryIO) -> Image.Image:
         except (rawpy.LibRawNoThumbnailError, rawpy.LibRawUnsupportedThumbnailError):
             thumb = None
         if thumb is not None and thumb.format == rawpy.ThumbFormat.JPEG:
-            with Image.open(io.BytesIO(thumb.data)) as preview:
+            with Image.open(io.BytesIO(bytes(thumb.data))) as preview:
                 preview.load()
                 return _orient_preview(preview, raw.sizes.flip)
         if thumb is not None and thumb.format == rawpy.ThumbFormat.BITMAP:
-            return _apply_flip(Image.fromarray(thumb.data), raw.sizes.flip)
+            return _apply_flip(Image.fromarray(np.asarray(thumb.data)), raw.sizes.flip)
         # No usable preview: demosaic. postprocess() applies the flip itself.
         logger.debug("RAW has no embedded preview; demosaicing at half size")
         return Image.fromarray(raw.postprocess(half_size=True, use_camera_wb=True))

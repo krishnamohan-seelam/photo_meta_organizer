@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Camera, Flag, Folder, Images, Plus, Star } from 'lucide-react'
+import { Camera, Flag, Folder, Images, Plus, Sparkles, Star } from 'lucide-react'
 import { useUiStore } from '../../stores/useUiStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useFacets } from '../../hooks/useFacets'
+import { aiSearchReady, useAiTagCounts, useAnalysisStatus } from '../../hooks/useAnalysis'
 import { useCollections, useSaveCollection } from '../../hooks/useCollections'
 import { NameDialog } from '../collections/NameDialog'
 
@@ -61,6 +62,8 @@ export const LibraryPanel: React.FC = () => {
       setCollectionFilter: st.setCollectionFilter,
       filterRating: st.filterRating,
       setRatingFilter: st.setRatingFilter,
+      filterAiTag: st.filterAiTag,
+      setAiTagFilter: st.setAiTagFilter,
     }))
   )
   const selectionCount = useSelectionStore((st) => st.selectedHashes.size)
@@ -68,6 +71,8 @@ export const LibraryPanel: React.FC = () => {
   const collections = useCollections()
   const saveCollection = useSaveCollection()
   const [naming, setNaming] = useState(false)
+  const aiReady = aiSearchReady(useAnalysisStatus())
+  const aiTags = useAiTagCounts(aiReady).data ?? []
 
   if (!s.sidebarOpen) return null
 
@@ -154,6 +159,27 @@ export const LibraryPanel: React.FC = () => {
           </div>
         )}
       </Section>
+
+      {aiReady && aiTags.length > 0 && (
+        <Section title="Suggested by AI" onClear={s.filterAiTag ? () => s.setAiTagFilter(null) : undefined}>
+          <div className="pill-list">
+            {aiTags.slice(0, 40).map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                className="btn-reset pill pill-ai"
+                aria-pressed={s.filterAiTag === t.name}
+                title="Photos the model suggests this tag for; accept them from the inspector or the selection bar"
+                onClick={() => s.setAiTagFilter(s.filterAiTag === t.name ? null : t.name)}
+              >
+                <Sparkles size={10} aria-hidden="true" />
+                {t.name}
+                <span className="pill-count">{t.count}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {naming && (
         <NameDialog

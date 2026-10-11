@@ -17,6 +17,7 @@ export function useLibraryFilters(): LibraryFilters {
       filterHasLocation: s.filterHasLocation,
       filterDateRange: s.filterDateRange,
       filterArea: s.filterArea,
+      filterAiTag: s.filterAiTag,
       sortBy: s.sortBy,
       sortOrder: s.sortOrder,
     }))
@@ -45,6 +46,8 @@ export function removeFilterChip(chip: FilterChip): void {
       return useUiStore.setState({ filterHasLocation: null })
     case 'area':
       return s.setFilterArea(null)
+    case 'aitag':
+      return s.setAiTagFilter(null)
     case 'date':
       return s.setDateRangeFilter(null)
   }

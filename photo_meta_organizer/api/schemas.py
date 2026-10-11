@@ -118,6 +118,9 @@ class SearchRequest(BaseModel):
         default=None, description="Only photos inside this map area"
     )
     collection: str | None = Field(default=None, description="Members of this collection")
+    ai_tag: str | None = Field(
+        default=None, description="Photos with an open AI suggestion of this label"
+    )
     location_lat: float | None = None
     location_lon: float | None = None
     radius_km: float | None = None
@@ -307,6 +310,10 @@ class AnalyzeRequest(BaseModel):
     reanalyze: bool = Field(default=False, description="Redo every photo, not only new ones")
     limit: int | None = Field(default=None, ge=1, description="Analyze at most this many photos")
     tags: bool = Field(default=True, description="Also suggest tags")
+    retag: bool = Field(
+        default=False,
+        description="Only recompute suggested tags from the stored embeddings (no photo is opened)",
+    )
 
 
 class SemanticSearchRequest(SearchRequest):
