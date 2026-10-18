@@ -4,22 +4,43 @@ from pathlib import Path
 
 import pytest
 
+from photo_meta_organizer.application import settings as settings_module
 from photo_meta_organizer.application.settings import (
+    APP_NAME,
     DEFAULT_ALLOWED_HOSTS,
     DEFAULT_CORS_ORIGINS,
     Settings,
+    UserDirs,
 )
 
 
 @pytest.mark.unit
 class TestSettings:
-    def test_defaults_are_the_dev_layout(self) -> None:
+    def test_defaults_are_the_os_folders_split_by_kind(self, user_dirs: UserDirs) -> None:
         s = Settings.from_env({})
-        assert s.db_path == Path("photos.db")
-        assert s.cache_dir is None and s.log_dir is None
-        assert s.thumbnail_dir == Path(".cache") / "thumbnails"
+        assert s.db_path == user_dirs.data / "photos.db"
+        assert s.thumbnail_dir == user_dirs.cache / "thumbnails"
+        assert s.models_dir == user_dirs.data / "models"
+        assert s.log_dir is None  # no log file unless logging to a file is turned on
         assert s.allowed_hosts == DEFAULT_ALLOWED_HOSTS
         assert s.cors_origins == DEFAULT_CORS_ORIGINS
+
+    def test_a_settings_object_built_directly_uses_the_same_folders(
+        self, user_dirs: UserDirs
+    ) -> None:
+        s = Settings()
+        assert s.db_path == user_dirs.data / "photos.db"
+        assert s.thumbnail_dir == user_dirs.cache / "thumbnails"
+        assert s.models_dir == user_dirs.data / "models"
+
+    def test_log_file_turned_on_goes_to_the_os_log_folder(self, user_dirs: UserDirs) -> None:
+        assert Settings.from_env({}, log_to_file=True).log_dir == user_dirs.log
+
+    def test_a_log_folder_that_is_given_beats_the_os_log_folder(self, tmp_path) -> None:
+        env = {"PMO_LOG_DIR": str(tmp_path / "env")}
+        assert Settings.from_env(env, log_to_file=True).log_dir == tmp_path / "env"
+        data = {"PMO_DATA_DIR": str(tmp_path)}
+        assert Settings.from_env(data, log_to_file=True).log_dir == tmp_path / "logs"
 
     def test_environment(self, tmp_path) -> None:
         s = Settings.from_env(
@@ -108,8 +129,9 @@ class TestMapTiles:
 class TestModelDir:
     """Where the downloaded AI model lives (PMO_MODEL_DIR)."""
 
-    def test_default_is_under_the_dev_cache(self) -> None:
-        assert Settings.from_env({}).models_dir == Path(".cache") / "models"
+    def test_default_is_under_the_data_folder(self, user_dirs: UserDirs) -> None:
+        # Not the cache: an OS cleanup must not cost a 305 MB re-download.
+        assert Settings.from_env({}).models_dir == user_dirs.data / "models"
 
     def test_environment(self, tmp_path) -> None:
         settings = Settings.from_env({"PMO_MODEL_DIR": str(tmp_path / "m")})
@@ -124,3 +146,18 @@ class TestModelDir:
         assert Settings.from_env(env).models_dir == tmp_path / "env"
         flagged = Settings.from_env(env, model_dir=tmp_path / "flag")
         assert flagged.models_dir == tmp_path / "flag"
+
+
+class TestUserDirs:
+    """The real per-user folders come from platformdirs, so they follow each OS's rules."""
+
+    def test_each_kind_is_an_absolute_folder_named_for_the_app(self, monkeypatch) -> None:
+        monkeypatch.undo()  # the conftest stand-in; nothing is created here
+        dirs = settings_module.user_dirs()
+        for path in (dirs.data, dirs.cache, dirs.log):
+            assert path.is_absolute() and APP_NAME in path.parts
+
+    def test_cache_and_logs_are_kept_apart_from_the_data(self, monkeypatch) -> None:
+        monkeypatch.undo()
+        dirs = settings_module.user_dirs()
+        assert len({dirs.data, dirs.cache, dirs.log}) == 3

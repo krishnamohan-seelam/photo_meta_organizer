@@ -9,15 +9,18 @@ them the same way; parsing of search arguments lives in
 
 Example:
     $ python -m photo_meta_organizer.main --help
-    $ python -m photo_meta_organizer.main index --path /photos --db photos.db
+    $ python -m photo_meta_organizer.main index --path /photos
+    $ python -m photo_meta_organizer.main paths     # where the library, cache and logs live
 """
 
 import argparse
 import logging
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from photo_meta_organizer import __version__
+from photo_meta_organizer.application import settings as app_settings
 from photo_meta_organizer.application.interfaces import (
     ImageMetadataExtractor,
     ImageMetadataRepository,
@@ -557,12 +560,44 @@ def handle_analyze_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_paths_command(args: argparse.Namespace) -> int:
+    """Handle 'paths' command: show where this library's files live. Writes nothing."""
+    settings: Settings = args.settings
+    log = settings.log_dir or app_settings.user_dirs().log
+    print(f" Database   : {settings.db_path}")
+    print(f" Thumbnails : {settings.thumbnail_dir}")
+    print(f" AI model   : {settings.models_dir}")
+    print(f" Logs       : {log}{'' if settings.log_dir else '  (written only with --log)'}")
+    return 0
+
+
+OLD_DEFAULT_DB = Path("photos.db")
+
+
+def _note_library_left_behind(db_flag: str | None, settings: Settings) -> None:
+    """The default library used to be photos.db in the working directory: say where it went."""
+    default = app_settings.user_dirs().data / "photos.db"
+    if (
+        db_flag is not None
+        or settings.db_path != default
+        or default.exists()
+        or not OLD_DEFAULT_DB.is_file()
+    ):
+        return
+    print(
+        f"Note: found {OLD_DEFAULT_DB.resolve()}, but the library now lives at {default}.\n"
+        "      Move photos.db (with any photos.db-wal/-shm files) there, or pass "
+        "--db photos.db to keep using it here.",
+        file=sys.stderr,
+    )
+
+
 # ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
 
 
-DB_HELP = "Path to metadata database file (default: $PMO_DB, else photos.db)"
+DB_HELP = "Path to metadata database file (default: $PMO_DB, else the per-user data folder)"
 
 
 def main() -> int:
@@ -595,11 +630,17 @@ def main() -> int:
         help="Set logging level (default: INFO)",
     )
     parser.add_argument(
+        "--log",
+        action="store_true",
+        default=False,
+        help="Also write a rotating photo_meta_organizer.log to the per-user log folder",
+    )
+    parser.add_argument(
         "--log-dir",
         default=None,
         help=(
             "Write a rotating photo_meta_organizer.log here "
-            "(default: $PMO_LOG_DIR, else no log file)"
+            "(default: $PMO_LOG_DIR, else none unless --log)"
         ),
     )
 
@@ -788,7 +829,7 @@ def main() -> int:
     analyze_parser.add_argument(
         "--model-dir",
         default=None,
-        help="Where the model is stored (default: $PMO_MODEL_DIR, else .cache/models)",
+        help="Where the model is stored (default: $PMO_MODEL_DIR, else the per-user data folder)",
     )
     analyze_parser.add_argument(
         "--download",
@@ -836,12 +877,27 @@ def main() -> int:
     stats_parser.add_argument("--db", default=None, help=DB_HELP)
     stats_parser.set_defaults(func=handle_stats_command)
 
+    paths_parser = subparsers.add_parser(
+        "paths",
+        help="Show where the database, thumbnails, AI model and logs are kept",
+    )
+    paths_parser.add_argument("--db", default=None, help=DB_HELP)
+    paths_parser.set_defaults(func=handle_paths_command)
+
     try:
         args = parser.parse_args()
         # Same precedence as the API and desktop backend: flag > environment > default.
-        settings = Settings.from_env(db_path=getattr(args, "db", None), log_dir=args.log_dir)
+        db_flag = getattr(args, "db", None)
+        settings = Settings.from_env(
+            db_path=db_flag,
+            log_dir=args.log_dir,
+            log_to_file=args.log,
+            model_dir=getattr(args, "model_dir", None),
+        )
+        args.settings = settings
         if hasattr(args, "db"):
             args.db = str(settings.db_path)
+            _note_library_left_behind(db_flag, settings)
 
         from photo_meta_organizer.infrastructure.logging_setup import configure_logging
 

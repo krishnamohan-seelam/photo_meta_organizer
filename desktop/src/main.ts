@@ -81,24 +81,21 @@ function getBackendCommand(port: number): { cmd: string; args: string[]; cwd: st
       'photo_meta_organizer_backend.exe'
     );
     if (fs.existsSync(packagedExe)) {
-      // Everything the backend writes goes under the per-user data directory, never the
-      // install directory (read-only for normal users, replaced on update). Older builds
-      // kept their database in resources/; --legacy-dir adopts it once.
-      const dataDir = app.getPath('userData');
-      fs.mkdirSync(dataDir, { recursive: true });
+      // The backend keeps its data in the OS per-user folders (data, cache, logs), the
+      // same library the CLI uses, never in the install directory (read-only for normal
+      // users, replaced on update). Earlier builds kept it in userData, older ones in
+      // resources/: each --legacy-dir is adopted once (database copied, model moved).
+      const userData = app.getPath('userData');
+      fs.mkdirSync(userData, { recursive: true });
       return {
         cmd: packagedExe,
         args: [
           '--port', port.toString(),
           '--host', '127.0.0.1',
-          '--db', path.join(dataDir, 'photos.db'),
-          // Not under userData/Cache: that is Chromium's HTTP cache (and on Windows
-          // "cache" and "Cache" are the same directory).
-          '--cache-dir', path.join(dataDir, 'thumbnails'),
-          '--log-dir', path.join(dataDir, 'logs'),
+          '--legacy-dir', userData,
           '--legacy-dir', process.resourcesPath,
         ],
-        cwd: dataDir,
+        cwd: userData,
       };
     }
   }

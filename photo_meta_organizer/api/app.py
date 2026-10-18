@@ -2,7 +2,7 @@
 
 Usage:
     # Production: settings from explicit values, then PMO_* environment variables
-    app = create_app(settings=Settings.from_env(db_path="photos.db"))
+    app = create_app(settings=Settings.from_env())  # the per-user library (see settings)
     uvicorn.run(app, host="127.0.0.1", port=8000)  # loopback only; see security notes below
 
     # uvicorn factory: create_app() with no arguments reads the environment (PMO_DB, ...)
@@ -95,7 +95,7 @@ def create_app(
         settings: The full configuration. When omitted it is read from the ``PMO_*``
                  environment variables (see ``application.settings``); the arguments
                  above override single fields either way.
-        cache_dir: Thumbnail cache directory (default ``.cache/thumbnails``).
+        cache_dir: Thumbnail cache directory (default: ``Settings.thumbnail_dir``).
         frontend_dist: The built UI to serve at ``/``. Defaults to
                  :func:`default_frontend_dist`.
         model_store: The AI model's home (default: built from the settings). A seam for tests.

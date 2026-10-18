@@ -19,9 +19,11 @@ from typing import BinaryIO
 
 import pytest
 
+from photo_meta_organizer.application import settings as settings_module
 from photo_meta_organizer.application.interfaces import (
     RemoteFileHandle,
 )
+from photo_meta_organizer.application.settings import UserDirs
 from photo_meta_organizer.domain.models import (
     CameraProfile,
     GpsCoordinates,
@@ -68,6 +70,18 @@ def _isolate_logging_config():
     root.handlers[:] = saved[1]
     package.setLevel(saved[2])
     package.handlers[:] = saved[3]
+
+
+@pytest.fixture(autouse=True)
+def user_dirs(tmp_path_factory, monkeypatch) -> UserDirs:
+    """Stand-in for the OS per-user folders, so no test writes to the real AppData,
+    ~/Library or ~/.local. Settings built without explicit paths land here."""
+    root = tmp_path_factory.mktemp("user-dirs")
+    dirs = UserDirs(data=root / "data", cache=root / "cache", log=root / "log")
+    monkeypatch.setattr(settings_module, "user_dirs", lambda: dirs)
+    for var in ("PMO_DATA_DIR", "PMO_DB", "PMO_CACHE_DIR", "PMO_LOG_DIR", "PMO_MODEL_DIR"):
+        monkeypatch.delenv(var, raising=False)
+    return dirs
 
 
 @pytest.fixture

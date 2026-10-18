@@ -87,6 +87,8 @@ def build_repository(db_path: str) -> ImageMetadataRepository:
             )
         return SqliteRepository(db_path=sqlite_path)
 
+    if db_path != ":memory:":
+        os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     return SqliteRepository(db_path=db_path)
 
 

@@ -10,11 +10,13 @@ from tests.conftest import wait_for_job
 
 from photo_meta_organizer.api.app import create_app, default_frontend_dist
 from photo_meta_organizer.api.desktop import (
+    adopt_legacy_data,
     adopt_legacy_database,
+    adopt_legacy_models,
     parse_args,
     resolve_settings,
 )
-from photo_meta_organizer.application.settings import Settings
+from photo_meta_organizer.application.settings import Settings, UserDirs
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
 )
@@ -77,11 +79,6 @@ class TestCacheDir:
 
 
 class TestDesktopSettings:
-    @pytest.fixture(autouse=True)
-    def _clean_env(self, monkeypatch):
-        for var in ("PMO_DATA_DIR", "PMO_DB", "PMO_CACHE_DIR", "PMO_LOG_DIR"):
-            monkeypatch.delenv(var, raising=False)
-
     def test_explicit_paths_win(self, tmp_path):
         args = parse_args(
             [
@@ -118,9 +115,20 @@ class TestDesktopSettings:
         assert s.db_path == tmp_path / "flag.db"
         assert s.log_dir == tmp_path / "logs"
 
-    def test_no_arguments_keeps_the_dev_layout(self):
+    def test_no_arguments_uses_the_os_folders_and_always_logs(self, user_dirs: UserDirs):
+        # The same library the CLI and the API use; the desktop app always keeps a log.
         s = resolve_settings(parse_args([]))
-        assert s.db_path == Path("photos.db") and s.cache_dir is None and s.log_dir is None
+        assert s.db_path == user_dirs.data / "photos.db"
+        assert s.thumbnail_dir == user_dirs.cache / "thumbnails"
+        assert s.models_dir == user_dirs.data / "models"
+        assert s.log_dir == user_dirs.log
+
+    def test_legacy_dir_may_be_given_more_than_once(self, tmp_path):
+        args = parse_args(
+            ["--legacy-dir", str(tmp_path / "a"), "--legacy-dir", str(tmp_path / "b")]
+        )
+        assert args.legacy_dir == [tmp_path / "a", tmp_path / "b"]
+        assert parse_args([]).legacy_dir == []
 
 
 class TestAdoptLegacyDatabase:
@@ -211,6 +219,74 @@ class TestAdoptLegacyDatabase:
     def test_nothing_to_adopt(self, tmp_path):
         assert adopt_legacy_database(tmp_path / "t.db", [tmp_path / "missing.db"]) is None
         assert not (tmp_path / "t.db").exists()
+
+
+class TestAdoptLegacyModels:
+    """Older desktop builds downloaded the model to <userData>/.cache/models (the backend's
+    working directory). It is moved, not copied: it can be downloaded again, and a second
+    305 MB copy would stay behind in the roaming profile."""
+
+    def _model(self, root: Path) -> Path:
+        (root / "clip").mkdir(parents=True)
+        (root / "clip" / "model.onnx").write_bytes(b"weights")
+        return root
+
+    def test_moves_an_old_model_folder(self, tmp_path):
+        old = self._model(tmp_path / "userData" / ".cache" / "models")
+        target = tmp_path / "new" / "models"
+
+        assert adopt_legacy_models(target, [tmp_path / "nope", old]) == old
+
+        assert (target / "clip" / "model.onnx").read_bytes() == b"weights"
+        assert not old.exists()
+
+    def test_an_installed_model_is_never_replaced(self, tmp_path):
+        old = self._model(tmp_path / "old")
+        target = self._model(tmp_path / "new")
+        (target / "clip" / "model.onnx").write_bytes(b"current")
+
+        assert adopt_legacy_models(target, [old]) is None
+        assert (target / "clip" / "model.onnx").read_bytes() == b"current"
+        assert old.exists()
+
+    def test_an_empty_target_folder_counts_as_not_installed(self, tmp_path):
+        old = self._model(tmp_path / "old")
+        target = tmp_path / "new"
+        target.mkdir()
+        assert adopt_legacy_models(target, [old]) == old
+
+    def test_nothing_to_adopt(self, tmp_path):
+        assert adopt_legacy_models(tmp_path / "t", [tmp_path / "missing"]) is None
+        assert not (tmp_path / "t").exists()
+
+
+class TestAdoptLegacyData:
+    def test_takes_the_database_and_model_from_the_first_dir_that_has_them(self, tmp_path):
+        user_data = tmp_path / "userData"
+        (user_data / ".cache" / "models" / "clip").mkdir(parents=True)
+        (user_data / ".cache" / "models" / "clip" / "m.onnx").write_bytes(b"w")
+        SqliteRepository(str(user_data / "photos.db")).close()
+        resources = tmp_path / "resources"
+        resources.mkdir()
+        (resources / "photos.db").write_bytes(b"older install")
+        settings = Settings(
+            db_path=tmp_path / "new" / "photos.db",
+            cache_dir=tmp_path / "new" / "thumbs",
+            model_dir=tmp_path / "new" / "models",
+        )
+
+        adopt_legacy_data(settings, [user_data, resources])
+
+        repo = SqliteRepository(str(settings.db_path))
+        assert repo.count() == 0  # a real SQLite file: userData's, not the resources' bytes
+        repo.close()
+        assert (user_data / "photos.db").exists()  # the database is copied, never moved
+        assert (settings.models_dir / "clip" / "m.onnx").exists()
+
+    def test_no_legacy_dirs_is_a_no_op(self, tmp_path):
+        settings = Settings(db_path=tmp_path / "p.db", model_dir=tmp_path / "m")
+        adopt_legacy_data(settings, [])
+        assert not settings.db_path.exists() and not settings.models_dir.exists()
 
 
 def test_importing_the_api_has_no_side_effects(tmp_path):

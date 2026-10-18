@@ -37,21 +37,19 @@ class ThumbnailService:
 
     def __init__(
         self,
-        cache_dir: str | None = None,
+        cache_dir: str | Path,
         max_bytes: int = DEFAULT_MAX_BYTES,
         max_concurrent: int | None = None,
     ) -> None:
         """Initialize ThumbnailService.
 
         Args:
-            cache_dir: Directory where generated thumbnails are stored.
-                       Defaults to '.cache/thumbnails' in current working dir.
+            cache_dir: Directory where generated thumbnails are stored
+                       (``Settings.thumbnail_dir``; nothing is assumed about the CWD).
             max_bytes: Size budget of the cache; least recently used files are
                        evicted beyond it.
             max_concurrent: Renders allowed at once (default: half the CPUs, min 2).
         """
-        if cache_dir is None:
-            cache_dir = os.path.join(os.getcwd(), ".cache", "thumbnails")
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.max_bytes = max_bytes

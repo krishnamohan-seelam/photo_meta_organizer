@@ -1,9 +1,15 @@
-"""Seed sample photos and metadata into photos.db for interactive demo testing."""
+"""Seed sample photos and metadata into the library for interactive demo testing.
+
+The library is the one every front door uses (``Settings``: $PMO_DB, $PMO_DATA_DIR, else
+the per-user data folder); set PMO_DATA_DIR to seed a scratch library instead.
+"""
 
 import os
 from datetime import datetime, timezone
 from PIL import Image, ImageDraw
 
+from photo_meta_organizer.application.composition import build_repository
+from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.domain.models import (
     CameraProfile,
     GpsCoordinates,
@@ -11,9 +17,6 @@ from photo_meta_organizer.domain.models import (
     ImageExifData,
     ImageFileInfo,
     ImageMetadata,
-)
-from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
-    SqliteRepository,
 )
 
 SAMPLE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sample_photos")
@@ -124,7 +127,8 @@ photos_spec = [
     },
 ]
 
-repo = SqliteRepository(db_path="photos.db")
+DB_PATH = Settings.from_env().db_path
+repo = build_repository(str(DB_PATH))
 
 for spec in photos_spec:
     img_path = os.path.join(SAMPLE_DIR, spec["filename"])
@@ -170,5 +174,5 @@ for spec in photos_spec:
     )
     repo.save(metadata)
 
-repo.close()
-print("Successfully seeded photos.db with sample photos!")
+repo.close()  # type: ignore[attr-defined]
+print(f"Successfully seeded {DB_PATH} with sample photos!")

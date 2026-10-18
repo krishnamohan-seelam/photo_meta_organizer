@@ -105,6 +105,17 @@ class TestPruneNonImages:
         assert result.candidates == [] and result.removed == 0
 
 
+class TestBuildRepository:
+    def test_creates_the_database_folder(self, tmp_path):
+        """The default library sits in a per-user folder that may not exist yet."""
+        from photo_meta_organizer.application.composition import build_repository
+
+        repository = build_repository(str(tmp_path / "new" / "nested" / "photos.db"))
+
+        assert (tmp_path / "new" / "nested" / "photos.db").exists()
+        repository.close()  # type: ignore[attr-defined]
+
+
 class TestBuildAnalysisRepository:
     def test_shares_the_metadata_repositorys_storage(self, tmp_path):
         from photo_meta_organizer.application.composition import (

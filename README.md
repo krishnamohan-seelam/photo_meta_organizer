@@ -46,7 +46,7 @@ Metadata indexing and organization system built specifically for large-scale pho
   - **Library Analytics Dashboard** (the *Insights* view): KPI metrics and charts with click-to-filter drilldowns.
   - **Fullscreen Lightbox**: a 2048 px preview (works for HEIC and RAW too), a filmstrip, and keyboard navigation (arrows, `Esc`, `P`, `0`-`5`).
 - **Windows Desktop Application (Electron shell)**: starts the Python FastAPI backend on a free port, opens the UI, and provides a native folder picker for indexing. The packaged app keeps its data under the per-user data directory and sets a per-launch API token cookie (see [Security model](#security-model)); the `electron-builder` + `PyInstaller` pipeline is verified on the unpacked app (see [Known limitations](#known-limitations) for the remaining code-signing caveat).
-- **WebP Thumbnail Cache & Streaming Service**: SHA-256 hash-addressed thumbnails with EXIF transpose correction, cached under `.cache/thumbnails/` (or `PMO_CACHE_DIR`). Writes are atomic, each thumbnail renders once even under concurrent requests, and the cache is bounded by `PMO_THUMBNAIL_CACHE_MB` (default 1024) with least-recently-used eviction.
+- **WebP Thumbnail Cache & Streaming Service**: SHA-256 hash-addressed thumbnails with EXIF transpose correction, cached in the per-user cache folder (or `PMO_CACHE_DIR`; see Configuration). Writes are atomic, each thumbnail renders once even under concurrent requests, and the cache is bounded by `PMO_THUMBNAIL_CACHE_MB` (default 1024) with least-recently-used eviction.
 - **HEIC/HEIF and camera RAW**: decoded with pillow-heif and rawpy (the RAW file's embedded preview) for dimensions, thumbnails and the lightbox preview.
 - **Export**: `POST /api/export/zip` streams a ZIP of the selected originals (skipped files are listed in an `export_report.txt` inside it); `POST /api/export/json` exports metadata for a selection or the whole library.
 - **Asynchronous Index & Sync Jobs**: `POST /api/index` and `POST /api/sync` return `202` plus a job id; `GET /api/jobs/{id}` reports progress and errors, and a job can be cancelled mid-run. The frontend shows a progress bar and an in-app folder dialog (`FolderJobDialog`) instead of `window.prompt`. Only image files are indexed, exactly as with the CLI.
@@ -96,7 +96,7 @@ Add one with `uv add <package>` (or `uv add --group dev <package>`) and commit b
 
 ## 🖥️ Running the Application (Backend & Frontend)
 
-Run the API commands from the **repository root**: the database path (`photos.db`) and the thumbnail cache (`.cache/`) are relative to the working directory. `--db photos.db` still works against an old TinyDB library — it is imported once into a sibling `.db` file and never modified.
+The CLI, the API and the desktop app share one library in your per-user folders (see [Where your data lives](#where-your-data-lives)), so you can start them from any directory. `--db old.json` still works against an old TinyDB library — it is imported once into a sibling `.db` file and never modified.
 
 ### Option A: Development Mode (Two Terminals with Hot-Reload)
 
@@ -156,33 +156,52 @@ npm run desktop:package
 ```
 *Output binaries are generated in:* `desktop/dist-package/`
 
-The installed app keeps its data in the per-user data directory
-(`%APPDATA%\Photo Meta Organizer\`): `photos.db`, `thumbnails\` and `logs\backend.log`.
-Nothing is written to the install directory, so updates and reinstalls keep the library.
-A database left by an older build in the install's `resources\` folder (`photos.db` or
-`metadata.json`) is copied or imported once on first start; the original is not modified.
+The desktop app uses the same per-user folders as the CLI (see below) and always keeps
+`backend.log` in the log folder. Nothing is written to the install directory, so updates
+and reinstalls keep the library. On first start it adopts the data of older builds once:
+a database in `%APPDATA%\Photo Meta Organizer\` (or, older still, the install's
+`resources\` folder: `photos.db` or `metadata.json`) is copied or imported and the
+original is not modified; a downloaded AI model there is moved. The old `thumbnails\`
+and `logs\` in `%APPDATA%\Photo Meta Organizer\` are no longer used and can be deleted.
 
 ---
+
+### Where your data lives
+
+Nothing is kept in the project directory. By default each kind of file goes to the folder
+your operating system sets aside for it (via [platformdirs](https://pypi.org/project/platformdirs/)):
+
+| Kind | Windows | macOS | Linux |
+|---|---|---|---|
+| Data: `photos.db`, `models/` (AI model) | `%LOCALAPPDATA%\PhotoMetaOrganizer\` | `~/Library/Application Support/PhotoMetaOrganizer/` | `~/.local/share/PhotoMetaOrganizer/` |
+| Cache: `thumbnails/` (safe to delete) | `%LOCALAPPDATA%\PhotoMetaOrganizer\Cache\` | `~/Library/Caches/PhotoMetaOrganizer/` | `~/.cache/PhotoMetaOrganizer/` |
+| Logs (only with `--log`; always for the desktop app) | `%LOCALAPPDATA%\PhotoMetaOrganizer\Logs\` | `~/Library/Logs/PhotoMetaOrganizer/` | `~/.local/state/PhotoMetaOrganizer/log/` |
+
+On Linux the `XDG_DATA_HOME`, `XDG_CACHE_HOME` and `XDG_STATE_HOME` variables are honoured.
+`python -m photo_meta_organizer.main paths` prints the folders in use. Back up the data
+folder; the cache rebuilds itself. If a CLI command finds an older `photos.db` in the
+current directory, it says where the library now lives: move the file (with any
+`photos.db-wal`/`-shm` files) there, or pass `--db photos.db` to keep using it.
 
 ### Configuration
 
 The CLI, the API and the desktop backend read the same settings (`application/settings.py`).
-An explicit flag or argument wins, then the environment, then the development default:
+An explicit flag or argument wins, then the environment, then the per-user folders above:
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `PMO_DATA_DIR` | Base directory for the three paths below | (unset) |
-| `PMO_DB` | SQLite database file | `<data dir>/photos.db`, else `photos.db` |
-| `PMO_CACHE_DIR` | Thumbnail cache | `<data dir>/thumbnails`, else `.cache/thumbnails` |
-| `PMO_MODEL_DIR` | Where the downloaded AI model lives | `<data dir>/models`, else `.cache/models` |
-| `PMO_LOG_DIR` | Directory for a rotating log (CLI: `photo_meta_organizer.log`, also `--log-dir`; desktop backend: `backend.log`) | `<data dir>/logs`, else no log file |
+| `PMO_DATA_DIR` | One folder for everything below (e.g. a scratch library) | (unset) |
+| `PMO_DB` | SQLite database file | `<data dir>/photos.db`, else the data folder |
+| `PMO_CACHE_DIR` | Thumbnail cache | `<data dir>/thumbnails`, else the cache folder |
+| `PMO_MODEL_DIR` | Where the downloaded AI model lives | `<data dir>/models`, else the data folder |
+| `PMO_LOG_DIR` | Directory for a rotating log (CLI: `photo_meta_organizer.log`, also `--log-dir`; desktop backend: `backend.log`) | `<data dir>/logs`, else the log folder with `--log`, else no log file |
 | `PMO_THUMBNAIL_CACHE_MB` | Size budget of the thumbnail cache | `1024` |
 | `PMO_ALLOWED_HOSTS` | Host names the API accepts | `localhost,127.0.0.1` |
 | `PMO_CORS_ORIGINS` | Origins granted CORS | the Vite dev origins |
 | `PMO_MAP_TILES_URL` | Opt-in online map tiles, an `http(s)` template containing `{z}`, `{x}` and `{y}`. The browser then asks that server for tiles, which reveals the area you are viewing | (unset: offline outline) |
 | `PMO_MAP_TILES_ATTRIBUTION` | Credit line the map shows for that tile server | (unset) |
 
-Relative paths are relative to the working directory, so start the API from the repository root.
+Relative paths you give are relative to the working directory.
 
 ### Security model
 
@@ -202,14 +221,18 @@ Only image files are indexed; other files in the folder are skipped.
 
 ```bash
 # Index all images in a directory (uses 4 workers by default)
-python -m photo_meta_organizer.main index --path "C:\your\photos" --db photos.db
+python -m photo_meta_organizer.main index --path "C:\your\photos"
 
 # Index with a specific number of worker threads
-python -m photo_meta_organizer.main index --path "C:\your\photos" --db photos.db --workers 8
+python -m photo_meta_organizer.main index --path "C:\your\photos" --workers 8
 
 # With verbose logging (global flags, placed before the command). Log lines go to stderr;
-# --log-dir (or PMO_LOG_DIR) also writes a rotating photo_meta_organizer.log there.
-python -m photo_meta_organizer.main --log-level DEBUG --log-dir logs index --path /photos --db photos.db
+# --log also writes a rotating photo_meta_organizer.log to the per-user log folder
+# (--log-dir DIR or PMO_LOG_DIR: there instead).
+python -m photo_meta_organizer.main --log-level DEBUG --log index --path /photos
+
+# Where the database, thumbnails, AI model and logs are kept
+python -m photo_meta_organizer.main paths
 
 # View help
 python -m photo_meta_organizer.main --help
@@ -221,23 +244,23 @@ python -m photo_meta_organizer.main --help
 
 ```bash
 # View library statistics
-python -m photo_meta_organizer.main stats --db photos.db
+python -m photo_meta_organizer.main stats
 
 # Search by camera make or model (substring match)
-python -m photo_meta_organizer.main search --camera Sony --db photos.db
+python -m photo_meta_organizer.main search --camera Sony
 
 # Search by date range (YYYY-MM, YYYY-MM-DD, or ISO datetimes). A bare day or month as the end
 # covers the whole period: --date-to 2026-12-31 includes photos taken on the 31st.
-python -m photo_meta_organizer.main search --date-from 2026-01-01 --date-to 2026-12-31 --db photos.db
+python -m photo_meta_organizer.main search --date-from 2026-01-01 --date-to 2026-12-31
 
 # One month or one day
-python -m photo_meta_organizer.main search --date 2026-03 --db photos.db
+python -m photo_meta_organizer.main search --date 2026-03
 
 # Search near a GPS coordinate within a 25 km radius (all three flags, or --location lat,lon,km)
-python -m photo_meta_organizer.main search --lat 35.6586 --lon 139.7454 --radius 25 --db photos.db
+python -m photo_meta_organizer.main search --lat 35.6586 --lon 139.7454 --radius 25
 
 # Tags: a photo must have ALL listed tags
-python -m photo_meta_organizer.main search --tags travel,japan --db photos.db
+python -m photo_meta_organizer.main search --tags travel,japan
 ```
 
 **Dates are naive local time.** EXIF has no timezone, so `captured_at` is the wall-clock time the camera recorded. Date bounds that carry a timezone (for example `...Z` in an API request) have the timezone dropped, not converted.
@@ -246,13 +269,13 @@ python -m photo_meta_organizer.main search --tags travel,japan --db photos.db
 
 ```bash
 # Index new photos and update modified ones
-python -m photo_meta_organizer.main sync --path "C:\your\photos" --db photos.db
+python -m photo_meta_organizer.main sync --path "C:\your\photos"
 
 # Also remove records for files that no longer exist
-python -m photo_meta_organizer.main sync --path /photos --db photos.db --cleanup-deleted
+python -m photo_meta_organizer.main sync --path /photos --cleanup-deleted
 
 # Preview changes without writing to the DB
-python -m photo_meta_organizer.main sync --path /photos --db photos.db --dry-run
+python -m photo_meta_organizer.main sync --path /photos --dry-run
 ```
 
 ### AI analysis (Phase 5, command line only so far)
@@ -263,15 +286,15 @@ python -m photo_meta_organizer.main sync --path /photos --db photos.db --dry-run
 uv sync --extra ai     # a plain `uv sync` removes the extra
 
 # First time: shows what will be downloaded and asks before doing it (--yes agrees up front)
-python -m photo_meta_organizer.main analyze --db photos.db --download
+python -m photo_meta_organizer.main analyze --download
 
 # Afterwards: only photos with no embedding yet are processed, so it is safe to interrupt and re-run
-python -m photo_meta_organizer.main analyze --db photos.db
-python -m photo_meta_organizer.main analyze --db photos.db --no-tags --limit 500 --reanalyze
+python -m photo_meta_organizer.main analyze
+python -m photo_meta_organizer.main analyze --no-tags --limit 500 --reanalyze
 
 # After changing --threshold (or the vocabulary): recompute only the suggested tags from the stored
 # embeddings. No photo is opened, so it takes seconds; accepted and rejected tags are kept.
-python -m photo_meta_organizer.main analyze --db photos.db --retag --threshold 0.03
+python -m photo_meta_organizer.main analyze --retag --threshold 0.03
 ```
 
 Suggested tags never touch your own tags until you accept them, and a rejected suggestion is not suggested for that photo again. A modified file is analysed again on the next run. Expect roughly 10 photos a second (about 35 minutes for 20,000), once. The same work is available over the API (see Features): download the model, run the analysis, search by meaning and review tags, all as jobs and requests. In the app the Library panel lists “Suggested by AI” labels with counts (click one to filter), and a search by meaning has “Show more”, opens in the viewer and takes the grid's keys. The app has the same flow: the sparkle button in the top bar walks through the consent, the download and the analysis, with progress in the job pill.
@@ -282,13 +305,13 @@ Earlier versions of `POST /api/index` indexed every file in a folder, so a libra
 
 ```bash
 # Dry run (default): list what would be removed
-python -m photo_meta_organizer.main prune --db photos.db
+python -m photo_meta_organizer.main prune
 
 # Actually delete those records (files on disk are never touched)
-python -m photo_meta_organizer.main prune --db photos.db --apply
+python -m photo_meta_organizer.main prune --apply
 ```
 
-Back up `photos.db` before any command that deletes records.
+Back up `photos.db` (see `paths`) before any command that deletes records.
 
 ### Repair Duplicate Paths and Force a Full Re-check
 
@@ -296,22 +319,22 @@ Before this fix, syncing an edited file saved the new content as a second record
 
 ```bash
 # Dry run (default)
-python -m photo_meta_organizer.main dedupe --db photos.db
+python -m photo_meta_organizer.main dedupe
 
 # Merge them
-python -m photo_meta_organizer.main dedupe --db photos.db --apply
+python -m photo_meta_organizer.main dedupe --apply
 ```
 
 `sync` compares each file's size and modification time with what was stored and hashes only the files that differ. Records created by older versions have no stored time; they are trusted on size and filled in on the next sync. To hash every file regardless (slow, reads the whole library), for example after an edit that preserved size and mtime:
 
 ```bash
-python -m photo_meta_organizer.main sync --path "D:\photos" --db photos.db --rehash
+python -m photo_meta_organizer.main sync --path "D:\photos" --rehash
 ```
 
 Records indexed before the capture-date fix may carry the file's modification time as their capture date. `--reextract` re-reads every file already in the database and keeps ratings, flags, labels and the date added (slow; back up `photos.db` first):
 
 ```bash
-python -m photo_meta_organizer.main sync --path "D:\photos" --db photos.db --reextract
+python -m photo_meta_organizer.main sync --path "D:\photos" --reextract
 ```
 
 ### Run Tests

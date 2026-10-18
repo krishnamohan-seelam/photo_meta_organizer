@@ -18,6 +18,7 @@ dependencies = [
     "pillow-heif>=1.0",     # HEIC/HEIF decoding (PMO-23)
     "rawpy>=0.25",          # camera RAW: embedded preview + dimensions (PMO-23)
     "numpy>=2.0",
+    "platformdirs>=4.11.15",
 ]
 
 [project.optional-dependencies]
