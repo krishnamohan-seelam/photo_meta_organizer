@@ -1,4 +1,4 @@
-"""Contract tests for AnalysisRepository (Phase 5): embeddings and suggested tags.
+﻿"""Contract tests for AnalysisRepository (Phase 5): embeddings and suggested tags.
 
 Parametrized over backends like the metadata contract, so a Phase 6 store has to pass the same
 bodies unchanged. Today there is one.
@@ -348,7 +348,9 @@ def test_an_existing_database_gains_the_analysis_tables(tmp_path):
     first = SqliteRepository(path)
     first.save(_photo("a"))
     with first.lock, first.connection:
-        first.connection.executescript("DROP TABLE photo_embeddings; DROP TABLE photo_ai_tags;")
+        first.connection.executescript(
+            "DROP TABLE photo_embeddings; DROP TABLE photo_ai_tags; PRAGMA user_version = 0;"
+        )
     first.close()
 
     reopened = SqliteRepository(path)

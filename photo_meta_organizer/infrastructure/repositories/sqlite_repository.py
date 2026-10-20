@@ -47,88 +47,7 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-
-_SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS photos (
-    file_hash TEXT PRIMARY KEY,
-    path TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    size_bytes INTEGER NOT NULL,
-    mime_type TEXT NOT NULL,
-    mtime TEXT,
-    width INTEGER NOT NULL,
-    height INTEGER NOT NULL,
-    captured_at TEXT,
-    camera_make TEXT,
-    camera_model TEXT,
-    f_stop REAL,
-    exposure_time TEXT,
-    iso INTEGER,
-    focal_length TEXT,
-    camera_profile TEXT NOT NULL DEFAULT 'unknown',
-    flash_fired INTEGER,
-    focal_length_35mm TEXT,
-    white_balance_mode TEXT,
-    exposure_program TEXT,
-    metering_mode TEXT,
-    orientation INTEGER,
-    gps_lat REAL,
-    gps_lon REAL,
-    gps_alt REAL,
-    gps_datum TEXT,
-    raw_tags TEXT NOT NULL DEFAULT '{}',
-    rating INTEGER CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
-    flagged INTEGER NOT NULL DEFAULT 0,
-    added_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_photos_captured_at ON photos(captured_at);
-CREATE INDEX IF NOT EXISTS idx_photos_size_bytes ON photos(size_bytes);
-CREATE INDEX IF NOT EXISTS idx_photos_camera_make ON photos(camera_make);
-CREATE INDEX IF NOT EXISTS idx_photos_flagged_rating ON photos(flagged, rating);
-
-CREATE TABLE IF NOT EXISTS photo_labels (
-    file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
-    label TEXT NOT NULL,
-    PRIMARY KEY (file_hash, label)
-);
-CREATE INDEX IF NOT EXISTS idx_photo_labels_label ON photo_labels(label);
-
-CREATE TABLE IF NOT EXISTS collections (
-    name TEXT PRIMARY KEY,
-    description TEXT NOT NULL DEFAULT '',
-    updated_at TEXT NOT NULL
-);
-
--- AI analysis (Phase 5, ADR-002). Keyed by content hash, so results go with a photo
--- (ON DELETE CASCADE) and survive re-saving unchanged content (the upsert is an UPDATE).
-CREATE TABLE IF NOT EXISTS photo_embeddings (
-    file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
-    model_id TEXT NOT NULL,
-    dim INTEGER NOT NULL,
-    vector BLOB NOT NULL,
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (file_hash, model_id)
-);
--- Counting a model's embeddings must not read the vectors (the search cache checks it).
-CREATE INDEX IF NOT EXISTS idx_photo_embeddings_model ON photo_embeddings(model_id, dim);
-
-CREATE TABLE IF NOT EXISTS photo_ai_tags (
-    file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
-    label TEXT NOT NULL,
-    confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
-    model_id TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'suggested'
-        CHECK (status IN ('suggested', 'accepted', 'rejected')),
-    PRIMARY KEY (file_hash, label)
-);
-CREATE INDEX IF NOT EXISTS idx_photo_ai_tags_label ON photo_ai_tags(label, status);
-
-CREATE TABLE IF NOT EXISTS collection_photos (
-    collection TEXT NOT NULL REFERENCES collections(name) ON DELETE CASCADE,
-    file_hash TEXT NOT NULL REFERENCES photos(file_hash) ON DELETE CASCADE,
-    PRIMARY KEY (collection, file_hash)
-);
-"""
+from photo_meta_organizer.infrastructure.repositories.migrations import migrate
 
 # Written by the user (or carried over by a replace), never by extraction.
 _CURATION_COLUMNS = ("rating", "flagged", "added_at")
@@ -179,8 +98,12 @@ class SqliteRepository:
         self.connection.execute("PRAGMA busy_timeout = 5000")
         if db_path != ":memory:":
             self.connection.execute("PRAGMA journal_mode = WAL")
-        with self.lock, self.connection:
-            self.connection.executescript(_SCHEMA_SQL)
+        try:
+            with self.lock:
+                migrate(self.connection, db_path)
+        except BaseException:
+            self.connection.close()  # a refused or failed open must not keep the file locked
+            raise
 
     def close(self) -> None:
         with self.lock:

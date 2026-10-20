@@ -4,10 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-20). Note: an unversioned database runs the idempotent baseline and is then stamped 1, so pre-Phase-5 libraries still gain the AI tables.
 
-- [ ] Today's schema becomes migration 0001; an existing database with tables and version 0 is stamped 1 without re-running it
-- [ ] Pending migrations run once, each in its own transaction, before any other repository work
-- [ ] Before a table-rebuilding migration, the database is copied with the SQLite backup API (safe under WAL)
-- [ ] A database with a newer version than the code knows is refused with an 'update the app' error (no read-only mode)
-- [ ] Tests: fresh database, existing unversioned database, newer-version database, backup created
+- [x] Today's schema becomes migration 0001; an existing database with tables and version 0 is brought to the baseline and stamped 1
+- [x] Pending migrations run once, each in its own transaction, before any other repository work
+- [x] Before a table-rebuilding migration, the database is copied with the SQLite backup API (safe under WAL)
+- [x] A database with a newer version than the code knows is refused with an 'update the app' error (no read-only mode)
+- [x] Tests: fresh database, existing unversioned database, newer-version database, backup created
+- [ ] Follow-up: make the CLI and the desktop shell show the refusal message cleanly (today it surfaces as an exception on open)
