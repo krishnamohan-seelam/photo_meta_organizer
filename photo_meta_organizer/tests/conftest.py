@@ -13,6 +13,7 @@ concrete classes implement the protocols and compose via dependency injection.
 import logging
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime
 from io import BytesIO
 from typing import BinaryIO
@@ -345,12 +346,24 @@ class MockImageMetadataRepository:
         """Initialize with empty in-memory storage."""
         self.storage: dict[str, ImageMetadata] = {}
 
-    def save(self, metadata: ImageMetadata) -> None:
+    def save(self, metadata: ImageMetadata, *, overwrite_curation: bool = False) -> None:
         """Persist metadata to in-memory storage (upsert semantics).
+
+        An existing record keeps its curation unless ``overwrite_curation`` is set.
 
         Args:
             metadata: ImageMetadata to store.
+            overwrite_curation: Also replace the stored curation.
         """
+        existing = self.storage.get(metadata.file_hash)
+        if existing is not None and not overwrite_curation:
+            metadata = replace(
+                metadata,
+                rating=existing.rating,
+                flagged=existing.flagged,
+                labels=list(existing.labels),
+                added_at=existing.added_at,
+            )
         self.storage[metadata.file_hash] = metadata
 
     def get_by_filehash(self, file_hash: str) -> ImageMetadata | None:

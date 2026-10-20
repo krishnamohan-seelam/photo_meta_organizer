@@ -98,18 +98,21 @@ class ImageMetadataRepository(Protocol):
         """Delete many records by hash. Returns the number actually deleted."""
         ...
 
-    def save(self, metadata: ImageMetadata) -> None:
+    def save(self, metadata: ImageMetadata, *, overwrite_curation: bool = False) -> None:
         """Persist image metadata to storage.
 
         Args:
             metadata: The ImageMetadata entity to store.
+            overwrite_curation: Also replace the stored curation with the record's.
 
         Raises:
             IOError: If the metadata cannot be persisted.
             ValueError: If the metadata is invalid or incomplete.
 
         Note:
-            Implementations should handle upsert semantics (update if exists).
+            Implementations should handle upsert semantics (update if exists). An
+            existing record keeps its curation (rating, flagged, labels, added_at)
+            unless ``overwrite_curation`` is true: extraction never writes curation.
         """
         ...
 

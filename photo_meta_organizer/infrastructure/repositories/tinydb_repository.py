@@ -170,7 +170,7 @@ class TinyDBRepository:
             self._upsert(metadata)
         self.rebuild_indexes()
 
-    def save(self, metadata: ImageMetadata) -> None:
+    def save(self, metadata: ImageMetadata, *, overwrite_curation: bool = False) -> None:
         """Persist image metadata with upsert semantics.
 
         If a record with the same file_hash exists, it is updated.

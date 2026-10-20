@@ -66,7 +66,9 @@ class DedupePathsUseCase:
         if apply:
             for group in result.groups:
                 # Save the merged survivor first so a crash never loses curation.
-                self._repository.save(carry_over_curation(group.keep, *group.drop))
+                self._repository.save(
+                    carry_over_curation(group.keep, *group.drop), overwrite_curation=True
+                )
                 for stale in group.drop:
                     if self._repository.delete(stale.file_hash):
                         result.removed += 1

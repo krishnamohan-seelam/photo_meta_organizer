@@ -102,10 +102,10 @@ class TestSaveMany:
         assert repository.get_by_filehash("h2") is not None
 
     def test_batch_upsert_updates_existing(self, repository):
-        repository.save(_photo("h1", rating=1))
-        repository.save_many([_photo("h1", rating=5)])
+        repository.save(_photo("h1", camera_make="Old"))
+        repository.save_many([_photo("h1", camera_make="New")])
         assert repository.count() == 1
-        assert repository.get_by_filehash("h1").rating == 5
+        assert repository.get_by_filehash("h1").exif.camera_make == "New"
 
 
 class TestQuery:

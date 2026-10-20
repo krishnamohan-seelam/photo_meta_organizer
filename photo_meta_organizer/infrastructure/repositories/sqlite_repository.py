@@ -130,6 +130,9 @@ CREATE TABLE IF NOT EXISTS collection_photos (
 );
 """
 
+# Written by the user (or carried over by a replace), never by extraction.
+_CURATION_COLUMNS = ("rating", "flagged", "added_at")
+
 _PHOTO_COLUMNS = [
     "file_hash",
     "path",
@@ -187,21 +190,34 @@ class SqliteRepository:
     # Save / upsert
     # =========================================================================
 
-    def save(self, metadata: ImageMetadata) -> None:
+    def save(self, metadata: ImageMetadata, *, overwrite_curation: bool = False) -> None:
         with self.lock, self.connection:
-            self._upsert(metadata)
+            self._upsert(metadata, overwrite_curation=overwrite_curation)
 
     def save_many(self, items: Sequence[ImageMetadata]) -> None:
         with self.lock, self.connection:
             for metadata in items:
                 self._upsert(metadata)
 
-    def _upsert(self, metadata: ImageMetadata) -> None:
-        """Insert or update by file hash. Must run inside an open transaction."""
+    def _upsert(self, metadata: ImageMetadata, *, overwrite_curation: bool = False) -> None:
+        """Insert or update by file hash. Must run inside an open transaction.
+
+        An existing row keeps its curation (``rating``, ``flagged``, ``added_at`` and
+        labels) unless ``overwrite_curation`` is set, so re-extracting a photo never
+        erases the user's decisions (ADR-003 R2). A new row is stored with the
+        curation the record arrives with.
+        """
         values = _to_row(metadata)
         placeholders = ", ".join("?" for _ in _PHOTO_COLUMNS)
+        skipped = {"file_hash"} if overwrite_curation else {"file_hash", *_CURATION_COLUMNS}
         update_clause = ", ".join(
-            f"{col}=excluded.{col}" for col in _PHOTO_COLUMNS if col != "file_hash"
+            f"{col}=excluded.{col}" for col in _PHOTO_COLUMNS if col not in skipped
+        )
+        existed = (
+            self.connection.execute(
+                "SELECT 1 FROM photos WHERE file_hash = ?", (metadata.file_hash,)
+            ).fetchone()
+            is not None
         )
         self.connection.execute(
             f"""
@@ -210,6 +226,8 @@ class SqliteRepository:
             """,
             [values[col] for col in _PHOTO_COLUMNS],
         )
+        if existed and not overwrite_curation:
+            return
         self.connection.execute(
             "DELETE FROM photo_labels WHERE file_hash = ?", (metadata.file_hash,)
         )
@@ -222,7 +240,7 @@ class SqliteRepository:
     def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
         with self.lock, self.connection:
             if old_hash == metadata.file_hash:
-                self._upsert(metadata)
+                self._upsert(metadata, overwrite_curation=True)
                 return
             # The delete cascades the old hash out of every collection, and the new
             # record usually has the same (UNIQUE) path, so it can't be inserted first.
@@ -234,7 +252,8 @@ class SqliteRepository:
                 (old_hash,),
             ).fetchall()
             self.connection.execute("DELETE FROM photos WHERE file_hash = ?", (old_hash,))
-            self._upsert(metadata)
+            # The caller merged the old record's curation into ``metadata``.
+            self._upsert(metadata, overwrite_curation=True)
             for row in memberships:
                 self.connection.execute(
                     "INSERT OR IGNORE INTO collection_photos (rowid, collection, file_hash) "

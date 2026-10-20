@@ -446,7 +446,7 @@ class TestSyncMtimeFingerprint:
             rating=4,
             labels=["keep"],
         )
-        repository.save(polluted)
+        repository.save(polluted, overwrite_curation=True)
         extractor.extracted.clear()
 
         result = uc.execute(reextract=True)
