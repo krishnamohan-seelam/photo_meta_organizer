@@ -26,10 +26,8 @@ Component Architecture:
            - save(metadata) persists to database
            - Implementations: TinyDB, MongoDB, Elasticsearch, etc.
 
-    Orchestrator Pattern (ExtractorOrchestrator):
-    - Coordinates interaction between Retriever and Extractor
-    - Simplifies client code for batch operations
-    - Manages stream fetching and passing
+    The scan (``application.use_cases.scan_library.ScanLibrary``, built by
+    ``application.composition.build_scan``) wires the three together.
 
     This composition enables:
     - Swappable storage backends without changing extractor logic
@@ -37,20 +35,14 @@ Component Architecture:
     - Scalability: stateless extractor ready for parallel processing
     - Streaming: supports batching, filtering, custom iteration patterns
 
-Example Wiring - Via Orchestrator (Recommended):
-    >>> from application.orchestrators import ExtractorOrchestrator
-    >>> retriever = LocalDiskRetriever(base_path="/photos")
-    >>> extractor = DiskMetadataExtractor()  # Stateless
-    >>> orchestrator = ExtractorOrchestrator(extractor, retriever)
-    >>> all_metadata = orchestrator.extract_all()
-    >>> repository = TinyDBRepository(db_path="./metadata.json")
-    >>> for metadata in all_metadata:
-    ...     repository.save(metadata)
+Example Wiring - Via the scan (Recommended):
+    >>> scan = build_scan("/photos", build_repository("photos.db"))
+    >>> result = scan.execute(ScanOptions(workers=4), scope_root="/photos")
 
 Example Wiring - Manual (Custom Logic):
     >>> retriever = LocalDiskRetriever(base_path="/photos")
     >>> extractor = DiskMetadataExtractor()  # Stateless
-    >>> repository = TinyDBRepository(db_path="./metadata.json")
+    >>> repository = SqliteRepository(db_path="photos.db")
     >>> for file_handle in retriever.list_files():
     ...     stream = retriever.get_file_stream(file_handle)
     ...     metadata = extractor.extract(file_handle, stream)

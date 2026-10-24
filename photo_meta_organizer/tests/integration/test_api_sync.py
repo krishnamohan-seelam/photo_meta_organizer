@@ -101,7 +101,7 @@ def test_missing_folder_is_400(client):
 
 
 def test_sync_errors_are_reported(client, library, monkeypatch):
-    from photo_meta_organizer.api.routes import photos_router
+    from photo_meta_organizer.infrastructure.extractors import disk_metadata_extractor
     from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
         DiskMetaDataExtractor,
     )
@@ -110,7 +110,7 @@ def test_sync_errors_are_reported(client, library, monkeypatch):
         def extract(self, file_handle, stream):
             raise OSError("cannot read")
 
-    monkeypatch.setattr(photos_router, "DiskMetaDataExtractor", Broken)
+    monkeypatch.setattr(disk_metadata_extractor, "DiskMetaDataExtractor", Broken)
     Image.new("RGB", (8, 8), "white").save(library / "new.jpg")
 
     done = _sync(client, library)

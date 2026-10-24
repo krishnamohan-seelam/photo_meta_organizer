@@ -86,6 +86,9 @@ class S3ImageRetriever:
                     modified_time=_local_naive(obj.get("LastModified")),
                 )
 
+    def check_readable(self) -> None:
+        """A bucket that cannot be read fails the listing itself, so nothing to check."""
+
     def skipped_paths(self) -> list[str]:
         """Listing a bucket either succeeds or raises, so nothing is skipped."""
         return []

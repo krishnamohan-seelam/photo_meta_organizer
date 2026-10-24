@@ -280,7 +280,7 @@ class FileState:
     """Represents the detected state of a single file during synchronization.
 
     Produced by MetadataStateAnalyzer after comparing disk state against
-    the metadata DB. Consumed by SyncOrchestrator to decide the action
+    the recorded Files. Consumed by the scan (``ScanLibrary``) to decide the action
     to take for each file.
 
     Attributes:
@@ -337,6 +337,11 @@ class SyncResult:
     errors: list[str] = field(default_factory=list)
     duration_seconds: float = 0.0
     cancelled: bool = False
+
+    @property
+    def indexed_files(self) -> int:
+        """Files whose content was read and recorded (new or changed)."""
+        return self.new_files + self.modified_files
 
     @property
     def total_changes(self) -> int:

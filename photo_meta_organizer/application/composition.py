@@ -21,7 +21,9 @@ from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbe
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
+from photo_meta_organizer.application.interfaces.progress import ProgressSink
 from photo_meta_organizer.application.settings import Settings
+from photo_meta_organizer.application.use_cases.scan_library import ScanLibrary
 from photo_meta_organizer.application.zero_shot_tagger import ZeroShotTagger
 from photo_meta_organizer.domain.formats import IMAGE_EXTENSIONS
 
@@ -45,6 +47,36 @@ def build_local_retriever(path: str) -> ImageRetriever:
     )
 
     return ExtensionFilteredRetriever(LocalDiskRetriever(base_path=path), set(IMAGE_EXTENSIONS))
+
+
+def build_scan(
+    folder: str,
+    repository: ImageMetadataRepository,
+    progress_reporter: ProgressSink | None = None,
+) -> ScanLibrary:
+    """The scan of one local folder (ADR-003 R4): the CLI and the API both call this.
+
+    Args:
+        folder: The root to scan.
+        repository: The library the scan records into.
+        progress_reporter: Console-style progress output (the CLI's tqdm bar).
+
+    Returns:
+        A scan of ``folder``'s image files.
+
+    Raises:
+        NotADirectoryError: If ``folder`` is not an existing directory.
+    """
+    from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
+        DiskMetaDataExtractor,
+    )
+
+    return ScanLibrary(
+        retriever=build_local_retriever(folder),
+        extractor=DiskMetaDataExtractor(),
+        repository=repository,
+        progress_reporter=progress_reporter,
+    )
 
 
 def _is_legacy_json(db_path: str) -> bool:

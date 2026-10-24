@@ -6,17 +6,14 @@ SQLite repository (ADR-001).  No mocks — only the image extractor is stubbed t
 avoid requiring actual image files with EXIF data.
 """
 
-from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO
 
 import pytest
+from tests.conftest import FakeExtractor
 
-from photo_meta_organizer.application.interfaces.image_retriever import RemoteFileHandle
-from photo_meta_organizer.application.use_cases import SynchronizeMetadataUseCase
+from photo_meta_organizer.application.use_cases import ScanLibrary, ScanOptions
 from photo_meta_organizer.domain.models import (
     ImageDimensions,
     ImageExifData,
@@ -38,32 +35,6 @@ from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
 # ---------------------------------------------------------------------------
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
-
-
-class FakeExtractor:
-    """Stub extractor: produces predictable metadata from the file handle."""
-
-    def extract(self, file_handle: RemoteFileHandle, stream: BinaryIO) -> ImageMetadata:
-        content = stream.read()
-        import hashlib
-
-        h = hashlib.sha256(content).hexdigest()
-        return ImageMetadata(
-            file_hash=h,
-            file_info=ImageFileInfo(
-                name=file_handle.filename,
-                path=file_handle.original_path,
-                size_bytes=file_handle.size_bytes,
-                mime_type="image/jpeg",
-            ),
-            dimensions=ImageDimensions(width=100, height=100),
-            exif=ImageExifData(),
-        )
-
-    @contextmanager
-    def get_file_stream(self, file_handle):
-        """Not a retriever method – extractor doesn't need this."""
-        yield BytesIO(b"")
 
 
 @pytest.fixture
@@ -101,7 +72,7 @@ def extractor():
 
 @pytest.fixture
 def use_case(retriever, extractor, repository):
-    return SynchronizeMetadataUseCase(
+    return ScanLibrary(
         retriever=retriever,
         extractor=extractor,
         repository=repository,
@@ -119,7 +90,9 @@ class TestSyncIntegration:
 
     def test_initial_sync_indexes_all_new_files(self, use_case, repository):
         """First sync on an empty DB should index all photos."""
-        result = use_case.execute(index_new=True, reprocess_modified=True, cleanup_deleted=False)
+        result = use_case.execute(
+            ScanOptions(index_new=True, reprocess_modified=True, remove_missing=False)
+        )
 
         assert result.new_files == 3
         assert result.modified_files == 0
@@ -130,8 +103,8 @@ class TestSyncIntegration:
 
     def test_second_sync_unchanged_skips_all(self, use_case, repository):
         """Second sync should find all files UNCHANGED and skip hashing."""
-        use_case.execute(index_new=True)
-        result = use_case.execute(index_new=True)
+        use_case.execute(ScanOptions(index_new=True))
+        result = use_case.execute(ScanOptions(index_new=True))
 
         assert result.unchanged_files == 3
         assert result.new_files == 0
@@ -139,57 +112,59 @@ class TestSyncIntegration:
 
     def test_new_file_detected_after_first_sync(self, use_case, repository, photo_dir):
         """Adding a new file after initial sync should be detected on next sync."""
-        use_case.execute(index_new=True)
+        use_case.execute(ScanOptions(index_new=True))
 
         # Add a new file
         (photo_dir / "new_arrival.jpg").write_bytes(b"brand_new")
-        result = use_case.execute(index_new=True)
+        result = use_case.execute(ScanOptions(index_new=True))
 
         assert result.new_files == 1
         assert result.unchanged_files == 3
 
     def test_deleted_file_cleaned_up(self, use_case, repository, photo_dir):
         """Deleted files should be removed from DB when cleanup_deleted=True."""
-        use_case.execute(index_new=True)
+        use_case.execute(ScanOptions(index_new=True))
         assert repository.count() == 3
 
         (photo_dir / "photo1.jpg").unlink()
-        result = use_case.execute(cleanup_deleted=True, index_new=False)
+        result = use_case.execute(ScanOptions(remove_missing=True, index_new=False))
 
         assert result.deleted_entries == 1
         assert repository.count() == 2
 
     def test_deleted_file_kept_when_no_cleanup(self, use_case, repository, photo_dir):
         """Without --cleanup-deleted, orphaned entries stay in DB."""
-        use_case.execute(index_new=True)
+        use_case.execute(ScanOptions(index_new=True))
         (photo_dir / "photo1.jpg").unlink()
 
-        result = use_case.execute(cleanup_deleted=False, index_new=False)
+        result = use_case.execute(ScanOptions(remove_missing=False, index_new=False))
         assert result.deleted_entries == 0
         assert repository.count() == 3  # Orphaned entry still present
 
     def test_modified_file_reprocessed(self, use_case, repository, photo_dir):
         """Modified file (different size → different hash) should be re-extracted."""
-        use_case.execute(index_new=True)
+        use_case.execute(ScanOptions(index_new=True))
 
         # Overwrite with different content
         (photo_dir / "photo2.jpg").write_bytes(b"completely_different_content_here")
-        result = use_case.execute(reprocess_modified=True)
+        result = use_case.execute(ScanOptions(reprocess_modified=True))
 
         assert result.modified_files == 1
         assert result.unchanged_files == 2
 
     def test_modified_file_skipped_when_flag_off(self, use_case, repository, photo_dir):
         """Modified files are not reprocessed when reprocess_modified=False."""
-        use_case.execute(index_new=True)
+        use_case.execute(ScanOptions(index_new=True))
         (photo_dir / "photo2.jpg").write_bytes(b"different_content_here")
 
-        result = use_case.execute(reprocess_modified=False, index_new=False, cleanup_deleted=False)
+        result = use_case.execute(
+            ScanOptions(reprocess_modified=False, index_new=False, remove_missing=False)
+        )
         assert result.modified_files == 0
 
     def test_dry_run_does_not_change_repository(self, use_case, repository):
         """Dry run should report what would happen without touching the DB."""
-        result = use_case.execute(index_new=True, dry_run=True)
+        result = use_case.execute(ScanOptions(index_new=True, dry_run=True))
 
         assert result.new_files == 3
         assert repository.count() == 0  # Nothing actually written
@@ -207,13 +182,15 @@ class TestSyncIntegration:
         ret = ExtensionFilteredRetriever(base, IMAGE_EXTENSIONS)
         repo = SqliteRepository(db_path=db_path)
 
-        uc = SynchronizeMetadataUseCase(retriever=ret, extractor=extractor, repository=repo)
-        uc.execute(index_new=True)
+        uc = ScanLibrary(retriever=ret, extractor=extractor, repository=repo)
+        uc.execute(ScanOptions(index_new=True))
         assert repo.count() == 10
 
         # Delete 1 photo
         (photo_dir / "img0003.jpg").unlink()
-        result = uc.execute(cleanup_deleted=True, index_new=False, reprocess_modified=False)
+        result = uc.execute(
+            ScanOptions(remove_missing=True, index_new=False, reprocess_modified=False)
+        )
 
         assert result.deleted_entries == 1
         assert result.unchanged_files == 9
@@ -221,7 +198,7 @@ class TestSyncIntegration:
 
     def test_sync_result_total_changes(self, use_case, repository, photo_dir):
         """total_changes should equal sum of new + modified + deleted."""
-        result = use_case.execute(index_new=True)
+        result = use_case.execute(ScanOptions(index_new=True))
         assert (
             result.total_changes
             == result.new_files + result.modified_files + result.deleted_entries
@@ -333,9 +310,7 @@ class TestSyncMtimeFingerprint:
     def _use_case(self, retriever, repository, extractor=None):
         extractor = extractor or CountingExtractor()
         return (
-            SynchronizeMetadataUseCase(
-                retriever=retriever, extractor=extractor, repository=repository
-            ),
+            ScanLibrary(retriever=retriever, extractor=extractor, repository=repository),
             extractor,
         )
 
@@ -409,7 +384,7 @@ class TestSyncMtimeFingerprint:
         with repository.lock, repository.connection:
             repository.connection.execute("UPDATE files SET mtime = NULL")
 
-        result = uc.execute(dry_run=True)
+        result = uc.execute(ScanOptions(dry_run=True))
 
         assert result.fingerprints_refreshed == 3
         assert all(r.file_info.modified_time is None for r in repository.list_all())
@@ -428,7 +403,7 @@ class TestSyncMtimeFingerprint:
         os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns))  # forge the old mtime
 
         assert uc.execute().modified_files == 0  # the cheap check cannot see it
-        result = uc.execute(rehash=True)
+        result = uc.execute(ScanOptions(rehash=True))
 
         assert result.modified_files == 1
         assert repository.get_by_filehash(_sha(edited)) is not None
@@ -449,7 +424,7 @@ class TestSyncMtimeFingerprint:
         repository.save(polluted, overwrite_curation=True)
         extractor.extracted.clear()
 
-        result = uc.execute(reextract=True)
+        result = uc.execute(ScanOptions(reextract=True))
 
         assert sorted(extractor.extracted) == ["photo1.jpg", "photo2.jpg", "photo3.jpg"]
         assert result.modified_files == 3
@@ -465,7 +440,7 @@ class TestSyncMtimeFingerprint:
         uc.execute()
         extractor.extracted.clear()
 
-        result = uc.execute(reextract=True, dry_run=True)
+        result = uc.execute(ScanOptions(reextract=True, dry_run=True))
 
         assert result.modified_files == 3
         assert extractor.extracted == []
@@ -476,9 +451,9 @@ class TestSyncMtimeFingerprint:
 # ---------------------------------------------------------------------------
 
 
-def _use_case(root: Path, repo: SqliteRepository) -> SynchronizeMetadataUseCase:
+def _use_case(root: Path, repo: SqliteRepository) -> ScanLibrary:
     retriever = ExtensionFilteredRetriever(LocalDiskRetriever(str(root)), IMAGE_EXTENSIONS)
-    return SynchronizeMetadataUseCase(retriever, FakeExtractor(), repo)
+    return ScanLibrary(retriever, FakeExtractor(), repo)
 
 
 class TestSyncScope:
@@ -494,7 +469,7 @@ class TestSyncScope:
         assert repo.count() == 2
 
         (a / "a1.jpg").unlink()
-        result = _use_case(a, repo).execute(cleanup_deleted=True, scope_root=str(a))
+        result = _use_case(a, repo).execute(ScanOptions(remove_missing=True), scope_root=str(a))
 
         assert result.deleted_entries == 1
         assert [m.file_info.name for m in repo.list_all()] == ["b1.jpg"]
@@ -507,7 +482,7 @@ class TestSyncScope:
         repo = SqliteRepository(":memory:")
         _use_case(ab, repo).execute(scope_root=str(ab))
 
-        result = _use_case(a, repo).execute(cleanup_deleted=True, scope_root=str(a))
+        result = _use_case(a, repo).execute(ScanOptions(remove_missing=True), scope_root=str(a))
         assert result.deleted_entries == 0
         assert repo.count() == 1
 
@@ -566,7 +541,7 @@ class TestSyncOfPathsRecordedUnresolved:
         self._record_unresolved(repository, photo_dir, "photo1.jpg")
         (photo_dir / "photo1.jpg").write_bytes(b"edited")
 
-        use_case.execute(index_new=False)
+        use_case.execute(ScanOptions(index_new=False))
 
         assert repository.count() == 1
         edited = repository.get_by_filehash(_sha(b"edited"))
@@ -576,7 +551,7 @@ class TestSyncOfPathsRecordedUnresolved:
         self._record_unresolved(repository, photo_dir, "photo1.jpg")
         (photo_dir / "photo1.jpg").unlink()
 
-        result = use_case.execute(cleanup_deleted=True, index_new=False)
+        result = use_case.execute(ScanOptions(remove_missing=True, index_new=False))
 
         assert result.deleted_entries == 1
         assert repository.count() == 0
@@ -584,7 +559,7 @@ class TestSyncOfPathsRecordedUnresolved:
     def test_a_missing_fingerprint_is_backfilled(self, use_case, repository, photo_dir):
         self._record_unresolved(repository, photo_dir, "photo1.jpg")
 
-        result = use_case.execute(index_new=False)
+        result = use_case.execute(ScanOptions(index_new=False))
 
         assert result.fingerprints_refreshed == 1
         assert all(f.modified_time is not None for f in repository.list_files())

@@ -10,6 +10,7 @@ The mock implementations serve educational purposes, demonstrating how
 concrete classes implement the protocols and compose via dependency injection.
 """
 
+import hashlib
 import logging
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
@@ -269,6 +270,9 @@ class MockImageRetriever:
         """
         yield from self.files
 
+    def check_readable(self) -> None:
+        """An in-memory listing is always readable."""
+
     def skipped_paths(self) -> list[str]:
         """An in-memory listing never skips anything."""
         return []
@@ -333,6 +337,24 @@ class MockMetadataExtractor:
                 mime_type="image/jpeg",
             ),
             dimensions=ImageDimensions(width=1920, height=1080),
+            exif=ImageExifData(),
+        )
+
+
+class FakeExtractor:
+    """Stub extractor: hashes the content (identical bytes are one Asset), fixed metadata."""
+
+    def extract(self, file_handle: RemoteFileHandle, stream: BinaryIO) -> ImageMetadata:
+        h = hashlib.sha256(stream.read()).hexdigest()
+        return ImageMetadata(
+            file_hash=h,
+            file_info=ImageFileInfo(
+                name=file_handle.filename,
+                path=file_handle.original_path,
+                size_bytes=file_handle.size_bytes,
+                mime_type="image/jpeg",
+            ),
+            dimensions=ImageDimensions(width=100, height=100),
             exif=ImageExifData(),
         )
 

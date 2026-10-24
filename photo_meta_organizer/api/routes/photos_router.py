@@ -60,7 +60,7 @@ from photo_meta_organizer.api.schemas import (
     SearchRequest,
     SyncFolderRequest,
 )
-from photo_meta_organizer.application.composition import build_local_retriever
+from photo_meta_organizer.application.composition import build_scan
 from photo_meta_organizer.application.geo import cell_degrees_for_zoom, place_scope_for_zoom
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
@@ -70,17 +70,12 @@ from photo_meta_organizer.application.interfaces.image_repository import (
 )
 from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
 from photo_meta_organizer.application.interfaces.search_types import BoundingBox
-from photo_meta_organizer.application.job_work import index_work, sync_work
+from photo_meta_organizer.application.job_work import scan_work
 from photo_meta_organizer.application.jobs import Job, JobConflictError, JobManager, Work
-from photo_meta_organizer.application.use_cases.parallel_index_photos_use_case import (
-    ParallelIndexPhotosUseCase,
-)
+from photo_meta_organizer.application.use_cases.scan_library import ScanOptions
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,
-)
-from photo_meta_organizer.application.use_cases.synchronize_metadata_use_case import (
-    SynchronizeMetadataUseCase,
 )
 from photo_meta_organizer.domain.curation import (
     AddTag,
@@ -92,9 +87,6 @@ from photo_meta_organizer.domain.curation import (
     is_valid_rating,
 )
 from photo_meta_organizer.domain.models import ImageMetadata
-from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
-    DiskMetaDataExtractor,
-)
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 photos_router = APIRouter(prefix="/api/photos", tags=["photos"])
@@ -615,18 +607,18 @@ def index_directory(
 ) -> JobResponse:
     """Start a background index job and return it at once (202).
 
+    An index is a scan that adds new and changed files and never removes any; files
+    it already knows unchanged are skipped.
+
     Poll ``GET /api/jobs/{id}`` for progress and the final counts, including
     per-file errors. A second job on the same (or an overlapping) folder while
     one is running is refused with 409.
     """
     folder_path = _existing_directory(request.folder_path)
-    use_case = ParallelIndexPhotosUseCase(
-        retriever=build_local_retriever(folder_path),
-        extractor=DiskMetaDataExtractor(),
-        repository=repository,
-        num_workers=request.num_workers,
-    )
-    return _submit(jobs, "index", folder_path, index_work(use_case, folder_path))
+    # An index is a scan that never removes anything (ADR-003 R4).
+    options = ScanOptions(workers=request.num_workers)
+    work = scan_work(build_scan(folder_path, repository), folder_path, options, kind="index")
+    return _submit(jobs, "index", folder_path, work)
 
 
 @sync_router.post(
@@ -643,27 +635,21 @@ def sync_directory(
     """Re-scan a folder and apply only what changed (NEW / MODIFIED / DELETED).
 
     Returns a job at once (202); its final ``counts`` report ``new``, ``modified``,
-    ``deleted`` and ``unchanged``. Deleted files are removed only with
-    ``cleanup_deleted``; ``dry_run`` reports the counts and writes nothing. Only
-    records under ``folder_path`` are considered, so photos indexed from other
-    folders are never affected.
+    ``deleted``, ``missing``, ``found_again`` and ``unchanged``. Files the scan did not
+    find are flagged missing, and removed only with ``cleanup_deleted``; ``dry_run``
+    reports the counts and writes nothing. Only files under ``folder_path`` are
+    considered, so photos indexed from other folders are never affected.
     """
     folder_path = _existing_directory(request.folder_path)
-    use_case = SynchronizeMetadataUseCase(
-        retriever=build_local_retriever(folder_path),
-        extractor=DiskMetaDataExtractor(),
-        repository=repository,
-    )
-    work = sync_work(
-        use_case,
-        folder_path,
-        cleanup_deleted=request.cleanup_deleted,
+    options = ScanOptions(
+        remove_missing=request.cleanup_deleted,
         reprocess_modified=request.reprocess_modified,
         index_new=request.index_new,
         dry_run=request.dry_run,
         rehash=request.rehash,
         reextract=request.reextract,
     )
+    work = scan_work(build_scan(folder_path, repository), folder_path, options, kind="sync")
     return _submit(jobs, "sync", folder_path, work)
 
 

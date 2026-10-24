@@ -7,11 +7,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.integration.test_sync_end_to_end import IMAGE_EXTENSIONS, FakeExtractor
+from tests.conftest import FakeExtractor
 
-from photo_meta_organizer.application.use_cases import SynchronizeMetadataUseCase
-from photo_meta_organizer.application.use_cases.synchronize_metadata_use_case import (
+from photo_meta_organizer.application.use_cases import (
     RootUnavailableError,
+    ScanLibrary,
+    ScanOptions,
 )
 from photo_meta_organizer.domain.analysis import AiTag, Embedding
 from photo_meta_organizer.domain.curation import AddTag, SetRating
@@ -27,6 +28,8 @@ from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
     LocalDiskRetriever,
 )
 
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -35,10 +38,10 @@ def _sha(data: bytes) -> str:
 Library = tuple[Path, SqliteRepository]
 
 
-def _scan(root: Path, repo: SqliteRepository, **options: object) -> SyncResult:
+def _scan(root: Path, repo: SqliteRepository, **options: bool) -> SyncResult:
     retriever = ExtensionFilteredRetriever(LocalDiskRetriever(str(root)), IMAGE_EXTENSIONS)
-    use_case = SynchronizeMetadataUseCase(retriever, FakeExtractor(), repo)
-    return use_case.execute(scope_root=str(root), **options)  # type: ignore[arg-type]
+    use_case = ScanLibrary(retriever, FakeExtractor(), repo)
+    return use_case.execute(ScanOptions(**options), scope_root=str(root))
 
 
 @pytest.fixture
@@ -125,7 +128,7 @@ def test_remove_missing_forgets_the_file_and_its_orphaned_photo(library: Library
     analysis.save_embeddings([Embedding(file_hash=_sha(b"home"), model_id="m", vector=(1.0, 0.0))])
     analysis.save_ai_tags(_sha(b"home"), [AiTag("kitchen", 0.5, "m")])
 
-    result = _scan(root, repo, cleanup_deleted=True)
+    result = _scan(root, repo, remove_missing=True)
 
     assert (result.deleted_entries, result.missing_files) == (1, 0)
     assert repo.get_by_filehash(_sha(b"home")) is None
@@ -150,11 +153,11 @@ def test_a_photo_with_a_present_copy_is_not_missing(library: Library) -> None:
 def test_an_unavailable_root_fails_and_changes_nothing(library: Library, tmp_path: Path) -> None:
     root, repo = library
     retriever = ExtensionFilteredRetriever(LocalDiskRetriever(str(root)), IMAGE_EXTENSIONS)
-    use_case = SynchronizeMetadataUseCase(retriever, FakeExtractor(), repo)
+    use_case = ScanLibrary(retriever, FakeExtractor(), repo)
     root.rename(tmp_path / "unplugged")  # the drive went away after the scan was set up
 
     with pytest.raises(RootUnavailableError):
-        use_case.execute(scope_root=str(root), cleanup_deleted=True)
+        use_case.execute(ScanOptions(remove_missing=True), scope_root=str(root))
 
     assert repo.count() == 2
     assert all(f.missing_since is None for f in repo.list_files())
@@ -194,7 +197,7 @@ def test_files_in_a_folder_the_scan_could_not_read_are_left_alone(
     root, repo = library
     _unreadable(monkeypatch, root / "trip")
 
-    result = _scan(root, repo, cleanup_deleted=True)
+    result = _scan(root, repo, remove_missing=True)
 
     assert (result.deleted_entries, result.missing_files) == (0, 0)
     beach = repo.get_by_filehash(_sha(b"beach"))

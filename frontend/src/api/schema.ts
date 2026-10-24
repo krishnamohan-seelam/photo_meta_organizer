@@ -266,6 +266,9 @@ export interface paths {
          * Start indexing a local photo directory
          * @description Start a background index job and return it at once (202).
          *
+         *     An index is a scan that adds new and changed files and never removes any; files
+         *     it already knows unchanged are skipped.
+         *
          *     Poll ``GET /api/jobs/{id}`` for progress and the final counts, including
          *     per-file errors. A second job on the same (or an overlapping) folder while
          *     one is running is refused with 409.
@@ -572,10 +575,10 @@ export interface paths {
          * @description Re-scan a folder and apply only what changed (NEW / MODIFIED / DELETED).
          *
          *     Returns a job at once (202); its final ``counts`` report ``new``, ``modified``,
-         *     ``deleted`` and ``unchanged``. Deleted files are removed only with
-         *     ``cleanup_deleted``; ``dry_run`` reports the counts and writes nothing. Only
-         *     records under ``folder_path`` are considered, so photos indexed from other
-         *     folders are never affected.
+         *     ``deleted``, ``missing``, ``found_again`` and ``unchanged``. Files the scan did not
+         *     find are flagged missing, and removed only with ``cleanup_deleted``; ``dry_run``
+         *     reports the counts and writes nothing. Only files under ``folder_path`` are
+         *     considered, so photos indexed from other folders are never affected.
          */
         post: operations["sync_directory_api_sync_post"];
         delete?: never;

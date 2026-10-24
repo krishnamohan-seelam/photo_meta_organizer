@@ -19,21 +19,10 @@ project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from photo_meta_organizer.application.use_cases import (
-    IndexPhotosUseCase,
-    ParallelIndexPhotosUseCase,
-)
-from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
-    DiskMetaDataExtractor,
-)
+from photo_meta_organizer.application.composition import build_scan
+from photo_meta_organizer.application.use_cases import ScanOptions
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
-)
-from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
-    ExtensionFilteredRetriever,
-)
-from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
-    LocalDiskRetriever,
 )
 
 
@@ -56,36 +45,19 @@ def run_benchmark_for_workers(photos_dir: Path, db_dir: Path, workers: int) -> d
     if db_file.exists():
         db_file.unlink()
 
-    base_retriever = LocalDiskRetriever(base_path=str(photos_dir))
-    retriever = ExtensionFilteredRetriever(base_retriever, {".jpg", ".png"})
-    extractor = DiskMetaDataExtractor()
     repository = SqliteRepository(db_path=str(db_file))
 
     tracemalloc.start()
     start_time = time.time()
 
-    use_case: IndexPhotosUseCase | ParallelIndexPhotosUseCase
-    if workers == 1:
-        use_case = IndexPhotosUseCase(
-            retriever=retriever,
-            extractor=extractor,
-            repository=repository,
-        )
-    else:
-        use_case = ParallelIndexPhotosUseCase(
-            retriever=retriever,
-            extractor=extractor,
-            repository=repository,
-            num_workers=workers,
-        )
-
-    results = use_case.execute()
+    scan = build_scan(str(photos_dir), repository)
+    result = scan.execute(ScanOptions(workers=workers))
     repository.close()
     elapsed_seconds = time.time() - start_time
     current_mem, peak_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    processed_count = len(results)
+    processed_count = result.new_files
     throughput_imgs_per_min = (
         (processed_count / elapsed_seconds) * 60.0 if elapsed_seconds > 0 else 0.0
     )

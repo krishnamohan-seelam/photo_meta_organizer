@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from photo_meta_organizer.application.use_cases import ParallelIndexPhotosUseCase
+from photo_meta_organizer.application.use_cases import ScanLibrary, ScanOptions
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
 )
@@ -26,7 +26,7 @@ from photo_meta_organizer.infrastructure.retriever.local_disk_retriever import (
 
 @pytest.mark.integration
 class TestParallelChaosIndexing:
-    """Chaos integration test suite for ParallelIndexPhotosUseCase."""
+    """Chaos integration test suite for the parallel scan (ScanLibrary)."""
 
     @pytest.fixture
     def chaos_directory(self, tmp_path: Path) -> Path:
@@ -71,21 +71,16 @@ class TestParallelChaosIndexing:
         extractor = DiskMetaDataExtractor()
         repository = SqliteRepository(db_path=str(db_file))
 
-        use_case = ParallelIndexPhotosUseCase(
-            retriever=retriever,
-            extractor=extractor,
-            repository=repository,
-            num_workers=4,
-        )
+        use_case = ScanLibrary(retriever=retriever, extractor=extractor, repository=repository)
 
-        results = use_case.execute()
+        result = use_case.execute(ScanOptions(workers=4))
 
         # Valid files (valid_image.jpg & valid_image.png) must be indexed successfully
-        assert len(results) >= 2
+        assert result.new_files >= 2
 
         # Verify DB records
         all_db_records = repository.list_all()
-        assert len(all_db_records) == len(results)
+        assert len(all_db_records) == result.new_files
 
         # Check DB hashes exist for valid files
         hashes = [r.file_hash for r in all_db_records]

@@ -4,7 +4,7 @@ These tests verify that:
 1. Protocols are properly defined and documented
 2. Mock implementations correctly satisfy protocol contracts
 3. Stateless extractor design works correctly
-4. ExtractorOrchestrator coordinates components properly
+4. The scan (ScanLibrary) coordinates components properly
 """
 
 from io import BytesIO
@@ -214,36 +214,24 @@ class TestImageMetadataRepositoryProtocol:
 
 @pytest.mark.unit
 class TestDependencyInjectionComposition:
-    """Test complete DI composition with orchestrator pattern."""
+    """Test complete DI composition, through the scan and by hand."""
 
-    def test_full_pipeline_with_orchestrator(
+    def test_full_pipeline_through_the_scan(
         self,
         mock_extractor: MockMetadataExtractor,
         mock_retriever: MockImageRetriever,
         mock_repository: MockImageMetadataRepository,
     ) -> None:
-        """Test complete data flow using ExtractorOrchestrator.
+        """The scan wires Retriever (discover + stream) → Extractor → Repository."""
+        from photo_meta_organizer.application.use_cases import ScanLibrary, ScanOptions
 
-        Demonstrates the full application flow:
-        Orchestrator → Retriever (discover files + get streams) →
-        Extractor (process streams) → Repository (persist)
-        """
-        from photo_meta_organizer.application.orchestrators import ExtractorOrchestrator
+        scan = ScanLibrary(mock_retriever, mock_extractor, mock_repository)
 
-        # Wire components via orchestrator
-        orchestrator = ExtractorOrchestrator(mock_extractor, mock_retriever)
+        result = scan.execute(ScanOptions(workers=2))
 
-        # 1. Orchestrator discovers files and extracts metadata
-        metadata_list = orchestrator.extract_all()
-        assert len(metadata_list) > 0
-
-        # 2. Persist extracted metadata to repository
-        for metadata in metadata_list:
-            mock_repository.save(metadata)
-
-        # 3. Verify persistence
-        all_stored = mock_repository.list_all()
-        assert len(all_stored) == len(metadata_list)
+        files = list(mock_retriever.list_files())
+        assert result.new_files == len(files) > 0
+        assert len(mock_repository.list_all()) == len(files)
 
     def test_manual_pipeline_without_orchestrator(
         self,
@@ -262,7 +250,7 @@ class TestDependencyInjectionComposition:
 
         # 2. Process each file (manual iteration = custom control)
         for file_handle in files:
-            # Orchestrator normally does this, but we can too
+            # The scan normally does this, but we can too
             with mock_retriever.get_file_stream(file_handle) as stream:
                 metadata = mock_extractor.extract(file_handle, stream)
             mock_repository.save(metadata)

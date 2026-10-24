@@ -49,7 +49,7 @@ def test_index_directory_returns_a_job_that_succeeds(client, photos_dir):
 
 
 def test_index_reports_per_file_failures(client, photos_dir, monkeypatch):
-    from photo_meta_organizer.api.routes import photos_router
+    from photo_meta_organizer.infrastructure.extractors import disk_metadata_extractor
     from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
         DiskMetaDataExtractor,
     )
@@ -60,7 +60,7 @@ def test_index_reports_per_file_failures(client, photos_dir, monkeypatch):
                 raise OSError("unreadable sector")
             return super().extract(file_handle, stream)
 
-    monkeypatch.setattr(photos_router, "DiskMetaDataExtractor", OneBadFile)
+    monkeypatch.setattr(disk_metadata_extractor, "DiskMetaDataExtractor", OneBadFile)
     done = wait_for_job(client, client.post("/api/index", json={"folder_path": photos_dir}).json())
 
     assert done["status"] == "succeeded"
@@ -93,7 +93,7 @@ class TestConflictAndCancel:
 
     @pytest.fixture
     def gate(self, monkeypatch):
-        from photo_meta_organizer.api.routes import photos_router
+        from photo_meta_organizer.infrastructure.extractors import disk_metadata_extractor
         from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
             DiskMetaDataExtractor,
         )
@@ -107,7 +107,7 @@ class TestConflictAndCancel:
                 release.wait(10)
                 return super().extract(file_handle, stream)
 
-        monkeypatch.setattr(photos_router, "DiskMetaDataExtractor", GatedExtractor)
+        monkeypatch.setattr(disk_metadata_extractor, "DiskMetaDataExtractor", GatedExtractor)
         yield entered, release
         release.set()
 

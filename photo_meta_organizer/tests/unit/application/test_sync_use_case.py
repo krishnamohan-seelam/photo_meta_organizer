@@ -1,4 +1,4 @@
-"""Unit tests for SynchronizeMetadataUseCase.
+"""Unit tests for ScanLibrary.
 
 Tests orchestration logic: correct dispatch of sync flags, dry-run mode,
 error accumulation, and SyncResult population.  All I/O is mocked.
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from photo_meta_organizer.application.use_cases import SynchronizeMetadataUseCase
+from photo_meta_organizer.application.use_cases import ScanLibrary, ScanOptions
 from photo_meta_organizer.domain.models import (
     FileState,
     ImageDimensions,
@@ -76,11 +76,11 @@ def mock_analyzer():
 # ---------------------------------------------------------------------------
 
 
-class TestSynchronizeMetadataUseCaseFlags:
+class TestScanLibraryFlags:
     """Test that flags correctly control which actions are performed."""
 
     def _make_use_case(self, retriever, extractor, repository, analyzer):
-        return SynchronizeMetadataUseCase(
+        return ScanLibrary(
             retriever=retriever,
             extractor=extractor,
             repository=repository,
@@ -101,7 +101,7 @@ class TestSynchronizeMetadataUseCaseFlags:
             mock_retriever, mock_extractor, mock_repository, mock_analyzer
         )
         result = use_case.execute(
-            cleanup_deleted=True, reprocess_modified=True, index_new=True, dry_run=True
+            ScanOptions(remove_missing=True, reprocess_modified=True, index_new=True, dry_run=True)
         )
 
         mock_repository.save.assert_not_called()
@@ -153,7 +153,7 @@ class TestSynchronizeMetadataUseCaseFlags:
         )
         mock_analyzer.analyze_changes.return_value = []
 
-        SynchronizeMetadataUseCase(
+        ScanLibrary(
             retriever=retriever,
             extractor=mock_extractor,
             repository=mock_repository,

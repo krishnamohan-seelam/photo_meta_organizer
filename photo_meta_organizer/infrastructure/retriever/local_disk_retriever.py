@@ -15,6 +15,7 @@ from typing import BinaryIO
 
 from photo_meta_organizer.application.interfaces.image_retriever import (
     RemoteFileHandle,
+    RootUnavailableError,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,15 @@ class LocalDiskRetriever:
                     # Naive local time, the convention for every stored datetime (ADR D3).
                     modified_time=datetime.fromtimestamp(stat.st_mtime),
                 )
+
+    def check_readable(self) -> None:
+        """Raise :class:`RootUnavailableError` if the base folder cannot be listed."""
+        try:
+            with os.scandir(self._base_path):
+                pass
+        except OSError as exc:
+            reason = exc.strerror or exc
+            raise RootUnavailableError(f"Cannot read '{self._base_path}': {reason}") from exc
 
     def skipped_paths(self) -> list[str]:
         """Folders and files the last :meth:`list_files` run could not read."""

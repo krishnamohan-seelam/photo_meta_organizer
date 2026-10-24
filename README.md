@@ -56,7 +56,7 @@ Metadata indexing and organization system built specifically for large-scale pho
 - **Search & Facets API**: `POST /api/search` filters, sorts and pages in SQL; `POST /api/search/ids` returns every match for Select All; `GET /api/facets` returns camera/tag/year/ISO counts, GPS bounds and library stats. The frontend uses all three.
 - **Generated API types**: the frontend's TypeScript types are generated from the API's OpenAPI schema, and a test on each side fails when they drift (see [Run Tests](#run-tests)).
 - **CLI**: `index`, `sync`, `search`, `stats` and `prune`, with tabular output via `tabulate`. Search input it cannot read (a bad date or location) is an error, not a silently unfiltered search.
-- **Multi-Threaded Parallel Indexing**: `ThreadPoolExecutor` workers, a bounded queue, and a dedicated DB-writer thread. Measured after the SQLite migration (2026-10-03): 3,000 generated 640×480 JPEGs (16 MB, warm disk cache, 16-thread CPU) in 5.5-5.9 s with the default 4 workers, about **31,000 images/min** including process start-up. 8 workers was slower (6.6-6.9 s). Real camera files are larger and slower to hash and decode.
+- **One Multi-Threaded Scan**: `index` and `sync` are the same pipeline (ADR-003 R4): `ThreadPoolExecutor` workers hash and extract only new and changed files, and a dedicated writer thread saves them in batches. A second `index` of an unchanged folder reads nothing. Measured after the SQLite migration (2026-10-03): 3,000 generated 640×480 JPEGs (16 MB, warm disk cache, 16-thread CPU) in 5.5-5.9 s with the default 4 workers, about **31,000 images/min** including process start-up. 8 workers was slower (6.6-6.9 s). Real camera files are larger and slower to hash and decode.
 - **Comprehensive EXIF Extraction**: three-tier model (Universal → Common → Camera-Specific) for DSLR, mirrorless, mobile, action cam, and film scanner profiles, with automatic DMS → decimal GPS conversion (WGS84).
 - **Content-Based Deduplication**: each photo is keyed by the SHA-256 hash of its content and stored once; every path holding it is recorded as one of its files (ADR-003), so copies are kept, not forgotten.
 - **Ports & Adapters**: retriever, extractor, and repository interfaces are Protocols. A local-disk retriever and a SQLite repository (WAL mode, per ADR-001) are wired in, with a one-time importer from legacy TinyDB `metadata.json` libraries; an S3 retriever exists but is not wired into the CLI or API, and there is no MongoDB backend yet.
@@ -217,7 +217,7 @@ Keep the server bound to `127.0.0.1`. If you deliberately expose it on a LAN nam
 
 ### Index Your Photos
 
-Only image files are indexed; other files in the folder are skipped.
+Only image files are indexed; other files in the folder are skipped. `index` and `sync` are the same scan: files already in the library whose size and modification time are unchanged are not read again (run `sync --reextract` to re-read every file, e.g. after upgrading), files no longer found are flagged missing, and only `sync --cleanup-deleted` removes anything.
 
 ```bash
 # Index all images in a directory (uses 4 workers by default)
@@ -373,13 +373,11 @@ Design docs for individual phases and the SQLite ADR live in `design_docs/`, whi
 │  ├── interfaces/      Protocols (ImageRetriever,             │
 │  │                    ImageMetadataExtractor,                 │
 │  │                    ImageMetadataRepository)                │
-│  ├── composition.py   Builds retrievers and repositories     │
+│  ├── composition.py   Builds scans, retrievers, repositories │
 │  ├── settings.py      One Settings object for every entry    │
-│  ├── jobs.py          Background index/sync jobs             │
-│  ├── orchestrators.py ExtractorOrchestrator, SyncOrchestrator │
-│  └── use_cases/       IndexPhotos, ParallelIndexPhotos,      │
-│                       SearchPhotos, SynchronizeMetadata,      │
-│                       PruneNonImages, DedupePaths             │
+│  ├── jobs.py          Background scan and analysis jobs      │
+│  └── use_cases/       ScanLibrary (index and sync),          │
+│                       SearchPhotos, PruneNonImages, analysis  │
 └────────────────────────────┬─────────────────────────────────┘
                              ↓
 ┌──────────────────────────────────────────────────────────────┐

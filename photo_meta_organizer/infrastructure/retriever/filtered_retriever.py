@@ -65,6 +65,10 @@ class ExtensionFilteredRetriever:
             if Path(handle.filename).suffix.lower() in self._extensions:
                 yield handle
 
+    def check_readable(self) -> None:
+        """Whether the underlying retriever's root can be read."""
+        self._retriever.check_readable()
+
     def skipped_paths(self) -> list[str]:
         """What the underlying retriever could not read."""
         return self._retriever.skipped_paths()

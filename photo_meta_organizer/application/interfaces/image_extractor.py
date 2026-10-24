@@ -20,12 +20,8 @@ Metadata extraction is responsible for:
 
 The Protocol is designed for flexible composition:
 
-- **Via ExtractorOrchestrator** (recommended for batch extraction):
-    >>> from application.orchestrators import ExtractorOrchestrator
-    >>> retriever = LocalDiskRetriever(base_path="/photos")
-    >>> extractor = DiskMetadataExtractor()  # Stateless, no dependencies
-    >>> orchestrator = ExtractorOrchestrator(extractor, retriever)
-    >>> all_metadata = orchestrator.extract_all()
+- **Via the scan** (recommended for batch extraction): ``ScanLibrary`` runs one
+  extractor instance on a thread pool, which is safe because it is stateless.
 
 - **Direct use** (for custom iteration logic):
     >>> retriever = LocalDiskRetriever(base_path="/photos")

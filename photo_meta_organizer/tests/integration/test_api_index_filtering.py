@@ -57,9 +57,7 @@ class TestPruneCommand:
     @pytest.fixture
     def polluted_db(self, tmp_path, mixed_folder):
         """A DB that already contains non-image records, as left by the old API."""
-        from photo_meta_organizer.application.use_cases import (
-            ParallelIndexPhotosUseCase,
-        )
+        from photo_meta_organizer.application.use_cases import ScanLibrary
         from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
             DiskMetaDataExtractor,
         )
@@ -70,9 +68,7 @@ class TestPruneCommand:
         db = str(tmp_path / "polluted.db")
         repo = SqliteRepository(db)
         # Deliberately the old, unfiltered retriever.
-        ParallelIndexPhotosUseCase(
-            LocalDiskRetriever(mixed_folder), DiskMetaDataExtractor(), repo, 1
-        ).execute()
+        ScanLibrary(LocalDiskRetriever(mixed_folder), DiskMetaDataExtractor(), repo).execute()
         assert repo.count() == 5
         repo.close()
         return db

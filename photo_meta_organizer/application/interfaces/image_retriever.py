@@ -27,6 +27,13 @@ from datetime import datetime
 from typing import BinaryIO, Protocol
 
 
+class RootUnavailableError(OSError):
+    """The root a retriever lists cannot be read (e.g. an unplugged drive: an Offline root).
+
+    A scan raises it before anything is classified, so no File is flagged or removed.
+    """
+
+
 @dataclass(frozen=True)
 class RemoteFileHandle:
     """Metadata about a file before full download or processing.
@@ -59,6 +66,7 @@ class ImageRetriever(Protocol):
 
     Methods:
         list_files: Discover all image files in the storage backend.
+        check_readable: Fail fast when the root cannot be read.
         skipped_paths: What the last listing could not read.
         get_file_stream: Retrieve a file stream for processing.
     """
@@ -72,6 +80,10 @@ class ImageRetriever(Protocol):
         Yields:
             RemoteFileHandle: Metadata for each discovered file.
         """
+        ...
+
+    def check_readable(self) -> None:
+        """Raise :class:`RootUnavailableError` if the root cannot be listed right now."""
         ...
 
     def skipped_paths(self) -> list[str]:

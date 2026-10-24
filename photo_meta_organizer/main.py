@@ -21,11 +21,7 @@ from typing import TYPE_CHECKING
 
 from photo_meta_organizer import __version__
 from photo_meta_organizer.application import settings as app_settings
-from photo_meta_organizer.application.interfaces import (
-    ImageMetadataExtractor,
-    ImageMetadataRepository,
-    ImageRetriever,
-)
+from photo_meta_organizer.application.interfaces import ImageMetadataRepository
 from photo_meta_organizer.application.settings import Settings
 
 if TYPE_CHECKING:
@@ -37,41 +33,6 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # FACTORIES — thin wrappers over application.composition
 # ============================================================================
-
-
-def build_retriever(args: argparse.Namespace) -> ImageRetriever:
-    """Create the file retriever based on CLI arguments.
-
-    Delegates to the shared factory so the CLI and the REST API index exactly the
-    same set of files (images only).
-
-    Phase 4: Will support S3Retriever, GoogleCloudStorageRetriever, etc.
-
-    Args:
-        args: Parsed CLI arguments containing --path.
-
-    Returns:
-        An ImageRetriever implementation.
-    """
-    from photo_meta_organizer.application.composition import build_local_retriever
-
-    return build_local_retriever(args.path)
-
-
-def build_extractor() -> ImageMetadataExtractor:
-    """Create the metadata extractor.
-
-    The extractor is stateless with no configuration — there's only
-    one implementation needed. Phase 5 may add AI-based extractors.
-
-    Returns:
-        A stateless ImageMetadataExtractor implementation.
-    """
-    from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
-        DiskMetaDataExtractor,
-    )
-
-    return DiskMetaDataExtractor()
 
 
 def build_repository(args: argparse.Namespace) -> ImageMetadataRepository:
@@ -100,51 +61,38 @@ def build_repository(args: argparse.Namespace) -> ImageMetadataRepository:
 
 
 def handle_index_command(args: argparse.Namespace) -> int:
-    """Handle 'index' command — scan photos and extract metadata.
+    """Handle 'index' command — a scan that records new and changed photos.
 
-    Delegates to IndexPhotosUseCase or ParallelIndexPhotosUseCase for the full pipeline:
-    retrieve → extract → persist.
+    ``index`` is a scan without ``remove_missing`` (ADR-003 R4): files it already knows
+    unchanged are skipped, and nothing is removed.
 
     Args:
-        args: Parsed CLI arguments (--path, --db, etc.).
+        args: Parsed CLI arguments (--path, --db, --workers).
 
     Returns:
         Exit code: 0 = success, 2 = some files failed (listed on stdout).
     """
-    retriever = build_retriever(args)
-    extractor = build_extractor()
-    repository = build_repository(args)
+    from photo_meta_organizer.application.composition import build_scan
+    from photo_meta_organizer.application.use_cases.scan_library import (
+        RootUnavailableError,
+        ScanOptions,
+    )
+    from photo_meta_organizer.infrastructure.metrics import ProgressReporter
 
-    workers = getattr(args, "workers", 4)
-    if workers > 1:
-        from photo_meta_organizer.application.use_cases import (
-            ParallelIndexPhotosUseCase,
-        )
-        from photo_meta_organizer.infrastructure.metrics import ProgressReporter
-
-        report = ParallelIndexPhotosUseCase(
-            retriever=retriever,
-            extractor=extractor,
-            repository=repository,
-            num_workers=workers,
-            progress_reporter=ProgressReporter(),
-        ).run()
-        print(f"Successfully indexed {len(report.indexed)} photos")
-        if report.errors:
-            print(f"Errors ({len(report.errors)}):")
-            for err in report.errors:
-                print(f"  x {err}")
-        return 0 if not report.errors else 2
-
-    from photo_meta_organizer.application.use_cases import IndexPhotosUseCase
-
-    results = IndexPhotosUseCase(
-        retriever=retriever,
-        extractor=extractor,
-        repository=repository,
-    ).execute()
-    print(f"Successfully indexed {len(results)} photos")
-    return 0
+    scan = build_scan(args.path, build_repository(args), progress_reporter=ProgressReporter())
+    try:
+        result = scan.execute(ScanOptions(workers=args.workers), scope_root=args.path)
+    except RootUnavailableError as exc:
+        print(f"{exc}. Nothing was changed.")
+        return 1
+    print(f"Successfully indexed {result.indexed_files} photos")
+    if result.unchanged_files:
+        print(f"  ({result.unchanged_files} already in the library and unchanged)")
+    if result.errors:
+        print(f"Errors ({len(result.errors)}):")
+        for err in result.errors:
+            print(f"  x {err}")
+    return 0 if not result.errors else 2
 
 
 def handle_search_command(args: argparse.Namespace) -> int:
@@ -334,46 +282,37 @@ def handle_stats_command(args: argparse.Namespace) -> int:
 
 
 def handle_sync_command(args: argparse.Namespace) -> int:
-    """Handle 'sync' command — incremental metadata synchronization.
+    """Handle 'sync' command — scan a folder and apply only what changed.
 
-    Detects NEW, MODIFIED, DELETED, and UNCHANGED files by comparing
-    the metadata DB against the current disk state.  Only changed files
-    are processed, making this significantly faster than a full reindex
-    for large libraries with few changes.
+    Detects NEW, MODIFIED, DELETED (missing) and UNCHANGED files by comparing the
+    library against the disk; only changed files are read.
 
     Args:
         args: Parsed CLI arguments (--path, --db, sync flags).
 
     Returns:
-        Exit code (0 = success, non-zero = error).
+        Exit code (0 = success, 1 = the folder could not be read, 2 = some files failed).
     """
-    from photo_meta_organizer.application.use_cases import SynchronizeMetadataUseCase
-
-    retriever = build_retriever(args)
-    extractor = build_extractor()
-    repository = build_repository(args)
-
-    use_case = SynchronizeMetadataUseCase(
-        retriever=retriever,
-        extractor=extractor,
-        repository=repository,
-    )
-
-    from photo_meta_organizer.application.use_cases.synchronize_metadata_use_case import (
+    from photo_meta_organizer.application.composition import build_scan
+    from photo_meta_organizer.application.use_cases.scan_library import (
         RootUnavailableError,
+        ScanOptions,
     )
 
+    options = ScanOptions(
+        remove_missing=args.cleanup_deleted,
+        reprocess_modified=args.reprocess_modified,
+        index_new=args.index_new,
+        dry_run=args.dry_run,
+        rehash=args.rehash,
+        reextract=args.reextract,
+        workers=args.workers,
+    )
     try:
-        result = use_case.execute(
-            cleanup_deleted=args.cleanup_deleted,
-            reprocess_modified=args.reprocess_modified,
-            index_new=args.index_new,
-            dry_run=args.dry_run,
-            rehash=args.rehash,
-            reextract=args.reextract,
-            # Only records under --path take part, so --cleanup-deleted can never
-            # remove photos indexed from another folder.
-            scope_root=args.path,
+        # Only files under --path take part, so --cleanup-deleted can never remove
+        # photos indexed from another folder.
+        result = build_scan(args.path, build_repository(args)).execute(
+            options, scope_root=args.path
         )
     except RootUnavailableError as exc:
         print(f"{exc}. Nothing was changed.")
@@ -712,6 +651,8 @@ def main() -> int:
     )
     sync_parser.add_argument(
         "--cleanup-deleted",
+        "--remove-missing",
+        dest="cleanup_deleted",
         action="store_true",
         default=False,
         help="Remove files no longer on disk (default: off; they are kept, flagged missing)",
@@ -754,6 +695,9 @@ def main() -> int:
             "Slow; repairs records from older versions, e.g. capture dates taken from "
             "the file's modification time"
         ),
+    )
+    sync_parser.add_argument(
+        "--workers", type=int, default=4, help="Files read in parallel (default: 4)"
     )
     sync_parser.set_defaults(
         func=handle_sync_command,
