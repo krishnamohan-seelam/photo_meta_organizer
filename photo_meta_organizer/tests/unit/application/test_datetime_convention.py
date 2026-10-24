@@ -5,7 +5,6 @@ from the CLI or API may carry tzinfo. Comparing the two used to raise
 ``TypeError: can't compare offset-naive and offset-aware datetimes`` (flaw B-04).
 """
 
-import argparse
 from datetime import UTC, datetime
 
 import pytest
@@ -129,9 +128,11 @@ class TestCliDateParsing:
             parsed = parse_date(text)
             assert parsed is not None and parsed.tzinfo is None, text
 
-    def test_cli_date_search_works_on_naive_records(self, tmp_path, capsys):
+    def test_cli_date_search_works_on_naive_records(self, tmp_path, capsys, monkeypatch):
         """README-documented ``search --date-from ...`` against real extractor output."""
-        from photo_meta_organizer.main import handle_search_command
+        import sys
+
+        from photo_meta_organizer.main import main
 
         db = str(tmp_path / "cli.json")
         repo = TinyDBRepository(db)
@@ -139,22 +140,8 @@ class TestCliDateParsing:
         repo.save(_photo("drop", datetime(2025, 3, 1, 12, 0)))
         repo.close()
 
-        args = argparse.Namespace(
-            db=db,
-            date=None,
-            date_from="2026-01-01",
-            date_to="2026-12-31",
-            camera=None,
-            location=None,
-            lat=None,
-            lon=None,
-            radius=None,
-            tags=None,
-            sort="captured_at",
-            order="asc",
-            page=1,
-            page_size=50,
-        )
-        assert handle_search_command(args) == 0
+        argv = ["main.py", "search", "--db", db, "--date-from", "2026-01-01"]
+        monkeypatch.setattr(sys, "argv", [*argv, "--date-to", "2026-12-31"])
+        assert main() == 0
         out = capsys.readouterr().out
         assert "keep.jpg" in out and "drop.jpg" not in out

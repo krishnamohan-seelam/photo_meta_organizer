@@ -365,7 +365,8 @@ Design docs for individual phases and the SQLite ADR live in `design_docs/`, whi
 │  Presentation Layer (FastAPI & React 19 Frontend)            │
 │  ├── frontend/        React 19 + TypeScript + Vite + Zustand │
 │  ├── api/routes/      REST Endpoints (/photos, /collections) │
-│  └── main.py          CLI interface                          │
+│  ├── cli/             CLI commands (Typer), one per module   │
+│  └── main.py          CLI entry point                        │
 └────────────────────────────┬─────────────────────────────────┘
                              ↓
 ┌──────────────────────────────────────────────────────────────┐

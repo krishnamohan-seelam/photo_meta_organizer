@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Photo Meta Organizer indexes large photo libraries: it extracts EXIF, keys every photo by SHA-256 of its contents (dedup), and stores results in SQLite (`photos.db`), behind the same repository port. Three front doors share one backend: a CLI (`main.py`), a FastAPI REST API, and a React 19 SPA that can also be wrapped in an Electron desktop app. README.md lists phases 0–4 as complete and phases 5–6 (AI tagging, S3/MongoDB) as planned. Note the numbering conflict: `design_docs/PHASE_5_COMPLETION.md` labels the finished Electron desktop app as "Phase 5", while the README treats the desktop app as part of the current state. The S3 and MongoDB backends and AI tagging do not exist yet.
+Photo Meta Organizer indexes large photo libraries: it extracts EXIF, keys every photo by SHA-256 of its contents (dedup), and stores results in SQLite (`photos.db`), behind the same repository port. Three front doors share one backend: a CLI (`main.py`, the commands in `cli/`, Typer), a FastAPI REST API, and a React 19 SPA that can also be wrapped in an Electron desktop app. README.md lists phases 0–4 as complete and phases 5–6 (AI tagging, S3/MongoDB) as planned. Note the numbering conflict: `design_docs/PHASE_5_COMPLETION.md` labels the finished Electron desktop app as "Phase 5", while the README treats the desktop app as part of the current state. The S3 and MongoDB backends and AI tagging do not exist yet.
 
 ## Repository layout (non-obvious bits)
 
@@ -71,7 +71,7 @@ Notes on the test config: `photo_meta_organizer/pytest.ini` is the only pytest c
 
 ## Architecture
 
-Clean Architecture with Protocol-based ports. Dependencies point inward: `api`/`main` → `application` → `domain`; `infrastructure` implements the `application/interfaces` Protocols.
+Clean Architecture with Protocol-based ports. Dependencies point inward: `api`/`cli` → `application` → `domain`; `infrastructure` implements the `application/interfaces` Protocols. (The CLI still imports a few infrastructure pieces directly, as `main.py` did: `logging_setup`, `metrics.ProgressReporter`, `ModelStore`/`ModelUnavailableError`.)
 
 - **domain/** has no I/O and its models are frozen dataclasses. `models.py` holds `ImageMetadata` (the aggregate, keyed by `file_hash`), the three-tier `ImageExifData` (universal → common → camera-specific plus `raw_tags`), and the sync types `FileInfo`, `FileState`, `SyncResult`. `services.py` holds `CameraClassifier` and `MetadataStateAnalyzer`. Small rule modules: `curation.py` (rating 1-5, tag and label rules, shared by the API schema and the repository), `datetimes.py` (`to_naive`), `formats.py` (`IMAGE_EXTENSIONS`, `is_image_filename`).
 - **application/interfaces/** defines three Protocols: `ImageRetriever` (discover files and open streams), `ImageMetadataExtractor` (stateless: `extract(file_handle, stream)`) and `ImageMetadataRepository`. Use cases live in `use_cases/` (`ScanLibrary`, `SearchPhotos`, `PruneNonImages`, the analysis ones). There is one ingest pipeline, the scan (ADR-003 R4).
@@ -90,6 +90,10 @@ Clean Architecture with Protocol-based ports. Dependencies point inward: `api`/`
 - **Curation input is validated in three places on purpose:** the Pydantic schema (422), `SqliteRepository` (raises `ValueError`, which the router maps to 422) and `_to_response` (tolerates a bad stored rating). Batch `action` is a `Literal`, `delete` is reported as `deleted_count`.
 - **Identity:** `file_hash` (SHA-256) is the Asset's key and `save()` is an upsert on it plus an upsert of the File on its path, so identical content at two paths is one photo with two Files (a Duplicate, see `GLOSSARY.md`). `ImageMetadata.file_info` is the primary file; `list_files()` lists them all. Sync matches on resolved path, not hash.
 - **User curation fields** (`rating`, `flagged`, `labels`) are stored in `curation`/`asset_labels`, and `save()` of an existing record updates only the extracted columns and keeps the stored curation (ADR-003 R2); `save(..., overwrite_curation=True)` is for callers that merged curation themselves. A new record is stored with the curation it arrives with.
+
+### CLI
+
+`main.py` is only the entry point (`main()` → `cli.run(argv)`). `cli/app.py` holds the Typer app: global options (`--version`, `--log-level`, `--log`, `--log-dir`) in its callback, then one module per command (`cli/index.py`, `sync.py`, `search.py`, `stats.py`, `prune.py`, `analyze.py`, `paths.py`). Each command calls `common.start(ctx, db, model_dir)` first (Settings flag > env > default, the "library left behind" note, logging) and ends with `common.finish(code)`. `run()` returns the command's exit code and turns usage errors into `SystemExit(2)` like argparse did; Typer 0.27 vendors click, so catch `typer.TyperException`, not `click` exceptions. Options use `Annotated[..., typer.Option(...)]` (ruff's B008 stays quiet) and `Literal` for choices. Commands are registered with `cls=common.Command` (the root with `cls=common.Group`): it accepts any unambiguous prefix of a long option as argparse did (`--dry`) and hides Typer's `[default: X]` because each help text says its default; the app sets `rich_markup_mode=None` so help is plain ASCII. Docstrings are the user's `--help`: keep ADR notes and RST out of them. Ctrl-C exits 130 (Typer).
 
 ### API and frontend
 
