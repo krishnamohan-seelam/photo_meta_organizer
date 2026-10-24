@@ -65,6 +65,10 @@ class ExtensionFilteredRetriever:
             if Path(handle.filename).suffix.lower() in self._extensions:
                 yield handle
 
+    def skipped_paths(self) -> list[str]:
+        """What the underlying retriever could not read."""
+        return self._retriever.skipped_paths()
+
     @contextmanager
     def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:
         """Retrieve a file stream from the underlying retriever.

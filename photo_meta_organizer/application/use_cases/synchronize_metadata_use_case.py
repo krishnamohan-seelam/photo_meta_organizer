@@ -57,6 +57,21 @@ def _within(path: str, root: str) -> bool:
         return False
 
 
+class RootUnavailableError(OSError):
+    """The folder a scan was asked to look through cannot be read (e.g. an unplugged drive).
+
+    Raised before anything is classified, so no File is flagged missing or removed.
+    """
+
+
+def _check_readable(root: str) -> None:
+    try:
+        with os.scandir(root):
+            pass
+    except OSError as exc:
+        raise RootUnavailableError(f"Cannot read '{root}': {exc.strerror or exc}") from exc
+
+
 class SynchronizeMetadataUseCase:
     """Use case: incrementally sync metadata DB with actual disk state.
 
@@ -125,8 +140,9 @@ class SynchronizeMetadataUseCase:
             5. Return SyncResult summary
 
         Args:
-            cleanup_deleted: If True, remove DB entries for files no longer on disk.
-                             Default False (safer — prevents accidental data loss).
+            cleanup_deleted: If True, remove the Files this scan did not find (and an
+                             Asset once no File holds it). Default False: they are
+                             kept and flagged missing, so nothing is lost.
             reprocess_modified: If True, re-extract metadata for modified files.
                                  Default True.
             index_new: If True, extract and insert metadata for new files.
@@ -144,7 +160,8 @@ class SynchronizeMetadataUseCase:
                     part, so a file elsewhere in the library is never classified as
                     DELETED (and removed by ``cleanup_deleted``) just because this scan
                     did not look there. ``None`` compares against the whole DB, which
-                    is only safe when the retriever covers every indexed folder.
+                    is only safe when the retriever covers every indexed folder. A root
+                    that cannot be read raises :class:`RootUnavailableError`.
             progress: Called with (done, total) while changes are applied.
             should_cancel: Polled before the analysis and before each write; see
                     ``SyncOrchestrator.sync``. ``result.cancelled`` reports it.
@@ -169,6 +186,10 @@ class SynchronizeMetadataUseCase:
         # ------------------------------------------------------------------
         # Step 1: Scan disk
         # ------------------------------------------------------------------
+        # A root that cannot be read would list as empty and make every File under it
+        # look missing: fail instead, before anything is flagged or removed.
+        if scope_root is not None:
+            _check_readable(scope_root)
         # Size and mtime come from the retriever's own listing (PMO-22): no second
         # stat per file, and the use case works with any storage backend.
         disk_files: dict[str, FileInfo] = {
@@ -181,6 +202,9 @@ class SynchronizeMetadataUseCase:
         }
 
         logger.info("Disk scan complete: %d files found", len(disk_files))
+        if scope_root is not None:
+            _check_readable(scope_root)  # still there: not unplugged half-way through
+        skipped = self._retriever.skipped_paths()
 
         # ------------------------------------------------------------------
         # Step 2: Load DB entries
@@ -188,6 +212,10 @@ class SynchronizeMetadataUseCase:
         db_entries = self._repository.list_files()
         if scope_root is not None:
             db_entries = [e for e in db_entries if _within(e.path, scope_root)]
+        if skipped:
+            # Not looked at is not missing: Files the listing could not reach stay as they are.
+            logger.warning("%d folder(s) or file(s) could not be read", len(skipped))
+            db_entries = [e for e in db_entries if not any(_within(e.path, s) for s in skipped)]
         logger.info("DB loaded: %d existing entries in scope", len(db_entries))
 
         if should_cancel is not None and should_cancel():
@@ -237,6 +265,8 @@ class SynchronizeMetadataUseCase:
             result.new_files = counts["NEW"] if index_new else 0
             result.modified_files = counts["MODIFIED"] if reprocess_modified else 0
             result.deleted_entries = counts["DELETED"] if cleanup_deleted else 0
+            result.missing_files = 0 if cleanup_deleted else counts["DELETED"]
+            result.found_again = sum(1 for fs in file_states if fs.found_again)
             result.fingerprints_refreshed = stale
             result.duration_seconds = time.monotonic() - start_time
             return result
@@ -257,6 +287,8 @@ class SynchronizeMetadataUseCase:
         result.new_files = sync_result.new_files
         result.modified_files = sync_result.modified_files
         result.deleted_entries = sync_result.deleted_entries
+        result.missing_files = sync_result.missing_files
+        result.found_again = sync_result.found_again
         result.fingerprints_refreshed = sync_result.fingerprints_refreshed
         result.errors.extend(sync_result.errors)
         result.cancelled = sync_result.cancelled

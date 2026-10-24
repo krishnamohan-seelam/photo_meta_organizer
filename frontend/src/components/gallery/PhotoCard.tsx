@@ -1,11 +1,11 @@
 import React from 'react'
-import { Check, Flag } from 'lucide-react'
+import { Check, FileX, Flag } from 'lucide-react'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
-import { displayTitle, exposureLine } from '../../utils/photoFormat'
+import { MISSING_TITLE, displayTitle, exposureLine, isMissing } from '../../utils/photoFormat'
 
 interface PhotoCardProps {
   photo: PhotoMetadata
@@ -27,12 +27,14 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index, width, he
   const toggleSelect = useSelectionStore((s) => s.toggleSelect)
 
   const name = photo.file_info.name
+  const missing = isMissing(photo)
   const title = displayTitle(name)
   const exposure = exposureLine(photo.exif)
   const description = [
     title === name ? name : `${title}, ${name}`,
     photo.rating ? `${photo.rating} star${photo.rating > 1 ? 's' : ''}` : null,
     photo.flagged ? 'picked' : null,
+    missing ? 'file missing' : null,
   ]
     .filter(Boolean)
     .join(', ')
@@ -68,8 +70,13 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index, width, he
 
       <img src={getThumbnailUrl(photo.file_hash, thumbSize, thumbSize)} alt="" loading="lazy" decoding="async" onError={swapToPlaceholder} />
 
-      {(photo.flagged || photo.rating) && (
+      {(photo.flagged || photo.rating || missing) && (
         <div className="tile-badges" aria-hidden="true">
+          {missing && (
+            <span className="tile-badge missing" title={MISSING_TITLE}>
+              <FileX size={11} />
+            </span>
+          )}
           {photo.flagged && (
             <span className="tile-badge pick">
               <Flag size={11} fill="currentColor" />

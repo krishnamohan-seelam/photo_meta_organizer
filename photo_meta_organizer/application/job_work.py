@@ -80,6 +80,8 @@ def sync_work(
             f"{result.modified_files} modified, {result.deleted_entries} deleted, "
             f"{result.unchanged_files} unchanged."
         )
+        if result.missing_files:
+            message += f" {result.missing_files} missing."
         if failures:
             message += f" {failures} error(s)."
         return JobOutcome(
@@ -88,6 +90,8 @@ def sync_work(
                 "new": result.new_files,
                 "modified": result.modified_files,
                 "deleted": result.deleted_entries,
+                "missing": result.missing_files,
+                "found_again": result.found_again,
                 "unchanged": result.unchanged_files,
                 "fingerprints_refreshed": result.fingerprints_refreshed,
                 "failed": failures,

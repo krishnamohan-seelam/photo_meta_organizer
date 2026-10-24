@@ -14,7 +14,7 @@ const initial = useUiStore.getState()
 function photosOf(n: number): PhotoMetadata[] {
   return Array.from({ length: n }, (_, i) => {
     const hash = i.toString(16).padStart(64, '0')
-    return makePhoto({ file_hash: hash, file_info: { name: `IMG_${i}.jpg`, path: `/p/${i}`, size_bytes: 1000 + i, mime_type: 'image/jpeg' } })
+    return makePhoto({ file_hash: hash, file_info: { name: `IMG_${i}.jpg`, path: `/p/${i}`, size_bytes: 1000 + i, mime_type: 'image/jpeg', missing_since: null } })
   })
 }
 
@@ -120,5 +120,14 @@ describe('virtualization keeps the DOM bounded (AC-1c.3, AC-2c.3)', () => {
     const rows = container.querySelectorAll('.jrow')
     expect(rows.length).toBeGreaterThan(0)
     expect(rows.length).toBeLessThanOrEqual(60)
+  })
+})
+
+describe('PhotoTable missing file (ticket 04)', () => {
+  it('marks a photo whose file a scan did not find', () => {
+    const [present, gone] = photosOf(2)
+    const missing = { ...gone, file_info: { ...gone.file_info, missing_since: '2026-10-20T08:00:00' } }
+    seed(<PhotoTable />, [present, missing])
+    expect(screen.getAllByTitle('File missing: not found by the last scan')).toHaveLength(1)
   })
 })

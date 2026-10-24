@@ -66,6 +66,9 @@ class ImageFileInfo:
         modified_time: File mtime (naive local time) when the content was hashed.
             ``None`` for records written before PMO-06; sync treats those as
             "size is the only fingerprint" and backfills the value.
+        missing_since: When a scan of its root first failed to find this file (naive
+            UTC, like ``added_at``), or ``None`` while it is present (GLOSSARY: Missing
+            file).
     """
 
     name: str
@@ -73,6 +76,7 @@ class ImageFileInfo:
     size_bytes: int
     mime_type: str
     modified_time: datetime | None = None
+    missing_since: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -268,6 +272,7 @@ class StoredFile:
     file_hash: str
     size_bytes: int
     modified_time: datetime | None
+    missing_since: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -290,6 +295,7 @@ class FileState:
             ``last_modified`` without re-extracting.
         recorded_path: The path as the library recorded the File (None for NEW). It can
             differ from the normalised ``file_path``, so writes about that File use it.
+        found_again: The File was recorded as missing and is on disk again.
     """
 
     file_path: str
@@ -300,6 +306,7 @@ class FileState:
     previous_hash: str | None = None  # Only set for MODIFIED
     refresh_fingerprint: bool = False  # Only meaningful for UNCHANGED
     recorded_path: str | None = None
+    found_again: bool = False
 
 
 @dataclass
@@ -309,7 +316,9 @@ class SyncResult:
     Attributes:
         new_files: Number of new files added to DB.
         modified_files: Number of modified files updated in DB.
-        deleted_entries: Number of orphaned DB entries removed.
+        deleted_entries: Number of missing Files removed (``cleanup_deleted``).
+        missing_files: Files not found by this scan and kept, flagged as missing.
+        found_again: Files recorded as missing that this scan found again.
         unchanged_files: Number of files skipped (identical fingerprint).
         fingerprints_refreshed: UNCHANGED files whose stored size/mtime was
             missing (legacy record) or stale (``touch``) and was brought up to date.
@@ -321,6 +330,8 @@ class SyncResult:
     new_files: int = 0
     modified_files: int = 0
     deleted_entries: int = 0
+    missing_files: int = 0
+    found_again: int = 0
     unchanged_files: int = 0
     fingerprints_refreshed: int = 0
     errors: list[str] = field(default_factory=list)

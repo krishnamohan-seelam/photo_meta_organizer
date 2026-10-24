@@ -8,7 +8,7 @@ import { PhotoCard } from './PhotoCard'
 const HASH = 'c'.repeat(64)
 const photo = makePhoto({
   file_hash: HASH,
-  file_info: { name: 'DSC04928_Tokyo_Tower_Sunset.ARW', path: '/p', size_bytes: 1000, mime_type: 'image/x-sony-arw' },
+  file_info: { name: 'DSC04928_Tokyo_Tower_Sunset.ARW', path: '/p', size_bytes: 1000, mime_type: 'image/x-sony-arw', missing_since: null },
   rating: 4,
   flagged: true,
 })
@@ -59,5 +59,22 @@ describe('PhotoCard tile (FR-1c.6–1c.8)', () => {
     const tile = container.querySelector('.tile') as HTMLElement
     expect(tile.style.width).toBe('300px')
     expect(tile.style.height).toBe('200px')
+  })
+})
+
+describe('PhotoCard missing file (ADR-003, ticket 04)', () => {
+  it('says when the photo is not on disk any more', () => {
+    const missing = makePhoto({
+      file_hash: 'd'.repeat(64),
+      file_info: { name: 'gone.jpg', path: '/p/gone.jpg', size_bytes: 10, mime_type: 'image/jpeg', missing_since: '2026-10-20T08:00:00' },
+    })
+    render(<PhotoCard photo={missing} index={0} width={300} height={200} thumbSize={320} />)
+    expect(screen.getByRole('button', { name: 'gone, gone.jpg, file missing' })).toBeTruthy()
+    expect(screen.getByTitle('File missing: not found by the last scan')).toBeTruthy()
+  })
+
+  it('shows no badge while the file is present', () => {
+    renderCard()
+    expect(screen.queryByTitle(/File missing/)).toBeNull()
   })
 })

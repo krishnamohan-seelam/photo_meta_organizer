@@ -6,6 +6,7 @@ Supports recursive directory traversal for comprehensive file discovery.
 """
 
 import logging
+import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
@@ -54,6 +55,7 @@ class LocalDiskRetriever:
         self._base_path = Path(base_path)
         if not self._base_path.is_dir():
             raise NotADirectoryError(f"{base_path} is not a valid directory.")
+        self._skipped: list[str] = []
 
     def list_files(self) -> Generator[RemoteFileHandle, None, None]:
         """Discover all files in the directory tree.
@@ -63,22 +65,36 @@ class LocalDiskRetriever:
 
         Yields:
             RemoteFileHandle: Metadata for each discovered file.
+
+        A folder or file that cannot be read is skipped and logged, and reported by
+        :meth:`skipped_paths` so a scan does not mistake it for a missing one.
         """
-        for path in self._base_path.rglob("*"):
-            try:
-                if not path.is_file():
+        self._skipped = []
+
+        def skip(exc: OSError) -> None:
+            logger.warning("Cannot read %s: %s", exc.filename, exc)
+            self._skipped.append(str(exc.filename))
+
+        for folder, _dirs, names in os.walk(self._base_path, onerror=skip):
+            for name in names:
+                path = Path(folder) / name
+                try:
+                    stat = path.stat()
+                except OSError as exc:  # vanished or unreadable between listing and stat
+                    logger.warning("Cannot stat %s: %s", path, exc)
+                    self._skipped.append(str(path))
                     continue
-                stat = path.stat()
-            except OSError as exc:  # vanished or unreadable between listing and stat
-                logger.warning("Cannot stat %s: %s", path, exc)
-                continue
-            yield RemoteFileHandle(
-                original_path=str(path),
-                filename=path.name,
-                size_bytes=stat.st_size,
-                # Naive local time, the convention for every stored datetime (ADR D3).
-                modified_time=datetime.fromtimestamp(stat.st_mtime),
-            )
+                yield RemoteFileHandle(
+                    original_path=str(path),
+                    filename=path.name,
+                    size_bytes=stat.st_size,
+                    # Naive local time, the convention for every stored datetime (ADR D3).
+                    modified_time=datetime.fromtimestamp(stat.st_mtime),
+                )
+
+    def skipped_paths(self) -> list[str]:
+        """Folders and files the last :meth:`list_files` run could not read."""
+        return list(self._skipped)
 
     @contextmanager
     def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:

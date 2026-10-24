@@ -959,6 +959,16 @@ kbd.k {
   background: var(--accent-primary);
   color: var(--accent-ink);
 }
+.tile-badge.missing {
+  background: var(--accent-danger);
+  color: var(--on-photo);
+}
+.tname-missing {
+  display: inline-flex;
+  vertical-align: -1px;
+  margin-right: 5px;
+  color: var(--accent-danger);
+}
 
 /* ---------- Table layout (§5.3) */
 .seg .seg-icon {
@@ -1310,6 +1320,18 @@ kbd.k {
   color: var(--text-muted);
   margin-top: 2px;
   word-break: break-all;
+}
+.insp-missing {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--accent-danger);
+}
+.insp-missing svg {
+  flex: none;
+  margin-top: 2px;
 }
 .curate {
   display: flex;

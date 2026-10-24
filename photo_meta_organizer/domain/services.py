@@ -131,7 +131,9 @@ class MetadataStateAnalyzer:
        - ``force_rehash=True`` hashes every file already in the DB, ignoring the
          fingerprint; this is the only way to catch an edit that kept both size
          and mtime.
-    4. DB entries whose path is not on disk → **DELETED**.
+    4. DB entries whose path is not on disk → **DELETED** (the caller decides between
+       flagging the File missing and removing it). A recorded-missing File found on disk
+       again is flagged ``found_again``.
 
     This is a pure domain service: no I/O, fully testable. The caller injects
     both the hasher (it opens files, e.g. through the retriever) and the path
@@ -220,6 +222,7 @@ class MetadataStateAnalyzer:
                         last_modified=fi.modified_time,
                         refresh_fingerprint=not mtime_known,
                         recorded_path=db_entry.path,
+                        found_again=db_entry.missing_since is not None,
                     )
                 )
                 continue
@@ -243,6 +246,7 @@ class MetadataStateAnalyzer:
                         last_modified=fi.modified_time,
                         refresh_fingerprint=not (mtime_same and size_same),
                         recorded_path=db_entry.path,
+                        found_again=db_entry.missing_since is not None,
                     )
                 )
             else:
@@ -255,6 +259,7 @@ class MetadataStateAnalyzer:
                         last_modified=fi.modified_time,
                         previous_hash=stored_hash,
                         recorded_path=db_entry.path,
+                        found_again=db_entry.missing_since is not None,
                     )
                 )
 

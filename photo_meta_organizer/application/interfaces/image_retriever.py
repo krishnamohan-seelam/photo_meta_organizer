@@ -59,6 +59,7 @@ class ImageRetriever(Protocol):
 
     Methods:
         list_files: Discover all image files in the storage backend.
+        skipped_paths: What the last listing could not read.
         get_file_stream: Retrieve a file stream for processing.
     """
 
@@ -70,6 +71,14 @@ class ImageRetriever(Protocol):
 
         Yields:
             RemoteFileHandle: Metadata for each discovered file.
+        """
+        ...
+
+    def skipped_paths(self) -> list[str]:
+        """Folders and files the last ``list_files()`` run could not read.
+
+        A scan must not treat a recorded File under one of these as missing: it was
+        not looked at, not found absent.
         """
         ...
 

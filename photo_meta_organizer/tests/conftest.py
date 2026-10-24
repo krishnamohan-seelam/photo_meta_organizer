@@ -11,7 +11,7 @@ concrete classes implement the protocols and compose via dependency injection.
 """
 
 import logging
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime
@@ -269,6 +269,10 @@ class MockImageRetriever:
         """
         yield from self.files
 
+    def skipped_paths(self) -> list[str]:
+        """An in-memory listing never skips anything."""
+        return []
+
     @contextmanager
     def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:
         """Return a mock file stream as a context manager.
@@ -423,6 +427,17 @@ class MockImageMetadataRepository:
         for metadata in items:
             self.save(metadata)
 
+    def set_missing(self, paths: Sequence[str], since: datetime | None) -> int:
+        """Flag (or, with ``since=None``, clear) the missing state of stored records."""
+        touched = 0
+        for file_hash, m in list(self.storage.items()):
+            if m.file_info.path in paths:
+                stamp = since if since is None else (m.file_info.missing_since or since)
+                info = replace(m.file_info, missing_since=stamp)
+                self.storage[file_hash] = replace(m, file_info=info)
+                touched += 1
+        return touched
+
     def list_files(self) -> list[StoredFile]:
         """One File per stored record (this mock keeps one path per hash)."""
         return [
@@ -431,6 +446,7 @@ class MockImageMetadataRepository:
                 file_hash=m.file_hash,
                 size_bytes=m.file_info.size_bytes,
                 modified_time=m.file_info.modified_time,
+                missing_since=m.file_info.missing_since,
             )
             for m in self.storage.values()
         ]

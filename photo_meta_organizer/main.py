@@ -359,17 +359,25 @@ def handle_sync_command(args: argparse.Namespace) -> int:
         repository=repository,
     )
 
-    result = use_case.execute(
-        cleanup_deleted=args.cleanup_deleted,
-        reprocess_modified=args.reprocess_modified,
-        index_new=args.index_new,
-        dry_run=args.dry_run,
-        rehash=args.rehash,
-        reextract=args.reextract,
-        # Only records under --path take part, so --cleanup-deleted can never
-        # remove photos indexed from another folder.
-        scope_root=args.path,
+    from photo_meta_organizer.application.use_cases.synchronize_metadata_use_case import (
+        RootUnavailableError,
     )
+
+    try:
+        result = use_case.execute(
+            cleanup_deleted=args.cleanup_deleted,
+            reprocess_modified=args.reprocess_modified,
+            index_new=args.index_new,
+            dry_run=args.dry_run,
+            rehash=args.rehash,
+            reextract=args.reextract,
+            # Only records under --path take part, so --cleanup-deleted can never
+            # remove photos indexed from another folder.
+            scope_root=args.path,
+        )
+    except RootUnavailableError as exc:
+        print(f"{exc}. Nothing was changed.")
+        return 1
 
     prefix = "[DRY RUN] " if args.dry_run else ""
     print(
@@ -379,6 +387,11 @@ def handle_sync_command(args: argparse.Namespace) -> int:
         f"-{result.deleted_entries} deleted, "
         f"{result.unchanged_files} unchanged"
     )
+    if result.missing_files or result.found_again:
+        print(
+            f"  {result.missing_files} file(s) missing (kept; --cleanup-deleted removes them), "
+            f"{result.found_again} found again"
+        )
     if result.fingerprints_refreshed:
         verb = "would record" if args.dry_run else "recorded"
         print(f"  ({verb} size/mtime for {result.fingerprints_refreshed} unchanged file(s))")
@@ -701,7 +714,7 @@ def main() -> int:
         "--cleanup-deleted",
         action="store_true",
         default=False,
-        help="Remove DB entries for files no longer on disk (default: off)",
+        help="Remove files no longer on disk (default: off; they are kept, flagged missing)",
     )
     sync_parser.add_argument(
         "--no-reprocess",

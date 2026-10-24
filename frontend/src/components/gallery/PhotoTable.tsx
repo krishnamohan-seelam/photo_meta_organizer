@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useShallow } from 'zustand/react/shallow'
-import { ArrowDown, ArrowUp, Check, Flag, Minus } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, FileX, Flag, Minus } from 'lucide-react'
 import type { PhotoMetadata, SortField } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
@@ -10,7 +10,7 @@ import { useLibraryHotkeys, type StepKeys } from '../../hooks/useLibraryHotkeys'
 import { useSelectAllMatches } from '../../hooks/useSelectAllMatches'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
-import { displayTitle, exposureParts, formatBytes, formatCapturedAt, lensModel } from '../../utils/photoFormat'
+import { MISSING_TITLE, displayTitle, exposureParts, formatBytes, formatCapturedAt, isMissing, lensModel } from '../../utils/photoFormat'
 
 /** Fixed row height (FR-2c.4): rows are never measured. */
 export const ROW_HEIGHT = 38
@@ -116,7 +116,14 @@ const TableRow = React.memo(function TableRow({ photo, index, start, onActivate 
       </div>
       <div role="gridcell" className="tcell tname">
         <button type="button" className="btn-reset tname-btn" data-photo-index={index} aria-current={inspected ? 'true' : undefined} title={name}>
-          <span className="tname-title">{displayTitle(name)}</span>
+          <span className="tname-title">
+            {isMissing(photo) && (
+              <span className="tname-missing" title={MISSING_TITLE}>
+                <FileX size={12} aria-label="file missing" />
+              </span>
+            )}
+            {displayTitle(name)}
+          </span>
           <span className="tname-file">{name}</span>
         </button>
       </div>

@@ -32,6 +32,7 @@ from photo_meta_organizer.application.interfaces.image_retriever import (
     ImageRetriever,
     RemoteFileHandle,
 )
+from photo_meta_organizer.domain.datetimes import utc_now_naive
 from photo_meta_organizer.domain.models import FileState, ImageMetadata, SyncResult
 
 
@@ -133,8 +134,10 @@ class SyncOrchestrator:
                  gains another File and keeps its curation
     - MODIFIED → extract metadata + repository.save(): the path's File now points at
                  the new content, and the repository carries the curation over
-    - DELETED  → repository.delete_by_path(): the File is forgotten, and its Asset too
-                 once no File holds it
+    - DELETED  → with ``cleanup_deleted``, repository.delete_by_path(): the File is
+                 forgotten, and its Asset too once no File holds it; otherwise the File
+                 is flagged missing (repository.set_missing), in one batch
+    - a File recorded as missing and found again has the flag cleared, in one batch
     - UNCHANGED → skip, except that a missing or stale (size, mtime) fingerprint is
                  recorded via repository.refresh_fingerprints() in one batch
 
@@ -193,9 +196,14 @@ class SyncOrchestrator:
         """
         result = SyncResult()
         stale_fingerprints: list[tuple[str, int, datetime]] = []  # (path, size, mtime)
+        missing: list[str] = []
+        found_again: list[str] = []
         total = len(file_states)
 
         for done, fs in enumerate(file_states, start=1):
+            if fs.found_again:
+                result.found_again += 1
+                found_again.append(fs.recorded_path or fs.file_path)
             if fs.state == "UNCHANGED":
                 result.unchanged_files += 1
                 if fs.refresh_fingerprint and fs.last_modified:
@@ -211,9 +219,10 @@ class SyncOrchestrator:
                     result.cancelled = True
                     break
                 if fs.state == "DELETED":
-                    # If not cleaning up, the orphan is kept and not counted.
                     if cleanup_deleted:
                         self._delete_entry(fs, result)
+                    else:
+                        missing.append(fs.recorded_path or fs.file_path)
                 elif acts:
                     self._extract_and_save(fs, result)
 
@@ -221,6 +230,7 @@ class SyncOrchestrator:
                 progress(done, total)
 
         self._refresh_fingerprints(stale_fingerprints, result)
+        self._flag_missing(missing, found_again, result)
         return result
 
     # ------------------------------------------------------------------
@@ -244,6 +254,17 @@ class SyncOrchestrator:
                 logger.warning("Could not delete: %s (not found in DB)", fs.file_path)
         except Exception as exc:  # noqa: BLE001
             msg = f"delete error: {fs.file_path}: {exc}"
+            logger.error(msg)
+            result.errors.append(msg)
+
+    def _flag_missing(self, missing: list[str], found_again: list[str], result: SyncResult) -> None:
+        """Flag Files the scan did not find, and clear the flag on those it found again."""
+        try:
+            self._repository.set_missing(missing, utc_now_naive())
+            self._repository.set_missing(found_again, None)
+            result.missing_files = len(missing)
+        except Exception as exc:  # noqa: BLE001
+            msg = f"missing-file flag error: {exc}"
             logger.error(msg)
             result.errors.append(msg)
 

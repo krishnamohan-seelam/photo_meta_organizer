@@ -233,6 +233,21 @@ JOIN files f ON f.id = (
 """
 
 
+# Ticket 04: a File a scan did not find is flagged, not forgotten. The primary file is now
+# the present File seen last, so a photo shows as missing only when every File is.
+MISSING_FILES_SQL = """
+ALTER TABLE files ADD COLUMN missing_since TEXT;
+DROP VIEW photo_view;
+CREATE VIEW photo_view AS
+SELECT v.*, f.path, f.name, f.mtime, f.missing_since
+FROM asset_view v
+JOIN files f ON f.id = (
+    SELECT id FROM files WHERE asset_hash = v.file_hash
+    ORDER BY missing_since IS NOT NULL, last_seen DESC, id LIMIT 1
+);
+"""
+
+
 @dataclass(frozen=True)
 class Migration:
     """One schema step. ``rebuilds`` marks steps that rewrite tables and so need a backup."""
@@ -249,6 +264,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     # predates the AI tables, is brought up to the baseline and then stamped as version 1.
     Migration(1, "baseline", BASELINE_SQL),
     Migration(2, "split_assets", SPLIT_ASSETS_SQL, rebuilds=True),
+    Migration(3, "missing_files", MISSING_FILES_SQL),
 )
 
 

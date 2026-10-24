@@ -10,6 +10,7 @@ export function makePhoto(overrides: Partial<PhotoMetadata> = {}): PhotoMetadata
       path: `/photos/${hash.slice(0, 6)}.jpg`,
       size_bytes: 2_097_152,
       mime_type: 'image/jpeg',
+      missing_since: null,
     },
     dimensions: { width: 6000, height: 4000 },
     exif: {

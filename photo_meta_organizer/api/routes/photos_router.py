@@ -124,6 +124,7 @@ def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
             path=metadata.file_info.path,
             size_bytes=metadata.file_info.size_bytes,
             mime_type=metadata.file_info.mime_type,
+            missing_since=metadata.file_info.missing_since,
         ),
         dimensions=DimensionsSchema(
             width=metadata.dimensions.width,

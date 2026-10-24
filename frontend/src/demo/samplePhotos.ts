@@ -10,6 +10,7 @@ export const SAMPLE_PHOTOS: PhotoMetadata[] = [
       path: '/media/raw/DSC04928_Tokyo_Tower_Sunset.ARW',
       size_bytes: 25345678,
       mime_type: 'image/x-sony-arw',
+      missing_since: null,
     },
     dimensions: { width: 7008, height: 4672 },
     exif: {
@@ -42,6 +43,7 @@ export const SAMPLE_PHOTOS: PhotoMetadata[] = [
       path: '/media/raw/IMG_8392_Kyoto_Bamboo_Path.CR3',
       size_bytes: 38920140,
       mime_type: 'image/x-canon-cr3',
+      missing_since: null,
     },
     dimensions: { width: 8192, height: 5464 },
     exif: {
@@ -74,6 +76,7 @@ export const SAMPLE_PHOTOS: PhotoMetadata[] = [
       path: '/media/raw/iPhone_15Pro_Shibuya_Night.HEIC',
       size_bytes: 4892100,
       mime_type: 'image/heic',
+      missing_since: null,
     },
     dimensions: { width: 4032, height: 3024 },
     exif: {
@@ -106,6 +109,7 @@ export const SAMPLE_PHOTOS: PhotoMetadata[] = [
       path: '/media/raw/_DSC9102_Fuji_Sunrise.NEF',
       size_bytes: 45210980,
       mime_type: 'image/x-nikon-nef',
+      missing_since: null,
     },
     dimensions: { width: 8256, height: 5504 },
     exif: {

@@ -777,6 +777,19 @@
             "title": "Mime Type",
             "type": "string"
           },
+          "missing_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the last scan of its folder stopped finding this file (naive UTC); null while it is on disk. The path shown is a present copy whenever one exists.",
+            "title": "Missing Since"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -794,7 +807,8 @@
           "name",
           "path",
           "size_bytes",
-          "mime_type"
+          "mime_type",
+          "missing_since"
         ],
         "title": "FileInfoSchema",
         "type": "object"
@@ -2166,7 +2180,7 @@
         "properties": {
           "cleanup_deleted": {
             "default": false,
-            "description": "Remove records whose file is gone (off by default)",
+            "description": "Remove files this scan did not find (and a photo once none of its files is left); off by default, when they are kept and flagged missing",
             "title": "Cleanup Deleted",
             "type": "boolean"
           },

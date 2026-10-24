@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Copy, Flag, Plus, Star, X } from 'lucide-react'
+import { Copy, FileX, Flag, Plus, Star, X } from 'lucide-react'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
 import { useInspectedPhoto, usePhotoSearch } from '../../hooks/usePhotos'
@@ -15,7 +15,9 @@ import {
   fileFormat,
   formatBytes,
   formatCapturedAt,
+  isMissing,
   lensModel,
+  missingNote,
   shortHash,
 } from '../../utils/photoFormat'
 import { NameDialog } from '../collections/NameDialog'
@@ -113,6 +115,12 @@ const Inspector: React.FC<{ photo: PhotoMetadata }> = ({ photo }) => {
 
       <div className="insp-title">{title}</div>
       <div className="insp-file">{photo.file_info.name}</div>
+      {isMissing(photo) && (
+        <div className="insp-missing" role="note">
+          <FileX size={13} aria-hidden="true" />
+          {missingNote(photo.file_info.missing_since)}
+        </div>
+      )}
 
       <div className="curate">
         <div className="stars" role="radiogroup" aria-label="Rating">

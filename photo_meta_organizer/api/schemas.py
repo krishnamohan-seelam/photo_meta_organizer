@@ -37,6 +37,13 @@ class FileInfoSchema(ResponseModel):
     path: str
     size_bytes: int
     mime_type: str
+    missing_since: datetime | None = Field(
+        None,
+        description=(
+            "When the last scan of its folder stopped finding this file (naive UTC); null "
+            "while it is on disk. The path shown is a present copy whenever one exists."
+        ),
+    )
 
 
 class DimensionsSchema(ResponseModel):
@@ -226,7 +233,11 @@ class SyncFolderRequest(BaseModel):
 
     folder_path: str = Field(description="Absolute path to the directory to re-scan")
     cleanup_deleted: bool = Field(
-        default=False, description="Remove records whose file is gone (off by default)"
+        default=False,
+        description=(
+            "Remove files this scan did not find (and a photo once none of its files is left);"
+            " off by default, when they are kept and flagged missing"
+        ),
     )
     reprocess_modified: bool = Field(default=True, description="Re-extract changed files")
     index_new: bool = Field(default=True, description="Index files not yet in the library")

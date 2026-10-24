@@ -85,6 +85,21 @@ export function formatCapturedAt(capturedAt: string | null | undefined): string 
   return hour ? `${date} · ${hour}:${minute}` : date
 }
 
+/** A scan stopped finding every file of the photo (the API lists a present copy first). */
+export function isMissing(photo: PhotoMetadata): boolean {
+  return photo.file_info.missing_since !== null
+}
+
+/** Tooltip of the missing-file badge, shared by the grid and the table. */
+export const MISSING_TITLE = 'File missing: not found by the last scan'
+
+/** The inspector's line for a photo whose file a scan stopped finding (day only: it is stored in UTC). */
+export function missingNote(missingSince: string | null): string | null {
+  if (missingSince === null) return null
+  const day = formatCapturedAt(missingSince.slice(0, 10))
+  return `File missing since ${day}: not found by the last scan of its folder.`
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`

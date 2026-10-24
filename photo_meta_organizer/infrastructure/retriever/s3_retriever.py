@@ -86,6 +86,10 @@ class S3ImageRetriever:
                     modified_time=_local_naive(obj.get("LastModified")),
                 )
 
+    def skipped_paths(self) -> list[str]:
+        """Listing a bucket either succeeds or raises, so nothing is skipped."""
+        return []
+
     @contextmanager
     def get_file_stream(self, file_handle: RemoteFileHandle) -> Generator[BinaryIO, None, None]:
         """Retrieve a binary stream for a specific S3 object.

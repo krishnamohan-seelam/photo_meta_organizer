@@ -926,6 +926,11 @@ export interface components {
         FileInfoSchema: {
             /** Mime Type */
             mime_type: string;
+            /**
+             * Missing Since
+             * @description When the last scan of its folder stopped finding this file (naive UTC); null while it is on disk. The path shown is a present copy whenever one exists.
+             */
+            missing_since: string | null;
             /** Name */
             name: string;
             /** Path */
@@ -1462,7 +1467,7 @@ export interface components {
         SyncFolderRequest: {
             /**
              * Cleanup Deleted
-             * @description Remove records whose file is gone (off by default)
+             * @description Remove files this scan did not find (and a photo once none of its files is left); off by default, when they are kept and flagged missing
              * @default false
              */
             cleanup_deleted?: boolean;

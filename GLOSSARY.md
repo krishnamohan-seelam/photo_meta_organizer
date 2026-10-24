@@ -32,7 +32,7 @@ An asset the user took out of the library. Its files stay on disk, and scans ski
 _Avoid_: Deleted photo
 
 **Offline root**:
-A root that cannot be read, such as an unplugged drive. Its files show as missing, without an error.
+A root that cannot be read, such as an unplugged drive. A scan of it fails and changes nothing, so its files keep their last known state; the app shows the root as offline rather than reporting an error for each file.
 
 **Orphan**:
 An asset with no files left.

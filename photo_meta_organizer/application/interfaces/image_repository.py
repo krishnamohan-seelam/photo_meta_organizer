@@ -129,6 +129,14 @@ class ImageMetadataRepository(Protocol):
         """
         ...
 
+    def set_missing(self, paths: Sequence[str], since: datetime | None) -> int:
+        """Flag the Files at ``paths`` as missing since ``since``; ``None`` clears the flag.
+
+        A File already flagged keeps the time it first went missing. Returns the number
+        of Files updated (unknown paths are skipped).
+        """
+        ...
+
     def list_files(self) -> list[StoredFile]:
         """Every File the library has recorded, one per path (what a scan compares).
 

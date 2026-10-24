@@ -7,6 +7,7 @@ import {
   formatBytes,
   formatCapturedAt,
   lensModel,
+  missingNote,
   photoAspectRatio,
   shortHash,
 } from './photoFormat'
@@ -94,5 +95,15 @@ describe('details formatting', () => {
   it('reads the lens from raw tags when present', () => {
     expect(lensModel({ ...makePhoto().exif, raw_tags: { LensModel: 'FE 35mm F1.4 GM' } })).toBe('FE 35mm F1.4 GM')
     expect(lensModel(makePhoto().exif)).toBeNull()
+  })
+})
+
+describe('missingNote (ticket 04)', () => {
+  it('names the day the last scan stopped finding the file', () => {
+    expect(missingNote('2026-10-20T08:15:00')).toBe('File missing since 20 Oct 2026: not found by the last scan of its folder.')
+  })
+
+  it('is empty while the file is present', () => {
+    expect(missingNote(null)).toBeNull()
   })
 })

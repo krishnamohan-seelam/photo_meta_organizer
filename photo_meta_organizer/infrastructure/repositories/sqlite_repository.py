@@ -181,7 +181,7 @@ class SqliteRepository:
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET asset_hash=excluded.asset_hash,
                 name=excluded.name, size_bytes=excluded.size_bytes, mtime=excluded.mtime,
-                last_seen=excluded.last_seen
+                last_seen=excluded.last_seen, missing_since=NULL
             """,
             (
                 file_hash,
@@ -270,6 +270,22 @@ class SqliteRepository:
                 touched += cur.rowcount
             return touched
 
+    def set_missing(self, paths: Sequence[str], since: datetime | None) -> int:
+        """Flag the Files at ``paths`` as missing since ``since``, or present with ``None``.
+
+        A File already flagged keeps the time it first went missing.
+        """
+        if not paths:
+            return 0
+        stamp = since.isoformat() if since is not None else None
+        sql = (
+            "UPDATE files SET missing_since = COALESCE(missing_since, ?) WHERE path = ?"
+            if stamp is not None
+            else "UPDATE files SET missing_since = ? WHERE path = ?"
+        )
+        with self.lock, self.connection:
+            return sum(self.connection.execute(sql, (stamp, path)).rowcount for path in paths)
+
     # =========================================================================
     # Reads
     # =========================================================================
@@ -296,14 +312,15 @@ class SqliteRepository:
     def list_files(self) -> list[StoredFile]:
         with self.lock:
             rows = self.connection.execute(
-                "SELECT path, asset_hash, size_bytes, mtime FROM files ORDER BY id"
+                "SELECT path, asset_hash, size_bytes, mtime, missing_since FROM files ORDER BY id"
             ).fetchall()
         return [
             StoredFile(
                 path=r["path"],
                 file_hash=r["asset_hash"],
                 size_bytes=r["size_bytes"],
-                modified_time=_mtime(r["mtime"]),
+                modified_time=_timestamp(r["mtime"]),
+                missing_since=_timestamp(r["missing_since"]),
             )
             for r in rows
         ]
@@ -348,7 +365,8 @@ class SqliteRepository:
             placeholders = ", ".join("?" for _ in paths)
             rows = self.connection.execute(
                 "SELECT v.*, f.path AS file_path, f.name AS file_name, "
-                "f.size_bytes AS file_size, f.mtime AS file_mtime "
+                "f.size_bytes AS file_size, f.mtime AS file_mtime, "
+                "f.missing_since AS file_missing_since "
                 "FROM files f JOIN photo_view v ON v.file_hash = f.asset_hash "
                 f"WHERE f.path IN ({placeholders})",
                 paths,
@@ -362,7 +380,8 @@ class SqliteRepository:
                 path=r["file_path"],
                 name=r["file_name"],
                 size_bytes=r["file_size"],
-                modified_time=_mtime(r["file_mtime"]),
+                modified_time=_timestamp(r["file_mtime"]),
+                missing_since=_timestamp(r["file_missing_since"]),
             )
             found.append(replace(record, file_info=file_info))
         return found
@@ -468,7 +487,7 @@ class SqliteRepository:
             # The primary file's name: the only sort key that lives on ``files``.
             "file_name": (
                 "(SELECT name FROM files WHERE asset_hash = file_hash "
-                "ORDER BY last_seen DESC, id LIMIT 1)"
+                "ORDER BY missing_since IS NOT NULL, last_seen DESC, id LIMIT 1)"
             ),
         }.get(sort_by, "captured_at")
         # file_hash breaks ties, so paging through equal keys never repeats or skips a row.
@@ -821,7 +840,8 @@ def _asset_row(metadata: ImageMetadata, extracted_at: str) -> dict[str, Any]:
     }
 
 
-def _mtime(value: str | None) -> datetime | None:
+def _timestamp(value: str | None) -> datetime | None:
+    """A stored naive timestamp (local for mtimes, UTC for bookkeeping), or ``None``."""
     return to_naive(datetime.fromisoformat(value)) if value else None
 
 
@@ -864,7 +884,8 @@ def _from_row(row: sqlite3.Row, labels: list[str]) -> ImageMetadata:
         path=row["path"],
         size_bytes=row["size_bytes"],
         mime_type=row["mime_type"],
-        modified_time=_mtime(row["mtime"]),
+        modified_time=_timestamp(row["mtime"]),
+        missing_since=_timestamp(row["missing_since"]),
     )
 
     return ImageMetadata(
