@@ -93,6 +93,146 @@ CREATE TABLE IF NOT EXISTS collection_photos (
 """
 
 
+# ADR-003 R3: one row per Asset (content), its Files (paths) and its Curation. Lossless for a
+# version-1 library, which has exactly one path per hash. The tables that referenced
+# ``photos`` are rebuilt to reference ``assets`` (same shape, same rowids, so collection
+# order is kept). Rows that point at no photo (only possible if written with foreign keys
+# off) are dropped rather than left to fail the reference check. ``asset_view`` is what
+# search filters and counts; ``photo_view`` adds each Asset's primary file, for the rows
+# actually returned.
+SPLIT_ASSETS_SQL = """
+CREATE TABLE assets (
+    file_hash TEXT PRIMARY KEY,
+    size_bytes INTEGER NOT NULL, -- of the content, so the same for every File holding it
+    mime_type TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    captured_at TEXT,
+    camera_make TEXT,
+    camera_model TEXT,
+    f_stop REAL,
+    exposure_time TEXT,
+    iso INTEGER,
+    focal_length TEXT,
+    camera_profile TEXT NOT NULL DEFAULT 'unknown',
+    flash_fired INTEGER,
+    focal_length_35mm TEXT,
+    white_balance_mode TEXT,
+    exposure_program TEXT,
+    metering_mode TEXT,
+    orientation INTEGER,
+    gps_lat REAL,
+    gps_lon REAL,
+    gps_alt REAL,
+    gps_datum TEXT,
+    raw_tags TEXT NOT NULL DEFAULT '{}',
+    extracted_at TEXT NOT NULL
+);
+INSERT INTO assets
+SELECT file_hash, size_bytes, mime_type, width, height, captured_at, camera_make, camera_model,
+    f_stop, exposure_time, iso, focal_length, camera_profile, flash_fired, focal_length_35mm,
+    white_balance_mode, exposure_program, metering_mode, orientation, gps_lat, gps_lon,
+    gps_alt, gps_datum, raw_tags, added_at
+FROM photos;
+CREATE INDEX idx_assets_captured_at ON assets(captured_at);
+CREATE INDEX idx_assets_camera_make ON assets(camera_make);
+CREATE INDEX idx_assets_size_bytes ON assets(size_bytes);
+
+CREATE TABLE files (
+    id INTEGER PRIMARY KEY,
+    asset_hash TEXT NOT NULL REFERENCES assets(file_hash) ON DELETE CASCADE,
+    path TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    mtime TEXT,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL
+);
+INSERT INTO files (asset_hash, path, name, size_bytes, mtime, first_seen, last_seen)
+SELECT file_hash, path, name, size_bytes, mtime, added_at, added_at FROM photos ORDER BY rowid;
+-- Covers the primary-file lookup: latest last_seen, lowest id on a tie.
+CREATE INDEX idx_files_asset ON files(asset_hash, last_seen DESC, id);
+
+CREATE TABLE curation (
+    asset_hash TEXT PRIMARY KEY REFERENCES assets(file_hash) ON DELETE CASCADE,
+    rating INTEGER CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
+    flagged INTEGER NOT NULL DEFAULT 0,
+    added_at TEXT NOT NULL
+);
+INSERT INTO curation SELECT file_hash, rating, flagged, added_at FROM photos;
+CREATE INDEX idx_curation_flagged_rating ON curation(flagged, rating);
+
+CREATE TABLE asset_labels (
+    asset_hash TEXT NOT NULL REFERENCES assets(file_hash) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    PRIMARY KEY (asset_hash, label)
+);
+INSERT INTO asset_labels (asset_hash, label)
+SELECT file_hash, label FROM photo_labels
+WHERE file_hash IN (SELECT file_hash FROM photos) ORDER BY rowid;
+CREATE INDEX idx_asset_labels_label ON asset_labels(label);
+
+CREATE TABLE photo_embeddings_new (
+    file_hash TEXT NOT NULL REFERENCES assets(file_hash) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    dim INTEGER NOT NULL,
+    vector BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (file_hash, model_id)
+);
+INSERT INTO photo_embeddings_new (rowid, file_hash, model_id, dim, vector, created_at)
+SELECT rowid, file_hash, model_id, dim, vector, created_at FROM photo_embeddings
+WHERE file_hash IN (SELECT file_hash FROM photos);
+
+CREATE TABLE photo_ai_tags_new (
+    file_hash TEXT NOT NULL REFERENCES assets(file_hash) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+    model_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'suggested'
+        CHECK (status IN ('suggested', 'accepted', 'rejected')),
+    PRIMARY KEY (file_hash, label)
+);
+INSERT INTO photo_ai_tags_new (rowid, file_hash, label, confidence, model_id, status)
+SELECT rowid, file_hash, label, confidence, model_id, status FROM photo_ai_tags
+WHERE file_hash IN (SELECT file_hash FROM photos);
+
+CREATE TABLE collection_photos_new (
+    collection TEXT NOT NULL REFERENCES collections(name) ON DELETE CASCADE,
+    file_hash TEXT NOT NULL REFERENCES assets(file_hash) ON DELETE CASCADE,
+    PRIMARY KEY (collection, file_hash)
+);
+INSERT INTO collection_photos_new (rowid, collection, file_hash)
+SELECT rowid, collection, file_hash FROM collection_photos
+WHERE file_hash IN (SELECT file_hash FROM photos)
+    AND collection IN (SELECT name FROM collections);
+
+DROP TABLE photo_embeddings;
+DROP TABLE photo_ai_tags;
+DROP TABLE collection_photos;
+DROP TABLE photo_labels;
+DROP TABLE photos;
+ALTER TABLE photo_embeddings_new RENAME TO photo_embeddings;
+ALTER TABLE photo_ai_tags_new RENAME TO photo_ai_tags;
+ALTER TABLE collection_photos_new RENAME TO collection_photos;
+CREATE INDEX idx_photo_embeddings_model ON photo_embeddings(model_id, dim);
+CREATE INDEX idx_photo_ai_tags_label ON photo_ai_tags(label, status);
+
+-- What search filters, sorts and counts: every Asset with its curation (each has a row).
+CREATE VIEW asset_view AS
+SELECT a.*, c.rating, c.flagged, c.added_at
+FROM assets a JOIN curation c ON c.asset_hash = a.file_hash;
+
+-- One row per Asset with its primary file: the present File seen last, lowest id on a tie.
+CREATE VIEW photo_view AS
+SELECT v.*, f.path, f.name, f.mtime
+FROM asset_view v
+JOIN files f ON f.id = (
+    SELECT id FROM files WHERE asset_hash = v.file_hash ORDER BY last_seen DESC, id LIMIT 1
+);
+"""
+
+
 @dataclass(frozen=True)
 class Migration:
     """One schema step. ``rebuilds`` marks steps that rewrite tables and so need a backup."""
@@ -108,6 +248,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     # Idempotent (CREATE ... IF NOT EXISTS), so a library that predates versioning, or
     # predates the AI tables, is brought up to the baseline and then stamped as version 1.
     Migration(1, "baseline", BASELINE_SQL),
+    Migration(2, "split_assets", SPLIT_ASSETS_SQL, rebuilds=True),
 )
 
 
@@ -138,23 +279,43 @@ def migrate(
             f"This library uses schema version {current}, but this build only understands "
             f"version {latest}. Update Photo Meta Organizer to open it."
         )
+    # A fresh database has nothing worth backing up; an unversioned one with tables does.
+    existing = current > 0 or (
+        connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' LIMIT 1").fetchone()
+        is not None
+    )
     for migration in sorted(migrations, key=lambda m: m.version):
         if migration.version <= current:
             continue
-        if migration.rebuilds and current > 0:
+        if migration.rebuilds and existing:
             _backup(connection, db_path, migration.version)
         _apply(connection, migration)
         current = migration.version
 
 
 def _apply(connection: sqlite3.Connection, migration: Migration) -> None:
-    script = f"BEGIN;\n{migration.sql}\nPRAGMA user_version = {migration.version};\nCOMMIT;"
+    # A rebuild drops and recreates referenced tables, which with foreign keys on would
+    # cascade-delete the children. SQLite's procedure: keys off outside the transaction,
+    # rebuild, check every reference, commit, keys back on.
+    foreign_keys = int(connection.execute("PRAGMA foreign_keys").fetchone()[0])
+    if migration.rebuilds:
+        connection.execute("PRAGMA foreign_keys = OFF")
     try:
-        connection.executescript(script)
+        connection.executescript(f"BEGIN;\n{migration.sql}")
+        if migration.rebuilds:
+            broken = connection.execute("PRAGMA foreign_key_check").fetchall()
+            if broken:
+                raise sqlite3.IntegrityError(
+                    f"migration {migration.version:04d} left {len(broken)} broken references"
+                )
+        connection.execute(f"PRAGMA user_version = {migration.version}")
+        connection.commit()
     except BaseException:
         if connection.in_transaction:
             connection.rollback()
         raise
+    finally:
+        connection.execute(f"PRAGMA foreign_keys = {'ON' if foreign_keys else 'OFF'}")
 
 
 def _backup(connection: sqlite3.Connection, db_path: str, version: int) -> None:

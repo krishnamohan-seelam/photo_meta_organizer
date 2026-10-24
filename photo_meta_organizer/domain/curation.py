@@ -59,28 +59,46 @@ def merge_labels(current: list[str], additions: list[str]) -> list[str]:
     return merged
 
 
+@dataclass(frozen=True)
+class Curation:
+    """What the user decided about one Asset."""
+
+    rating: int | None = None
+    flagged: bool = False
+    labels: tuple[str, ...] = ()
+
+
+def merge_curation(target: Curation, *sources: Curation) -> Curation:
+    """``target``'s curation with ``sources`` merged in, in priority order (highest first).
+
+    The rating comes from the first of ``target`` then the sources that has one,
+    ``flagged`` is true if any is, and labels are unioned, ``target``'s first.
+    """
+    records = (target, *sources)
+    labels: list[str] = []
+    for record in records:
+        labels = merge_labels(labels, list(record.labels))
+    return Curation(
+        rating=next((r.rating for r in records if r.rating is not None), None),
+        flagged=any(r.flagged for r in records),
+        labels=tuple(labels),
+    )
+
+
 def carry_over_curation(target: ImageMetadata, *sources: ImageMetadata) -> ImageMetadata:
     """Return ``target`` with the user's curation merged in from ``sources``.
 
     A fresh extraction always carries default curation (unrated, unflagged, no
     labels), so re-saving it would wipe what the user did. Identity and extracted
-    data stay ``target``'s; only ``rating``, ``flagged`` and ``labels`` are merged.
-
-    ``sources`` are in priority order (highest first): the rating comes from the first
-    of ``target`` then the sources that has one, ``flagged`` is true if any is, and
-    labels are unioned, ``target``'s first.
+    data stay ``target``'s; only ``rating``, ``flagged`` and ``labels`` are merged,
+    by the rule of :func:`merge_curation`.
     """
-    records = (target, *sources)
-    rating = next((r.rating for r in records if r.rating is not None), None)
-    labels: list[str] = []
-    for record in records:
-        labels = merge_labels(labels, list(record.labels))
-    return replace(
-        target,
-        rating=rating,
-        flagged=any(r.flagged for r in records),
-        labels=labels,
-    )
+    merged = merge_curation(*(_curation_of(r) for r in (target, *sources)))
+    return replace(target, rating=merged.rating, flagged=merged.flagged, labels=list(merged.labels))
+
+
+def _curation_of(record: ImageMetadata) -> Curation:
+    return Curation(rating=record.rating, flagged=record.flagged, labels=tuple(record.labels))
 
 
 # ============================================================================

@@ -104,7 +104,7 @@ class TestEmbedding:
     def test_a_modified_file_is_analysed_again(self, photos, analysis, embedder, tmp_path):
         old = _add(photos, tmp_path, "a.jpg", b"first")
         _use_case(analysis, embedder).run()
-        # sync saw the file change: the record is replaced under its new content hash
+        # sync saw the file change: the path now holds new content
         path = Path(old.file_info.path)
         path.write_bytes(b"second")
         new = ImageMetadata(
@@ -113,7 +113,7 @@ class TestEmbedding:
             dimensions=old.dimensions,
             exif=old.exif,
         )
-        photos.replace(old.file_hash, new)
+        photos.save(new)
         report = _use_case(analysis, embedder).run()
         assert report.analyzed == 1
         assert analysis.get_embedding("hash-new", embedder.model_id) is not None

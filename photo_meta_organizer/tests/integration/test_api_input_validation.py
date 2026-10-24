@@ -133,7 +133,9 @@ class TestPoisonedStoreIsTolerated:
         repo = SqliteRepository(db_path)
         with pytest.raises(sqlite3.IntegrityError):
             with repo.lock, repo.connection:
-                repo.connection.execute("UPDATE photos SET rating = 'abc' WHERE file_hash = 'h1'")
+                repo.connection.execute(
+                    "UPDATE curation SET rating = 'abc' WHERE asset_hash = 'h1'"
+                )
         repo.close()
 
         client = TestClient(create_app(db_path=db_path))

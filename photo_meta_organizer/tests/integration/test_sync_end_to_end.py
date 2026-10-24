@@ -389,7 +389,7 @@ class TestSyncMtimeFingerprint:
         uc, extractor = self._use_case(retriever, repository)
         uc.execute()
         with repository.lock, repository.connection:  # simulate a pre-PMO-06 database
-            repository.connection.execute("UPDATE photos SET mtime = NULL")
+            repository.connection.execute("UPDATE files SET mtime = NULL")
         extractor.extracted.clear()
 
         first = uc.execute()
@@ -407,7 +407,7 @@ class TestSyncMtimeFingerprint:
         uc, _ = self._use_case(retriever, repository)
         uc.execute()
         with repository.lock, repository.connection:
-            repository.connection.execute("UPDATE photos SET mtime = NULL")
+            repository.connection.execute("UPDATE files SET mtime = NULL")
 
         result = uc.execute(dry_run=True)
 
@@ -539,3 +539,52 @@ class TestSyncScope:
         assert result.cancelled is True
         assert 0 < result.new_files < 20
         assert repo.count() == 20 + result.new_files
+
+
+@pytest.mark.integration
+class TestSyncOfPathsRecordedUnresolved:
+    """``index`` stores the retriever's path as given (e.g. a relative ``--path``); sync
+    compares resolved paths. Its writes must still land on the File it matched."""
+
+    def _record_unresolved(self, repository, photo_dir, name: str) -> str:
+        raw = str(photo_dir / "sub" / ".." / name)  # resolves to photo_dir / name
+        content = (photo_dir / name).read_bytes()
+        repository.save(
+            ImageMetadata(
+                file_hash=_sha(content),
+                file_info=ImageFileInfo(
+                    name=name, path=raw, size_bytes=len(content), mime_type="image/jpeg"
+                ),
+                dimensions=ImageDimensions(width=1, height=1),
+                exif=ImageExifData(),
+                rating=4,
+            )
+        )
+        return raw
+
+    def test_an_edit_repoints_the_recorded_file(self, use_case, repository, photo_dir):
+        self._record_unresolved(repository, photo_dir, "photo1.jpg")
+        (photo_dir / "photo1.jpg").write_bytes(b"edited")
+
+        use_case.execute(index_new=False)
+
+        assert repository.count() == 1
+        edited = repository.get_by_filehash(_sha(b"edited"))
+        assert edited is not None and edited.rating == 4
+
+    def test_cleanup_forgets_the_recorded_file(self, use_case, repository, photo_dir):
+        self._record_unresolved(repository, photo_dir, "photo1.jpg")
+        (photo_dir / "photo1.jpg").unlink()
+
+        result = use_case.execute(cleanup_deleted=True, index_new=False)
+
+        assert result.deleted_entries == 1
+        assert repository.count() == 0
+
+    def test_a_missing_fingerprint_is_backfilled(self, use_case, repository, photo_dir):
+        self._record_unresolved(repository, photo_dir, "photo1.jpg")
+
+        result = use_case.execute(index_new=False)
+
+        assert result.fingerprints_refreshed == 1
+        assert all(f.modified_time is not None for f in repository.list_files())

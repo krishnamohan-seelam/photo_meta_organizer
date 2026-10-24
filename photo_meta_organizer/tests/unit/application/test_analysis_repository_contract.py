@@ -4,6 +4,8 @@ Parametrized over backends like the metadata contract, so a Phase 6 store has to
 bodies unchanged. Today there is one.
 """
 
+import sqlite3
+
 import pytest
 
 from photo_meta_organizer.application.interfaces.analysis_repository import (
@@ -18,6 +20,7 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
+from photo_meta_organizer.infrastructure.repositories.migrations import BASELINE_SQL
 from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
     SqliteAnalysisRepository,
 )
@@ -263,7 +266,7 @@ class TestLifecycle:
         photos.save(_photo("old", path="/p/x.jpg"))
         analysis.save_embeddings([_emb("old", 1.0)])
         analysis.save_ai_tags("old", [AiTag("beach", 0.5, M)])
-        photos.replace("old", _photo("new", path="/p/x.jpg"))
+        photos.save(_photo("new", path="/p/x.jpg"))  # the file at /p/x.jpg was edited
         assert analysis.count_embeddings(M) == 0
         assert analysis.list_ai_tags("new") == []
         assert analysis.pending_photos(M) == [PendingPhoto("new", "/p/x.jpg")]
@@ -345,12 +348,14 @@ class TestAiTags:
 def test_an_existing_database_gains_the_analysis_tables(tmp_path):
     """Opening a database from before Phase 5 must just work: the tables are added in place."""
     path = str(tmp_path / "old.db")
-    first = SqliteRepository(path)
-    first.save(_photo("a"))
-    with first.lock, first.connection:
-        first.connection.executescript(
-            "DROP TABLE photo_embeddings; DROP TABLE photo_ai_tags; PRAGMA user_version = 0;"
-        )
+    first = sqlite3.connect(path)  # the baseline schema, without the analysis tables
+    first.executescript(BASELINE_SQL)
+    first.executescript(
+        "DROP TABLE photo_embeddings; DROP TABLE photo_ai_tags; "
+        "INSERT INTO photos (file_hash, path, name, size_bytes, mime_type, width, height, "
+        "added_at) VALUES ('a', '/photos/a.jpg', 'a.jpg', 10, 'image/jpeg', 10, 10, "
+        "'2024-01-01T00:00:00');"
+    )
     first.close()
 
     reopened = SqliteRepository(path)

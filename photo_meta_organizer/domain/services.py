@@ -12,9 +12,9 @@ Domain services are:
 import logging
 import ntpath
 import posixpath
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
-from photo_meta_organizer.domain.models import CameraProfile, FileInfo, FileState, ImageMetadata
+from photo_meta_organizer.domain.models import CameraProfile, FileInfo, FileState, StoredFile
 
 
 class CameraClassifier:
@@ -118,7 +118,7 @@ class MetadataStateAnalyzer:
     Implements the **Hybrid fingerprinting** strategy (Option C from the plan):
 
     1. Build a (path → FileInfo) index from disk files.
-    2. Build a (path → ImageMetadata) index from DB entries.
+    2. Build a (path → StoredFile) index from the recorded Files.
     3. For each disk file:
        - Not in DB → **NEW**.
        - In DB, AND (size, mtime) match stored values → **UNCHANGED** (no hash).
@@ -142,7 +142,7 @@ class MetadataStateAnalyzer:
     def analyze_changes(
         self,
         disk_files: dict[str, FileInfo],
-        db_entries: list[ImageMetadata],
+        db_entries: Sequence[StoredFile],
         compute_hash: Callable[[str], str] | None = None,
         force_rehash: bool = False,
         normalise_path: Callable[[str], str] | None = None,
@@ -151,7 +151,7 @@ class MetadataStateAnalyzer:
 
         Args:
             disk_files: Mapping of normalised path → FileInfo from disk scan.
-            db_entries: All ImageMetadata records currently in the DB.
+            db_entries: Every File the library has recorded (one entry per path).
             compute_hash: Callable that accepts a (normalised) file path and returns
                 its SHA-256 hex digest. Required as soon as a file must be hashed;
                 a ``ValueError`` is raised if it is missing then.
@@ -172,9 +172,7 @@ class MetadataStateAnalyzer:
             return compute_hash(path)
 
         # Index DB entries by normalised path
-        db_by_path: dict[str, ImageMetadata] = {
-            normalise(entry.file_info.path): entry for entry in db_entries
-        }
+        db_by_path: dict[str, StoredFile] = {normalise(entry.path): entry for entry in db_entries}
 
         # Normalise disk paths for consistent comparison
         normalised_disk: dict[str, FileInfo] = {
@@ -203,9 +201,9 @@ class MetadataStateAnalyzer:
                 continue
 
             # File is in DB — try fast fingerprint check first
-            stored_size = db_entry.file_info.size_bytes
+            stored_size = db_entry.size_bytes
             stored_hash = db_entry.file_hash
-            stored_mtime = db_entry.file_info.modified_time
+            stored_mtime = db_entry.modified_time
 
             size_same = fi.size_bytes == stored_size
             mtime_known = stored_mtime is not None
@@ -221,6 +219,7 @@ class MetadataStateAnalyzer:
                         size_bytes=fi.size_bytes,
                         last_modified=fi.modified_time,
                         refresh_fingerprint=not mtime_known,
+                        recorded_path=db_entry.path,
                     )
                 )
                 continue
@@ -243,6 +242,7 @@ class MetadataStateAnalyzer:
                         size_bytes=fi.size_bytes,
                         last_modified=fi.modified_time,
                         refresh_fingerprint=not (mtime_same and size_same),
+                        recorded_path=db_entry.path,
                     )
                 )
             else:
@@ -254,6 +254,7 @@ class MetadataStateAnalyzer:
                         size_bytes=fi.size_bytes,
                         last_modified=fi.modified_time,
                         previous_hash=stored_hash,
+                        recorded_path=db_entry.path,
                     )
                 )
 
@@ -268,6 +269,7 @@ class MetadataStateAnalyzer:
                         file_path=norm_path,
                         state="DELETED",
                         file_hash=db_entry.file_hash,
+                        recorded_path=db_entry.path,
                     )
                 )
 

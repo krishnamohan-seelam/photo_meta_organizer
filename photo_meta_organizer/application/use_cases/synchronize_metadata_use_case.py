@@ -185,9 +185,9 @@ class SynchronizeMetadataUseCase:
         # ------------------------------------------------------------------
         # Step 2: Load DB entries
         # ------------------------------------------------------------------
-        db_entries = self._repository.list_all()
+        db_entries = self._repository.list_files()
         if scope_root is not None:
-            db_entries = [e for e in db_entries if _within(e.file_info.path, scope_root)]
+            db_entries = [e for e in db_entries if _within(e.path, scope_root)]
         logger.info("DB loaded: %d existing entries in scope", len(db_entries))
 
         if should_cancel is not None and should_cancel():
@@ -207,8 +207,8 @@ class SynchronizeMetadataUseCase:
         )
 
         if reextract:
-            # Unchanged content is re-extracted in place: the orchestrator's MODIFIED
-            # path replaces the record under the same hash and carries over curation.
+            # Unchanged content is re-extracted in place: saving it under the same hash
+            # updates the extracted columns and keeps the curation.
             file_states = [
                 (
                     replace(fs, state="MODIFIED", previous_hash=fs.file_hash)

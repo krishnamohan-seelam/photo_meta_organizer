@@ -196,6 +196,6 @@ class TestSemanticSearch:
     def test_hits_for_photos_deleted_meanwhile_are_dropped(self, library, analysis, embedder):
         use_case = self._use_case(analysis, embedder, library)
         library.connection.execute("PRAGMA foreign_keys = OFF")
-        library.connection.execute("DELETE FROM photos WHERE file_hash = 'h-tiger'")
+        library.connection.execute("DELETE FROM assets WHERE file_hash = 'h-tiger'")
         library.connection.commit()
         assert "h-tiger" not in [h.photo.file_hash for h in use_case.by_text("tiger", k=5)]

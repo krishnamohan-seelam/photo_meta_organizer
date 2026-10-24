@@ -1,4 +1,4 @@
-﻿"""ADR-003 R1: versioned schema migrations for the SQLite library."""
+"""ADR-003 R1: versioned schema migrations for the SQLite library."""
 
 import os
 import sqlite3
@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from photo_meta_organizer.domain.models import ImageMetadata
 from photo_meta_organizer.infrastructure.repositories.migrations import (
     BASELINE_SQL,
     MIGRATIONS,
@@ -38,9 +37,10 @@ def test_fresh_database_is_stamped_with_the_latest_version(tmp_path: Path) -> No
     repo = SqliteRepository(str(tmp_path / "photos.db"))
     try:
         assert _version(repo.connection) == latest_version(MIGRATIONS)
-        assert {"photos", "photo_labels", "photo_embeddings", "collections"} <= _tables(
+        assert {"assets", "files", "curation", "asset_labels", "photo_embeddings"} <= _tables(
             repo.connection
         )
+        assert "photos" not in _tables(repo.connection)
     finally:
         repo.close()
 
@@ -51,21 +51,24 @@ def test_baseline_is_migration_one() -> None:
     assert MIGRATIONS[0].sql == BASELINE_SQL
 
 
-def test_existing_unversioned_database_is_stamped_and_keeps_its_data(
-    tmp_path: Path, sample_image_metadata: ImageMetadata
-) -> None:
+def test_existing_unversioned_database_is_stamped_and_keeps_its_data(tmp_path: Path) -> None:
     path = tmp_path / "photos.db"
-    first = SqliteRepository(str(path))
-    first.save(sample_image_metadata)
-    first.connection.execute("PRAGMA user_version = 0")  # a library from before migrations
+    first = _connect(path)  # a library from before migrations: baseline tables, version 0
+    first.executescript(BASELINE_SQL)
+    first.executescript(f"""
+        INSERT INTO photos (file_hash, path, name, size_bytes, mime_type, width, height, added_at)
+        VALUES ('{"c" * 64}', '/p/c.jpg', 'c.jpg', 5, 'image/jpeg', 1, 1, '2024-01-01T00:00:00');
+        INSERT INTO photo_labels (file_hash, label) VALUES ('{"c" * 64}', 'kept');
+        """)
     first.close()
 
     reopened = SqliteRepository(str(path))
     try:
-        assert _version(reopened.connection) == 1
-        stored = reopened.get_by_filehash(sample_image_metadata.file_hash)
+        assert _version(reopened.connection) == latest_version(MIGRATIONS)
+        assert Path(f"{path}.pre-0002").exists()  # unversioned but not empty: backed up
+        stored = reopened.get_by_filehash("c" * 64)
         assert stored is not None
-        assert stored.labels == sample_image_metadata.labels
+        assert stored.labels == ["kept"]
     finally:
         reopened.close()
 
@@ -74,9 +77,10 @@ def test_unversioned_database_from_before_ai_analysis_gains_the_analysis_tables(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "photos.db"
-    first = SqliteRepository(str(path))
-    first.connection.executescript("DROP TABLE photo_embeddings; DROP TABLE photo_ai_tags;")
-    first.connection.execute("PRAGMA user_version = 0")
+    first = _connect(path)
+    migrate(first, str(path), MIGRATIONS[:1])
+    first.executescript("DROP TABLE photo_embeddings; DROP TABLE photo_ai_tags;")
+    first.execute("PRAGMA user_version = 0")
     first.close()
 
     reopened = SqliteRepository(str(path))

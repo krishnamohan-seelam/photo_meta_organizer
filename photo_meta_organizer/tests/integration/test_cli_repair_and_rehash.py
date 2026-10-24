@@ -1,11 +1,8 @@
-"""PMO-05/06/08 CLI: `dedupe` (dry run by default) and `sync --rehash`.
+"""PMO-05/06/08 CLI: legacy duplicate paths merged on import, and `sync --rehash`.
 
-SQLite's ``UNIQUE(path)`` constraint (ADR-001) makes the duplicate-path bug B-01
-structurally impossible for a native SQLite database: two different hashes can
-no longer share a path. The scenario now only arises in a *legacy* TinyDB JSON
-file, and the importer (PMO-08) merges duplicates as part of the one-time
-import — so ``dedupe`` against a fresh SQLite database always finds nothing,
-and the interesting case is the import itself.
+A path holds one File (ADR-003 R3, ``files.path UNIQUE``), so duplicate paths only
+arise in a *legacy* TinyDB JSON file, which the importer (PMO-08) merges as part of
+the one-time import. The ``dedupe`` repair command is gone.
 """
 
 import sys
@@ -52,7 +49,7 @@ def test_legacy_duplicate_paths_are_merged_on_import(tmp_path, monkeypatch):
     repo.save(_rec("new", "/p/a.jpg", datetime(2024, 2, 1)))
     repo.close()
 
-    assert _run(monkeypatch, "dedupe", "--db", json_db) == 0
+    assert _run(monkeypatch, "stats", "--db", json_db) == 0
 
     imported = SqliteRepository(str(tmp_path / "legacy.db"))
     try:
@@ -62,14 +59,6 @@ def test_legacy_duplicate_paths_are_merged_on_import(tmp_path, monkeypatch):
         assert survivor.rating == 3  # curation carried over from the merged duplicate
     finally:
         imported.close()
-
-
-def test_dedupe_with_nothing_to_do(tmp_path, monkeypatch, capsys):
-    db = str(tmp_path / "db.db")
-    SqliteRepository(db).close()
-
-    assert _run(monkeypatch, "dedupe", "--db", db) == 0
-    assert "no duplicate" in capsys.readouterr().out.lower()
 
 
 def test_sync_accepts_rehash_and_reports_refreshed_fingerprints(tmp_path, monkeypatch, capsys):

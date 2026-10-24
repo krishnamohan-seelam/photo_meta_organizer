@@ -28,7 +28,10 @@ from photo_meta_organizer.domain.analysis import (
     normalize,
 )
 from photo_meta_organizer.domain.datetimes import utc_now_naive
-from photo_meta_organizer.infrastructure.repositories.sqlite_repository import search_where
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    search_source,
+    search_where,
+)
 
 _FLOAT32 = np.dtype("<f4")
 
@@ -64,7 +67,7 @@ class SqliteAnalysisRepository:
                     """
                     INSERT INTO photo_embeddings (file_hash, model_id, dim, vector, created_at)
                     SELECT ?, ?, ?, ?, ?
-                    WHERE EXISTS (SELECT 1 FROM photos WHERE file_hash = ?)
+                    WHERE EXISTS (SELECT 1 FROM assets WHERE file_hash = ?)
                     ON CONFLICT(file_hash, model_id) DO UPDATE SET
                         dim = excluded.dim, vector = excluded.vector,
                         created_at = excluded.created_at
@@ -104,7 +107,7 @@ class SqliteAnalysisRepository:
 
     def pending_photos(self, model_id: str, limit: int | None = None) -> list[PendingPhoto]:
         sql = (
-            "SELECT p.file_hash, p.path FROM photos p WHERE NOT EXISTS ("
+            "SELECT p.file_hash, p.path FROM photo_view p WHERE NOT EXISTS ("
             "SELECT 1 FROM photo_embeddings e WHERE e.file_hash = p.file_hash AND e.model_id = ?"
             ") ORDER BY p.path, p.file_hash"
         )
@@ -149,11 +152,12 @@ class SqliteAnalysisRepository:
             hashes, matrix = self._matrix(model_id, dim)
             allowed: set[str] | None = None
             where_sql, where_params = search_where(query) if query is not None else ("", [])
+            source = search_source(query) if query is not None else "assets"
             if where_sql:
                 allowed = {
                     r[0]
                     for r in self._conn.execute(
-                        f"SELECT file_hash FROM photos {where_sql}", where_params
+                        f"SELECT file_hash FROM {source} {where_sql}", where_params
                     )
                 }
         if not hashes:
@@ -218,7 +222,7 @@ class SqliteAnalysisRepository:
         with self._lock, self._conn:
             if (
                 self._conn.execute(
-                    "SELECT 1 FROM photos WHERE file_hash = ?", (file_hash,)
+                    "SELECT 1 FROM assets WHERE file_hash = ?", (file_hash,)
                 ).fetchone()
                 is None
             ):

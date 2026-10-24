@@ -5,17 +5,10 @@ the hybrid fingerprinting logic, path normalisation, and edge cases.
 """
 
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
-from photo_meta_organizer.domain.models import (
-    FileInfo,
-    ImageDimensions,
-    ImageExifData,
-    ImageFileInfo,
-    ImageMetadata,
-)
+from photo_meta_organizer.domain.models import FileInfo, StoredFile
 from photo_meta_organizer.domain.services import MetadataStateAnalyzer
 
 # ---------------------------------------------------------------------------
@@ -28,19 +21,9 @@ HASH_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 BASE_MTIME = datetime(2024, 1, 1, 12, 0, 0)
 
 
-def _make_metadata(path: str, file_hash: str, size_bytes: int = 1000) -> ImageMetadata:
-    """Build a minimal ImageMetadata for test setup."""
-    return ImageMetadata(
-        file_hash=file_hash,
-        file_info=ImageFileInfo(
-            name=Path(path).name,
-            path=path,
-            size_bytes=size_bytes,
-            mime_type="image/jpeg",
-        ),
-        dimensions=ImageDimensions(width=100, height=100),
-        exif=ImageExifData(),
-    )
+def _make_metadata(path: str, file_hash: str, size_bytes: int = 1000) -> StoredFile:
+    """A recorded File from before mtimes were stored."""
+    return StoredFile(path=path, file_hash=file_hash, size_bytes=size_bytes, modified_time=None)
 
 
 def _make_file_info(path: str, size_bytes: int = 1000) -> FileInfo:
@@ -70,7 +53,7 @@ class TestMetadataStateAnalyzerNew:
         photo.write_bytes(b"fake image")
 
         disk_files = {"p": _make_file_info(str(photo), size_bytes=10)}
-        db_entries: list[ImageMetadata] = []
+        db_entries: list[StoredFile] = []
 
         states = analyzer.analyze_changes(
             disk_files=disk_files,
@@ -344,22 +327,9 @@ class TestMetadataStateAnalyzerEdgeCases:
 LATER_MTIME = datetime(2024, 6, 1, 8, 30, 0)
 
 
-def _stored(path: str, file_hash: str, size_bytes: int = 1000, mtime=BASE_MTIME) -> ImageMetadata:
-    """A DB record that carries the mtime seen at index time."""
-    record = _make_metadata(path, file_hash, size_bytes=size_bytes)
-    file_info = ImageFileInfo(
-        name=record.file_info.name,
-        path=path,
-        size_bytes=size_bytes,
-        mime_type="image/jpeg",
-        modified_time=mtime,
-    )
-    return ImageMetadata(
-        file_hash=file_hash,
-        file_info=file_info,
-        dimensions=record.dimensions,
-        exif=record.exif,
-    )
+def _stored(path: str, file_hash: str, size_bytes: int = 1000, mtime=BASE_MTIME) -> StoredFile:
+    """A recorded File that carries the mtime seen at index time."""
+    return StoredFile(path=path, file_hash=file_hash, size_bytes=size_bytes, modified_time=mtime)
 
 
 def _disk(path: str, size_bytes: int = 1000, mtime=BASE_MTIME) -> dict:

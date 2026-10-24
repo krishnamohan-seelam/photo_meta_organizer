@@ -389,31 +389,6 @@ def handle_sync_command(args: argparse.Namespace) -> int:
     return 0 if not result.errors else 2
 
 
-def handle_dedupe_command(args: argparse.Namespace) -> int:
-    """Handle 'dedupe' command — merge records that share a file path.
-
-    Dry-run by default; pass --apply to write.
-    """
-    from photo_meta_organizer.application.use_cases import DedupePathsUseCase
-
-    repository = build_repository(args)
-    result = DedupePathsUseCase(repository).execute(apply=args.apply)
-
-    if not result.groups:
-        print("No duplicate paths found.")
-        return 0
-    extra = sum(len(g.drop) for g in result.groups)
-    label = "Merged" if args.apply else "Would merge (dry run; pass --apply to write)"
-    print(f"{label}: {extra} extra record(s) across {len(result.groups)} path(s)")
-    for group in result.groups[:50]:
-        print(f"  {group.path}  keep {group.keep.file_hash[:12]}, drop {len(group.drop)}")
-    if len(result.groups) > 50:
-        print(f"  ... and {len(result.groups) - 50} more")
-    if args.apply:
-        print(f"Removed {result.removed} record(s).")
-    return 0
-
-
 def handle_prune_command(args: argparse.Namespace) -> int:
     """Handle 'prune' command — remove records for non-image files.
 
@@ -794,25 +769,6 @@ def main() -> int:
         help="Actually delete (default: dry run)",
     )
     prune_parser.set_defaults(func=handle_prune_command)
-
-    # Dedupe command (PMO-05)
-    dedupe_parser = subparsers.add_parser(
-        "dedupe",
-        help="Merge records that share a file path (left by older versions of sync)",
-        description=(
-            "Before PMO-05 an edited file was saved under its new hash and the old record "
-            "stayed behind. This keeps the newest record per path and merges the rating, "
-            "flag and labels of the others into it. Dry run unless --apply is given."
-        ),
-    )
-    dedupe_parser.add_argument("--db", default=None, help=DB_HELP)
-    dedupe_parser.add_argument(
-        "--apply",
-        action="store_true",
-        default=False,
-        help="Actually merge (default: dry run)",
-    )
-    dedupe_parser.set_defaults(func=handle_dedupe_command)
 
     # Analyze command (Phase 5, ADR-002)
     analyze_parser = subparsers.add_parser(

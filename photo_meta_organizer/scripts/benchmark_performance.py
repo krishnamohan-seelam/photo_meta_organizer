@@ -26,8 +26,8 @@ from photo_meta_organizer.application.use_cases import (
 from photo_meta_organizer.infrastructure.extractors.disk_metadata_extractor import (
     DiskMetaDataExtractor,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+    SqliteRepository,
 )
 from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
     ExtensionFilteredRetriever,
@@ -52,14 +52,14 @@ def generate_synthetic_images(target_dir: Path, count: int = 100) -> None:
 
 def run_benchmark_for_workers(photos_dir: Path, db_dir: Path, workers: int) -> dict:
     """Run indexing with specified worker count and track time + memory."""
-    db_file = db_dir / f"metadata_workers_{workers}.json"
+    db_file = db_dir / f"photos_workers_{workers}.db"
     if db_file.exists():
         db_file.unlink()
 
     base_retriever = LocalDiskRetriever(base_path=str(photos_dir))
     retriever = ExtensionFilteredRetriever(base_retriever, {".jpg", ".png"})
     extractor = DiskMetaDataExtractor()
-    repository = TinyDBRepository(db_path=str(db_file))
+    repository = SqliteRepository(db_path=str(db_file))
 
     tracemalloc.start()
     start_time = time.time()
@@ -80,6 +80,7 @@ def run_benchmark_for_workers(photos_dir: Path, db_dir: Path, workers: int) -> d
         )
 
     results = use_case.execute()
+    repository.close()
     elapsed_seconds = time.time() - start_time
     current_mem, peak_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()

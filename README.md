@@ -55,13 +55,13 @@ Metadata indexing and organization system built specifically for large-scale pho
 - **Curated Collections API**: `GET/POST /api/collections` for named photo sets, used by the frontend's Library panel and selection dock.
 - **Search & Facets API**: `POST /api/search` filters, sorts and pages in SQL; `POST /api/search/ids` returns every match for Select All; `GET /api/facets` returns camera/tag/year/ISO counts, GPS bounds and library stats. The frontend uses all three.
 - **Generated API types**: the frontend's TypeScript types are generated from the API's OpenAPI schema, and a test on each side fails when they drift (see [Run Tests](#run-tests)).
-- **CLI**: `index`, `sync`, `search`, `stats`, `prune` and `dedupe`, with tabular output via `tabulate`. Search input it cannot read (a bad date or location) is an error, not a silently unfiltered search.
+- **CLI**: `index`, `sync`, `search`, `stats` and `prune`, with tabular output via `tabulate`. Search input it cannot read (a bad date or location) is an error, not a silently unfiltered search.
 - **Multi-Threaded Parallel Indexing**: `ThreadPoolExecutor` workers, a bounded queue, and a dedicated DB-writer thread. Measured after the SQLite migration (2026-10-03): 3,000 generated 640×480 JPEGs (16 MB, warm disk cache, 16-thread CPU) in 5.5-5.9 s with the default 4 workers, about **31,000 images/min** including process start-up. 8 workers was slower (6.6-6.9 s). Real camera files are larger and slower to hash and decode.
 - **Comprehensive EXIF Extraction**: three-tier model (Universal → Common → Camera-Specific) for DSLR, mirrorless, mobile, action cam, and film scanner profiles, with automatic DMS → decimal GPS conversion (WGS84).
-- **Content-Based Deduplication**: SHA-256 file hash as primary key.
+- **Content-Based Deduplication**: each photo is keyed by the SHA-256 hash of its content and stored once; every path holding it is recorded as one of its files (ADR-003), so copies are kept, not forgotten.
 - **Ports & Adapters**: retriever, extractor, and repository interfaces are Protocols. A local-disk retriever and a SQLite repository (WAL mode, per ADR-001) are wired in, with a one-time importer from legacy TinyDB `metadata.json` libraries; an S3 retriever exists but is not wired into the CLI or API, and there is no MongoDB backend yet.
 - **Extension Filtering**: one shared list of image extensions (JPEG, PNG, TIFF, WebP, HEIC/HEIF, and RAW formats such as CR2, CR3, NEF, ARW, RAF, ORF, RW2 and DNG) used by both the CLI and the API.
-- **Incremental Synchronization**: `sync` classifies files as NEW / MODIFIED / DELETED / UNCHANGED by comparing size and modification time, replaces the record on a MODIFIED and carries over its rating/flag/labels and collection membership, and can repair libraries synced before that fix with `dedupe`. It only touches records under the folder it scans. See the limitations below for the one case it still misses.
+- **Incremental Synchronization**: `sync` classifies files as NEW / MODIFIED / DELETED / UNCHANGED by comparing size and modification time, points the path at the new content on a MODIFIED and carries over its rating/flag/labels and collection membership (moved if no other copy of the old content remains, copied if one does). It only touches records under the folder it scans. See the limitations below for the one case it still misses.
 - **Local-Only API Hardening**: no wildcard CORS, the `Host` header is validated to block DNS-rebinding, and the packaged desktop app requires a per-launch API token cookie (see [Security model](#security-model)).
 
 ---
@@ -313,17 +313,7 @@ python -m photo_meta_organizer.main prune --apply
 
 Back up `photos.db` (see `paths`) before any command that deletes records.
 
-### Repair Duplicate Paths and Force a Full Re-check
-
-Before this fix, syncing an edited file saved the new content as a second record and left the old one behind. `dedupe` keeps the newest record for each path and merges the rating, flag and labels of the others into it.
-
-```bash
-# Dry run (default)
-python -m photo_meta_organizer.main dedupe
-
-# Merge them
-python -m photo_meta_organizer.main dedupe --apply
-```
+### Force a Full Re-check
 
 `sync` compares each file's size and modification time with what was stored and hashes only the files that differ. Records created by older versions have no stored time; they are trusted on size and filled in on the next sync. To hash every file regardless (slow, reads the whole library), for example after an edit that preserved size and mtime:
 
@@ -412,7 +402,7 @@ Concrete implementations live in `infrastructure/` (local-disk retriever, extens
 
 These are open, documented gaps. The full analysis and work plan are tracked in internal design docs (`design_docs/`, git-ignored, not part of this repository).
 
-- **Sync still trusts size + modification time, not content, for the common case.** An edit that preserves both is invisible to a normal `sync`; run `sync --rehash` to force a full hash check. (An edit that changes size or mtime *is* detected, and now correctly replaces the old record and carries over its rating/flag/labels — `dedupe` repairs libraries synced before that fix.)
+- **Sync still trusts size + modification time, not content, for the common case.** An edit that preserves both is invisible to a normal `sync`; run `sync --rehash` to force a full hash check. (An edit that changes size or mtime *is* detected: the path then holds the new content, which takes over the old content's rating/flag/labels.)
 - **RAW and HEIC were verified on a real Nikon NEF only.** HEIC tests use pillow-heif's own encoder; no real phone HEIC or Canon CR3 / Sony ARW file has been tried, and the packaged desktop build has not been checked with the new native libraries.
 - **Old capture dates.** Libraries indexed before the capture-date fix may show a file's modification time as its capture date. Run `sync --reextract` once to repair them.
 - The query bar can filter only on what the search API supports: no ISO, aperture, focal-length or lens filters, no rating ranges. The map area chosen with "Show these in Library" is a filter of its own (a chip), not a query-bar token.
@@ -441,7 +431,7 @@ These are open, documented gaps. The full analysis and work plan are tracked in 
 
 *Numbering note:* an internal design doc calls the Electron desktop app "Phase 5"; in this table it is part of Phase 4 and "Phase 5" means AI tagging.
 
-**Hardening:** validated curation input, one datetime convention, images-only indexing, `prune` and `dedupe`, CORS/Host lock-down and the per-launch desktop token; sync correctness (replace on modify, curation carry-over, mtime fingerprint, `--rehash`, `--reextract`, folder-scoped cleanup); the SQLite migration with search, paging and facets in the store; asynchronous index/sync jobs with progress and cancel; one `Settings` object and composition root; HEIC/RAW decoding; a bounded thumbnail cache; server-driven paging, filtering and sorting in the UI; ZIP and JSON export; accessibility and keyboard handling; logging and CLI fixes; API types generated from OpenAPI; and a frontend test suite. What is left is under [Known limitations](#known-limitations).
+**Hardening:** validated curation input, one datetime convention, images-only indexing, `prune`, CORS/Host lock-down and the per-launch desktop token; sync correctness (replace on modify, curation carry-over, mtime fingerprint, `--rehash`, `--reextract`, folder-scoped cleanup); the SQLite migration with search, paging and facets in the store; asynchronous index/sync jobs with progress and cancel; one `Settings` object and composition root; HEIC/RAW decoding; a bounded thumbnail cache; server-driven paging, filtering and sorting in the UI; ZIP and JSON export; accessibility and keyboard handling; logging and CLI fixes; API types generated from OpenAPI; and a frontend test suite. What is left is under [Known limitations](#known-limitations).
 
 ---
 

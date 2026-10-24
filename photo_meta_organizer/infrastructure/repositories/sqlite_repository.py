@@ -14,8 +14,9 @@ import math
 import sqlite3
 import threading
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple, TypeVar
 
 from photo_meta_organizer.application.interfaces.search_types import (
     BoundingBox,
@@ -29,15 +30,17 @@ from photo_meta_organizer.application.interfaces.search_types import (
 )
 from photo_meta_organizer.domain.curation import (
     AddTag,
+    Curation,
     CurationCommand,
     RemoveTag,
     SetFlag,
     SetLabels,
     SetRating,
     is_valid_rating,
+    merge_curation,
     merge_labels,
 )
-from photo_meta_organizer.domain.datetimes import to_naive
+from photo_meta_organizer.domain.datetimes import to_naive, utc_now_naive
 from photo_meta_organizer.domain.geo import haversine_distance_km
 from photo_meta_organizer.domain.models import (
     CameraProfile,
@@ -46,19 +49,23 @@ from photo_meta_organizer.domain.models import (
     ImageExifData,
     ImageFileInfo,
     ImageMetadata,
+    StoredFile,
 )
 from photo_meta_organizer.infrastructure.repositories.migrations import migrate
 
-# Written by the user (or carried over by a replace), never by extraction.
-_CURATION_COLUMNS = ("rating", "flagged", "added_at")
+T = TypeVar("T")
 
-_PHOTO_COLUMNS = [
+
+class _StoredCuration(NamedTuple):
+    curation: Curation
+    added_at: str  # ISO timestamp, as stored
+
+
+# Extracted from the content: one row per Asset.
+_ASSET_COLUMNS = [
     "file_hash",
-    "path",
-    "name",
     "size_bytes",
     "mime_type",
-    "mtime",
     "width",
     "height",
     "captured_at",
@@ -80,14 +87,18 @@ _PHOTO_COLUMNS = [
     "gps_alt",
     "gps_datum",
     "raw_tags",
-    "rating",
-    "flagged",
-    "added_at",
+    "extracted_at",
 ]
 
 
 class SqliteRepository:
-    """SQLite-backed repository for ImageMetadata persistence (ADR-001)."""
+    """SQLite-backed repository for ImageMetadata persistence (ADR-001, ADR-003 R3).
+
+    An Asset (content, keyed by hash) is stored once in ``assets``, each path holding
+    it in ``files``, and the user's decisions in ``curation`` and ``asset_labels``.
+    Reads go through ``photo_view``: one row per Asset with its primary file, so an
+    :class:`ImageMetadata` still carries one path.
+    """
 
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
@@ -123,74 +134,138 @@ class SqliteRepository:
                 self._upsert(metadata)
 
     def _upsert(self, metadata: ImageMetadata, *, overwrite_curation: bool = False) -> None:
-        """Insert or update by file hash. Must run inside an open transaction.
+        """Record the Asset and the File it was read from. Must run inside a transaction.
 
-        An existing row keeps its curation (``rating``, ``flagged``, ``added_at`` and
-        labels) unless ``overwrite_curation`` is set, so re-extracting a photo never
-        erases the user's decisions (ADR-003 R2). A new row is stored with the
-        curation the record arrives with.
+        An existing Asset keeps its curation unless ``overwrite_curation`` is set, so
+        re-extracting a photo never erases the user's decisions (ADR-003 R2); a new one
+        is stored with the curation the record arrives with. If the path held other
+        content before (the file was edited), the File now points at this Asset and the
+        old Asset's curation is merged in: moved when no other File still holds the old
+        content (the old Asset is then deleted), copied when one does.
         """
-        values = _to_row(metadata)
-        placeholders = ", ".join("?" for _ in _PHOTO_COLUMNS)
-        skipped = {"file_hash"} if overwrite_curation else {"file_hash", *_CURATION_COLUMNS}
+        now = utc_now_naive().isoformat()
+        file_hash = metadata.file_hash
+        asset_existed = self._asset_exists(file_hash)
+        asset = _asset_row(metadata, now)
         update_clause = ", ".join(
-            f"{col}=excluded.{col}" for col in _PHOTO_COLUMNS if col not in skipped
-        )
-        existed = (
-            self.connection.execute(
-                "SELECT 1 FROM photos WHERE file_hash = ?", (metadata.file_hash,)
-            ).fetchone()
-            is not None
+            f"{col}=excluded.{col}" for col in _ASSET_COLUMNS if col != "file_hash"
         )
         self.connection.execute(
             f"""
-            INSERT INTO photos ({", ".join(_PHOTO_COLUMNS)}) VALUES ({placeholders})
+            INSERT INTO assets ({", ".join(_ASSET_COLUMNS)})
+            VALUES ({", ".join("?" for _ in _ASSET_COLUMNS)})
             ON CONFLICT(file_hash) DO UPDATE SET {update_clause}
             """,
-            [values[col] for col in _PHOTO_COLUMNS],
+            [asset[col] for col in _ASSET_COLUMNS],
         )
-        if existed and not overwrite_curation:
-            return
-        self.connection.execute(
-            "DELETE FROM photo_labels WHERE file_hash = ?", (metadata.file_hash,)
-        )
-        for label in merge_labels([], list(metadata.labels)):
-            self.connection.execute(
-                "INSERT OR IGNORE INTO photo_labels (file_hash, label) VALUES (?, ?)",
-                (metadata.file_hash, label),
+        if not asset_existed or overwrite_curation:
+            self._write_curation(
+                file_hash,
+                Curation(
+                    # A rating already poisoned upstream (e.g. a legacy JSON import) must
+                    # not trip the CHECK constraint and abort the whole write.
+                    rating=metadata.rating if is_valid_rating(metadata.rating) else None,
+                    flagged=metadata.flagged,
+                    labels=tuple(merge_labels([], list(metadata.labels))),
+                ),
+                added_at=metadata.added_at.isoformat(),
             )
 
-    def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
-        with self.lock, self.connection:
-            if old_hash == metadata.file_hash:
-                self._upsert(metadata, overwrite_curation=True)
-                return
-            # The delete cascades the old hash out of every collection, and the new
-            # record usually has the same (UNIQUE) path, so it can't be inserted first.
-            # Remember the membership rows and restore them under the new hash at the
-            # same rowid, so the photo keeps its place; OR IGNORE skips collections
-            # that already hold the new hash.
-            memberships = self.connection.execute(
-                "SELECT rowid, collection FROM collection_photos WHERE file_hash = ?",
-                (old_hash,),
-            ).fetchall()
-            self.connection.execute("DELETE FROM photos WHERE file_hash = ?", (old_hash,))
-            # The caller merged the old record's curation into ``metadata``.
-            self._upsert(metadata, overwrite_curation=True)
-            for row in memberships:
-                self.connection.execute(
-                    "INSERT OR IGNORE INTO collection_photos (rowid, collection, file_hash) "
-                    "VALUES (?, ?, ?)",
-                    (row["rowid"], row["collection"], metadata.file_hash),
-                )
+        info = metadata.file_info
+        previous = self.connection.execute(
+            "SELECT asset_hash FROM files WHERE path = ?", (info.path,)
+        ).fetchone()
+        self.connection.execute(
+            """
+            INSERT INTO files (asset_hash, path, name, size_bytes, mtime, first_seen, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(path) DO UPDATE SET asset_hash=excluded.asset_hash,
+                name=excluded.name, size_bytes=excluded.size_bytes, mtime=excluded.mtime,
+                last_seen=excluded.last_seen
+            """,
+            (
+                file_hash,
+                info.path,
+                info.name,
+                info.size_bytes,
+                info.modified_time.isoformat() if info.modified_time else None,
+                now,
+                now,
+            ),
+        )
+        if previous is not None and previous["asset_hash"] != file_hash:
+            self._carry_over(previous["asset_hash"], file_hash, adopt_added_at=not asset_existed)
+
+    def _carry_over(self, old_hash: str, new_hash: str, *, adopt_added_at: bool) -> None:
+        """Merge ``old_hash``'s curation into ``new_hash``; drop the old Asset if unused.
+
+        The edited file's own curation comes first, then whatever the new content already
+        had (the rule from before ADR-003 R3).
+        """
+        old = self._stored_curation(old_hash)
+        if old is not None:
+            new = self._stored_curation(new_hash)
+            merged = old.curation if new is None else merge_curation(old.curation, new.curation)
+            # Content that replaced an edited file was still added when first indexed.
+            added_at = old.added_at if adopt_added_at or new is None else new.added_at
+            self._write_curation(new_hash, merged, added_at=added_at)
+        still_held = self.connection.execute(
+            "SELECT 1 FROM files WHERE asset_hash = ? LIMIT 1", (old_hash,)
+        ).fetchone()
+        if still_held is not None:
+            return  # copied: another File still holds the old content, which keeps it all
+        # Moved: the new content takes the old one's place (same rowid) in each collection;
+        # OR IGNORE skips collections already holding it, and the delete drops the rest.
+        self.connection.execute(
+            "UPDATE OR IGNORE collection_photos SET file_hash = ? WHERE file_hash = ?",
+            (new_hash, old_hash),
+        )
+        self.connection.execute("DELETE FROM assets WHERE file_hash = ?", (old_hash,))
+
+    def _stored_curation(self, file_hash: str) -> _StoredCuration | None:
+        row = self.connection.execute(
+            "SELECT rating, flagged, added_at FROM curation WHERE asset_hash = ?", (file_hash,)
+        ).fetchone()
+        if row is None:
+            return None
+        labels = tuple(self._labels_for([file_hash]).get(file_hash, []))
+        return _StoredCuration(
+            Curation(rating=row["rating"], flagged=bool(row["flagged"]), labels=labels),
+            row["added_at"],
+        )
+
+    def _write_curation(self, file_hash: str, curation: Curation, *, added_at: str) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO curation (asset_hash, rating, flagged, added_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(asset_hash) DO UPDATE SET rating=excluded.rating,
+                flagged=excluded.flagged, added_at=excluded.added_at
+            """,
+            (file_hash, curation.rating, int(curation.flagged), added_at),
+        )
+        self.connection.execute("DELETE FROM asset_labels WHERE asset_hash = ?", (file_hash,))
+        for label in curation.labels:
+            self.connection.execute(
+                "INSERT OR IGNORE INTO asset_labels (asset_hash, label) VALUES (?, ?)",
+                (file_hash, label),
+            )
+
+    def _asset_exists(self, file_hash: str) -> bool:
+        return (
+            self.connection.execute(
+                "SELECT 1 FROM assets WHERE file_hash = ?", (file_hash,)
+            ).fetchone()
+            is not None
+        )
 
     def refresh_fingerprints(self, updates: Sequence[tuple[str, int, datetime]]) -> int:
+        now = utc_now_naive().isoformat()
         with self.lock, self.connection:
             touched = 0
-            for file_hash, size, mtime in updates:
+            for path, size, mtime in updates:
                 cur = self.connection.execute(
-                    "UPDATE photos SET size_bytes = ?, mtime = ? WHERE file_hash = ?",
-                    (size, mtime.isoformat(), file_hash),
+                    "UPDATE files SET size_bytes = ?, mtime = ?, last_seen = ? WHERE path = ?",
+                    (size, mtime.isoformat(), now, path),
                 )
                 touched += cur.rowcount
             return touched
@@ -202,36 +277,57 @@ class SqliteRepository:
     def get_by_filehash(self, file_hash: str) -> ImageMetadata | None:
         with self.lock:
             row = self.connection.execute(
-                "SELECT * FROM photos WHERE file_hash = ?", (file_hash,)
+                "SELECT * FROM photo_view WHERE file_hash = ?", (file_hash,)
             ).fetchone()
             if row is None:
                 return None
             return _from_row(row, self._labels_for([file_hash]).get(file_hash, []))
 
     def get_by_path(self, file_path: str) -> ImageMetadata | None:
-        with self.lock:
-            row = self.connection.execute(
-                "SELECT * FROM photos WHERE path = ?", (file_path,)
-            ).fetchone()
-            if row is None:
-                return None
-            return _from_row(row, self._labels_for([row["file_hash"]]).get(row["file_hash"], []))
+        found = self.find_by_paths([file_path])
+        return found[0] if found else None
 
     def list_all(self) -> list[ImageMetadata]:
         with self.lock:
-            rows = self.connection.execute("SELECT * FROM photos").fetchall()
+            rows = self.connection.execute("SELECT * FROM photo_view").fetchall()
             labels_by_hash = self._labels_for([r["file_hash"] for r in rows])
             return [_from_row(r, labels_by_hash.get(r["file_hash"], [])) for r in rows]
 
+    def list_files(self) -> list[StoredFile]:
+        with self.lock:
+            rows = self.connection.execute(
+                "SELECT path, asset_hash, size_bytes, mtime FROM files ORDER BY id"
+            ).fetchall()
+        return [
+            StoredFile(
+                path=r["path"],
+                file_hash=r["asset_hash"],
+                size_bytes=r["size_bytes"],
+                modified_time=_mtime(r["mtime"]),
+            )
+            for r in rows
+        ]
+
     def delete(self, file_hash: str) -> bool:
         with self.lock, self.connection:
-            cur = self.connection.execute("DELETE FROM photos WHERE file_hash = ?", (file_hash,))
+            cur = self.connection.execute("DELETE FROM assets WHERE file_hash = ?", (file_hash,))
             return cur.rowcount > 0
 
     def delete_by_path(self, file_path: str) -> bool:
+        """Forget one File; its Asset goes too once no File holds it."""
         with self.lock, self.connection:
-            cur = self.connection.execute("DELETE FROM photos WHERE path = ?", (file_path,))
-            return cur.rowcount > 0
+            row = self.connection.execute(
+                "SELECT asset_hash FROM files WHERE path = ?", (file_path,)
+            ).fetchone()
+            if row is None:
+                return False
+            self.connection.execute("DELETE FROM files WHERE path = ?", (file_path,))
+            self.connection.execute(
+                "DELETE FROM assets WHERE file_hash = ? "
+                "AND NOT EXISTS (SELECT 1 FROM files WHERE asset_hash = ?)",
+                (row["asset_hash"], row["asset_hash"]),
+            )
+            return True
 
     def batch_delete(self, file_hashes: Sequence[str]) -> int:
         if not file_hashes:
@@ -239,38 +335,54 @@ class SqliteRepository:
         with self.lock, self.connection:
             placeholders = ", ".join("?" for _ in file_hashes)
             cur = self.connection.execute(
-                f"DELETE FROM photos WHERE file_hash IN ({placeholders})",
+                f"DELETE FROM assets WHERE file_hash IN ({placeholders})",
                 list(file_hashes),
             )
             return cur.rowcount
 
     def find_by_paths(self, paths: list[str]) -> list[ImageMetadata]:
+        """The photo held at each known path, with that path as its ``file_info``."""
         if not paths:
             return []
         with self.lock:
             placeholders = ", ".join("?" for _ in paths)
             rows = self.connection.execute(
-                f"SELECT * FROM photos WHERE path IN ({placeholders})", paths
+                "SELECT v.*, f.path AS file_path, f.name AS file_name, "
+                "f.size_bytes AS file_size, f.mtime AS file_mtime "
+                "FROM files f JOIN photo_view v ON v.file_hash = f.asset_hash "
+                f"WHERE f.path IN ({placeholders})",
+                paths,
             ).fetchall()
             labels_by_hash = self._labels_for([r["file_hash"] for r in rows])
-            return [_from_row(r, labels_by_hash.get(r["file_hash"], [])) for r in rows]
+        found = []
+        for r in rows:
+            record = _from_row(r, labels_by_hash.get(r["file_hash"], []))
+            file_info = replace(
+                record.file_info,
+                path=r["file_path"],
+                name=r["file_name"],
+                size_bytes=r["file_size"],
+                modified_time=_mtime(r["file_mtime"]),
+            )
+            found.append(replace(record, file_info=file_info))
+        return found
 
     def count(self) -> int:
         with self.lock:
-            return int(self.connection.execute("SELECT COUNT(*) FROM photos").fetchone()[0])
+            return int(self.connection.execute("SELECT COUNT(*) FROM assets").fetchone()[0])
 
     def _labels_for(self, file_hashes: Sequence[str]) -> dict[str, list[str]]:
         if not file_hashes:
             return {}
         placeholders = ", ".join("?" for _ in file_hashes)
         rows = self.connection.execute(
-            f"SELECT file_hash, label FROM photo_labels WHERE file_hash IN ({placeholders}) "
+            f"SELECT asset_hash, label FROM asset_labels WHERE asset_hash IN ({placeholders}) "
             "ORDER BY rowid",
             list(file_hashes),
         ).fetchall()
         result: dict[str, list[str]] = {}
         for row in rows:
-            result.setdefault(row["file_hash"], []).append(row["label"])
+            result.setdefault(row["asset_hash"], []).append(row["label"])
         return result
 
     # =========================================================================
@@ -278,7 +390,9 @@ class SqliteRepository:
     # =========================================================================
 
     def query(self, query: SearchQuery) -> Page[ImageMetadata]:
+        """Filter, sort and page on Assets; read full rows only for the page returned."""
         where_sql, params = search_where(query)
+        source = search_source(query)
         order_sql = self._order_by_sql(query.sort_by, query.sort_order)
 
         with self.lock:
@@ -289,48 +403,61 @@ class SqliteRepository:
             ):
                 # No trig functions in stock SQLite: filter by distance in Python, over
                 # the rows that already passed every other filter.
-                rows = self.connection.execute(
-                    f"SELECT * FROM photos {where_sql} ORDER BY {order_sql}", params
+                located = self.connection.execute(
+                    f"SELECT file_hash, gps_lat, gps_lon FROM {source} {where_sql} "
+                    f"ORDER BY {order_sql}",
+                    params,
                 ).fetchall()
-                labels_by_hash = self._labels_for([r["file_hash"] for r in rows])
-                candidates = [_from_row(r, labels_by_hash.get(r["file_hash"], [])) for r in rows]
                 matched = [
-                    m
-                    for m in candidates
-                    if m.exif.location is not None
+                    r["file_hash"]
+                    for r in located
+                    if r["gps_lat"] is not None
+                    and r["gps_lon"] is not None
                     and haversine_distance_km(
-                        query.location_lat,
-                        query.location_lon,
-                        m.exif.location.latitude,
-                        m.exif.location.longitude,
+                        query.location_lat, query.location_lon, r["gps_lat"], r["gps_lon"]
                     )
                     <= query.radius_km
                 ]
-                return _paginate(matched, query.page, query.page_size)
+                page_of_hashes = _paginate(matched, query.page, query.page_size)
+                return replace(page_of_hashes, items=self._photos_in_order(page_of_hashes.items))
 
             total_count = self.connection.execute(
-                f"SELECT COUNT(*) FROM photos {where_sql}", params
+                f"SELECT COUNT(*) FROM {source} {where_sql}", params
             ).fetchone()[0]
             page_size = max(1, query.page_size)
-            import math as _math
-
-            total_pages = max(1, _math.ceil(total_count / page_size)) if total_count > 0 else 1
+            total_pages = max(1, math.ceil(total_count / page_size)) if total_count > 0 else 1
             page = max(1, min(query.page, total_pages))
             offset = (page - 1) * page_size
 
-            rows = self.connection.execute(
-                f"SELECT * FROM photos {where_sql} ORDER BY {order_sql} LIMIT ? OFFSET ?",
-                [*params, page_size, offset],
-            ).fetchall()
-            labels_by_hash = self._labels_for([r["file_hash"] for r in rows])
-            items = [_from_row(r, labels_by_hash.get(r["file_hash"], [])) for r in rows]
+            hashes = [
+                r[0]
+                for r in self.connection.execute(
+                    f"SELECT file_hash FROM {source} {where_sql} ORDER BY {order_sql} "
+                    "LIMIT ? OFFSET ?",
+                    [*params, page_size, offset],
+                )
+            ]
             return Page(
-                items=items,
+                items=self._photos_in_order(hashes),
                 total_count=total_count,
                 page=page,
                 page_size=page_size,
                 total_pages=total_pages,
             )
+
+    def _photos_in_order(self, hashes: Sequence[str]) -> list[ImageMetadata]:
+        """The photos for ``hashes``, in that order. Caller holds the lock."""
+        if not hashes:
+            return []
+        placeholders = ", ".join("?" for _ in hashes)
+        rows = {
+            r["file_hash"]: r
+            for r in self.connection.execute(
+                f"SELECT * FROM photo_view WHERE file_hash IN ({placeholders})", list(hashes)
+            )
+        }
+        labels_by_hash = self._labels_for(list(rows))
+        return [_from_row(rows[h], labels_by_hash.get(h, [])) for h in hashes if h in rows]
 
     @staticmethod
     def _order_by_sql(sort_by: str, sort_order: str) -> str:
@@ -338,7 +465,11 @@ class SqliteRepository:
         column = {
             "size_bytes": "size_bytes",
             "camera_model": "COALESCE(camera_model, '')",
-            "file_name": "name",
+            # The primary file's name: the only sort key that lives on ``files``.
+            "file_name": (
+                "(SELECT name FROM files WHERE asset_hash = file_hash "
+                "ORDER BY last_seen DESC, id LIMIT 1)"
+            ),
         }.get(sort_by, "captured_at")
         # file_hash breaks ties, so paging through equal keys never repeats or skips a row.
         if column == "captured_at":
@@ -350,6 +481,7 @@ class SqliteRepository:
         self, query: SearchQuery, bbox: BoundingBox | None, cell_degrees: float
     ) -> list[GeoCluster]:
         where_sql, params = search_where(query)
+        source = search_source(query)
         located = "gps_lat IS NOT NULL AND gps_lon IS NOT NULL"
         where_sql = f"{where_sql} AND {located}" if where_sql else f"WHERE {located}"
         if bbox is not None:
@@ -360,7 +492,7 @@ class SqliteRepository:
         # the row holding MAX(captured_at): the cluster's most recent photo.
         sql = (
             "SELECT AVG(gps_lat) AS lat, AVG(gps_lon) AS lon, COUNT(*) AS n, file_hash, "
-            "MAX(COALESCE(captured_at, '')) AS newest FROM photos "
+            f"MAX(COALESCE(captured_at, '')) AS newest FROM {source} "
             f"{where_sql} "
             "GROUP BY CAST((gps_lat + 90.0) / ? AS INTEGER), "
             "CAST((gps_lon + 180.0) / ? AS INTEGER) "
@@ -381,29 +513,29 @@ class SqliteRepository:
     def facets(self) -> Facets:
         with self.lock:
             camera_rows = self.connection.execute(
-                "SELECT camera_make AS name, COUNT(*) AS n FROM photos "
+                "SELECT camera_make AS name, COUNT(*) AS n FROM assets "
                 "WHERE camera_make IS NOT NULL GROUP BY camera_make ORDER BY camera_make"
             ).fetchall()
             tag_rows = self.connection.execute(
-                "SELECT label AS name, COUNT(*) AS n FROM photo_labels "
+                "SELECT label AS name, COUNT(*) AS n FROM asset_labels "
                 "GROUP BY label ORDER BY label"
             ).fetchall()
             year_rows = self.connection.execute(
-                "SELECT strftime('%Y', captured_at) AS year, COUNT(*) AS n FROM photos "
+                "SELECT strftime('%Y', captured_at) AS year, COUNT(*) AS n FROM assets "
                 "WHERE captured_at IS NOT NULL GROUP BY year ORDER BY year"
             ).fetchall()
             bounds_row = self.connection.execute(
-                "SELECT MIN(gps_lat), MAX(gps_lat), MIN(gps_lon), MAX(gps_lon) FROM photos "
+                "SELECT MIN(gps_lat), MAX(gps_lat), MIN(gps_lon), MAX(gps_lon) FROM assets "
                 "WHERE gps_lat IS NOT NULL"
             ).fetchone()
             iso_rows = self.connection.execute(
-                "SELECT iso, COUNT(*) AS n FROM photos WHERE iso IS NOT NULL "
+                "SELECT iso, COUNT(*) AS n FROM assets WHERE iso IS NOT NULL "
                 "GROUP BY iso ORDER BY iso"
             ).fetchall()
             totals = self.connection.execute(
                 "SELECT COUNT(*), SUM(flagged), "
                 "SUM(gps_lat IS NOT NULL AND gps_lon IS NOT NULL), SUM(captured_at IS NULL), "
-                "SUM(size_bytes), AVG(width * height / 1e6) FROM photos"
+                "SUM(size_bytes), AVG(width * height / 1e6) FROM asset_view"
             ).fetchone()
 
         gps_bounds = None
@@ -437,12 +569,7 @@ class SqliteRepository:
 
     def apply(self, file_hash: str, command: CurationCommand) -> ImageMetadata | None:
         with self.lock, self.connection:
-            if (
-                self.connection.execute(
-                    "SELECT 1 FROM photos WHERE file_hash = ?", (file_hash,)
-                ).fetchone()
-                is None
-            ):
+            if not self._asset_exists(file_hash):
                 return None
             self._apply_command(file_hash, command)
         return self.get_by_filehash(file_hash)
@@ -451,44 +578,39 @@ class SqliteRepository:
         count = 0
         with self.lock, self.connection:
             for file_hash in file_hashes:
-                if (
-                    self.connection.execute(
-                        "SELECT 1 FROM photos WHERE file_hash = ?", (file_hash,)
-                    ).fetchone()
-                    is None
-                ):
+                if not self._asset_exists(file_hash):
                     continue
                 self._apply_command(file_hash, command)
                 count += 1
         return count
 
     def _apply_command(self, file_hash: str, command: CurationCommand) -> None:
-        """Mutate the record for ``file_hash``. Must run inside an open transaction."""
+        """Mutate the curation of ``file_hash``. Must run inside an open transaction."""
         if isinstance(command, SetRating):
             self.connection.execute(
-                "UPDATE photos SET rating = ? WHERE file_hash = ?",
+                "UPDATE curation SET rating = ? WHERE asset_hash = ?",
                 (command.value, file_hash),
             )
         elif isinstance(command, SetFlag):
             self.connection.execute(
-                "UPDATE photos SET flagged = ? WHERE file_hash = ?",
+                "UPDATE curation SET flagged = ? WHERE asset_hash = ?",
                 (1 if command.value else 0, file_hash),
             )
         elif isinstance(command, AddTag):
             self.connection.execute(
-                "INSERT OR IGNORE INTO photo_labels (file_hash, label) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO asset_labels (asset_hash, label) VALUES (?, ?)",
                 (file_hash, command.value),
             )
         elif isinstance(command, RemoveTag):
             self.connection.execute(
-                "DELETE FROM photo_labels WHERE file_hash = ? AND label = ?",
+                "DELETE FROM asset_labels WHERE asset_hash = ? AND label = ?",
                 (file_hash, command.value),
             )
         elif isinstance(command, SetLabels):
-            self.connection.execute("DELETE FROM photo_labels WHERE file_hash = ?", (file_hash,))
+            self.connection.execute("DELETE FROM asset_labels WHERE asset_hash = ?", (file_hash,))
             for label in merge_labels([], list(command.value)):
                 self.connection.execute(
-                    "INSERT OR IGNORE INTO photo_labels (file_hash, label) VALUES (?, ?)",
+                    "INSERT OR IGNORE INTO asset_labels (asset_hash, label) VALUES (?, ?)",
                     (file_hash, label),
                 )
         else:
@@ -511,12 +633,7 @@ class SqliteRepository:
                 raise ValueError(f"{key} must be a list of strings")
 
         with self.lock, self.connection:
-            if (
-                self.connection.execute(
-                    "SELECT 1 FROM photos WHERE file_hash = ?", (file_hash,)
-                ).fetchone()
-                is None
-            ):
+            if not self._asset_exists(file_hash):
                 return None
             if "rating" in updates:
                 self._apply_command(file_hash, SetRating(updates["rating"]))
@@ -563,6 +680,11 @@ class SqliteRepository:
         else:
             command = SetFlag(bool(value))
         return self.apply_batch(file_hashes, command)
+
+
+def search_source(query: SearchQuery) -> str:
+    """The table :func:`search_where` filters: ``assets``, joined to curation only if needed."""
+    return "asset_view" if query.rating is not None or query.flagged is not None else "assets"
 
 
 def search_where(query: SearchQuery) -> tuple[str, list[Any]]:
@@ -617,17 +739,18 @@ def search_where(query: SearchQuery) -> tuple[str, list[Any]]:
     if query.tags:
         placeholders = ", ".join("?" for _ in query.tags)
         clauses.append(
-            f"file_hash IN (SELECT file_hash FROM photo_labels WHERE label IN "
-            f"({placeholders}) GROUP BY file_hash HAVING COUNT(DISTINCT label) = ?)"
+            f"file_hash IN (SELECT asset_hash FROM asset_labels WHERE label IN "
+            f"({placeholders}) GROUP BY asset_hash HAVING COUNT(DISTINCT label) = ?)"
         )
         params.extend(query.tags)
         params.append(len(set(query.tags)))
     if query.search_term:
         term = f"%{_escape_like(query.search_term)}%"
         clauses.append(
-            "(name LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\' OR "
+            "(file_hash IN (SELECT asset_hash FROM files WHERE name LIKE ? ESCAPE '\\' "
+            "OR path LIKE ? ESCAPE '\\') OR "
             "camera_make LIKE ? ESCAPE '\\' OR camera_model LIKE ? ESCAPE '\\' OR "
-            "file_hash IN (SELECT file_hash FROM photo_labels WHERE label LIKE ? ESCAPE '\\'))"
+            "file_hash IN (SELECT asset_hash FROM asset_labels WHERE label LIKE ? ESCAPE '\\'))"
         )
         params.extend([term, term, term, term, term])
 
@@ -650,7 +773,7 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _paginate(items: list[ImageMetadata], page: int, page_size: int) -> Page[ImageMetadata]:
+def _paginate(items: list[T], page: int, page_size: int) -> Page[T]:
     total_count = len(items)
     page_size = max(1, page_size)
     total_pages = max(1, math.ceil(total_count / page_size)) if total_count > 0 else 1
@@ -666,20 +789,13 @@ def _paginate(items: list[ImageMetadata], page: int, page_size: int) -> Page[Ima
     )
 
 
-def _to_row(metadata: ImageMetadata) -> dict[str, Any]:
+def _asset_row(metadata: ImageMetadata, extracted_at: str) -> dict[str, Any]:
     exif = metadata.exif
     location = exif.location
     return {
         "file_hash": metadata.file_hash,
-        "path": metadata.file_info.path,
-        "name": metadata.file_info.name,
         "size_bytes": metadata.file_info.size_bytes,
         "mime_type": metadata.file_info.mime_type,
-        "mtime": (
-            metadata.file_info.modified_time.isoformat()
-            if metadata.file_info.modified_time
-            else None
-        ),
         "width": metadata.dimensions.width,
         "height": metadata.dimensions.height,
         "captured_at": exif.captured_at.isoformat() if exif.captured_at else None,
@@ -701,13 +817,12 @@ def _to_row(metadata: ImageMetadata) -> dict[str, Any]:
         "gps_alt": location.altitude if location else None,
         "gps_datum": location.datum if location else None,
         "raw_tags": json.dumps(dict(exif.raw_tags)),
-        # A rating already poisoned upstream (e.g. a legacy JSON import) must not
-        # trip the CHECK constraint and abort the whole write; drop it instead,
-        # matching the tolerance the API layer already gives a corrupt stored value.
-        "rating": metadata.rating if is_valid_rating(metadata.rating) else None,
-        "flagged": int(metadata.flagged),
-        "added_at": metadata.added_at.isoformat(),
+        "extracted_at": extracted_at,
     }
+
+
+def _mtime(value: str | None) -> datetime | None:
+    return to_naive(datetime.fromisoformat(value)) if value else None
 
 
 def _from_row(row: sqlite3.Row, labels: list[str]) -> ImageMetadata:
@@ -749,7 +864,7 @@ def _from_row(row: sqlite3.Row, labels: list[str]) -> ImageMetadata:
         path=row["path"],
         size_bytes=row["size_bytes"],
         mime_type=row["mime_type"],
-        modified_time=(to_naive(datetime.fromisoformat(row["mtime"])) if row["mtime"] else None),
+        modified_time=_mtime(row["mtime"]),
     )
 
     return ImageMetadata(

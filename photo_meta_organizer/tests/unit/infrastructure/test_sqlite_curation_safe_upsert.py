@@ -61,16 +61,16 @@ def test_save_still_updates_extracted_columns(
     repo: SqliteRepository, sample_image_metadata: ImageMetadata
 ) -> None:
     repo.save(sample_image_metadata)
-    moved = replace(
+    reextracted = replace(
         sample_image_metadata,
-        file_info=replace(sample_image_metadata.file_info, path="/photos/moved.jpg"),
+        exif=replace(sample_image_metadata.exif, camera_model="Re-read model"),
     )
 
-    repo.save(moved)
+    repo.save(reextracted)
 
     stored = repo.get_by_filehash(sample_image_metadata.file_hash)
     assert stored is not None
-    assert stored.file_info.path == "/photos/moved.jpg"
+    assert stored.exif.camera_model == "Re-read model"
 
 
 def test_new_photo_is_stored_with_the_curation_it_arrives_with(
@@ -82,41 +82,6 @@ def test_new_photo_is_stored_with_the_curation_it_arrives_with(
     assert stored is not None
     assert (stored.rating, stored.flagged) == (3, True)
     assert stored.labels == sample_image_metadata.labels
-
-
-def test_replace_writes_carried_over_curation(
-    repo: SqliteRepository, sample_image_metadata: ImageMetadata
-) -> None:
-    repo.save(sample_image_metadata)
-    edited = replace(
-        sample_image_metadata,
-        file_hash="f" * 64,
-        rating=5,
-        flagged=True,
-        labels=["carried"],
-    )
-
-    repo.replace(sample_image_metadata.file_hash, edited)
-
-    stored = repo.get_by_filehash("f" * 64)
-    assert stored is not None
-    assert (stored.rating, stored.flagged, stored.labels) == (5, True, ["carried"])
-
-
-def test_replace_onto_existing_content_takes_the_merged_curation(
-    repo: SqliteRepository, sample_image_metadata: ImageMetadata
-) -> None:
-    other = replace(sample_image_metadata, file_hash="e" * 64)
-    other = replace(other, file_info=replace(other.file_info, path="/photos/other.jpg"), labels=[])
-    repo.save(sample_image_metadata)
-    repo.save(other)
-    merged = replace(other, rating=2, flagged=True, labels=["merged"])
-
-    repo.replace(sample_image_metadata.file_hash, merged)
-
-    stored = repo.get_by_filehash(other.file_hash)
-    assert stored is not None
-    assert (stored.rating, stored.flagged, stored.labels) == (2, True, ["merged"])
 
 
 def test_save_with_overwrite_curation_replaces_it(

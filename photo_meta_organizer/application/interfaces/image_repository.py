@@ -23,7 +23,7 @@ from photo_meta_organizer.application.interfaces.search_types import (
     SearchQuery,
 )
 from photo_meta_organizer.domain.curation import CurationCommand
-from photo_meta_organizer.domain.models import ImageMetadata
+from photo_meta_organizer.domain.models import ImageMetadata, StoredFile
 
 
 @runtime_checkable
@@ -41,7 +41,8 @@ class ImageMetadataRepository(Protocol):
         list_all: Retrieve all stored metadata.
         delete: Remove metadata by file hash.
         delete_by_path: Remove metadata by file path (for deleted-file cleanup).
-        find_by_paths: Retrieve multiple records by paths (for sync comparison).
+        find_by_paths: Retrieve the records held at several paths.
+        list_files: Every recorded File with its fingerprint (for sync comparison).
         count: Return total number of stored records.
     """
 
@@ -113,23 +114,25 @@ class ImageMetadataRepository(Protocol):
             Implementations should handle upsert semantics (update if exists). An
             existing record keeps its curation (rating, flagged, labels, added_at)
             unless ``overwrite_curation`` is true: extraction never writes curation.
-        """
-        ...
-
-    def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
-        """Swap the record stored under ``old_hash`` for ``metadata`` (one atomic step).
-
-        Used when a file's content changed, so its identity (the hash) changed too.
-        If ``metadata.file_hash`` already exists the two records collapse into one.
-        An unknown ``old_hash`` behaves like ``save``.
+            The record's path becomes one of the Asset's Files. If that path held other
+            content before (an edit), it now holds this one, and the old content's
+            curation is carried over: moved if no other File holds the old content,
+            copied if one does (ADR-003 R3).
         """
         ...
 
     def refresh_fingerprints(self, updates: Sequence[tuple[str, int, datetime]]) -> int:
-        """Record ``(file_hash, size_bytes, modified_time)`` on existing records.
+        """Record ``(path, size_bytes, modified_time)`` on existing Files.
 
-        Sync bookkeeping only; nothing else on the record changes. Returns the number
-        of records updated (unknown hashes are skipped).
+        Sync bookkeeping only; nothing else changes. Returns the number of Files
+        updated (unknown paths are skipped).
+        """
+        ...
+
+    def list_files(self) -> list[StoredFile]:
+        """Every File the library has recorded, one per path (what a scan compares).
+
+        An Asset held at several paths appears once per path.
         """
         ...
 
@@ -179,13 +182,15 @@ class ImageMetadataRepository(Protocol):
         ...
 
     def delete_by_path(self, file_path: str) -> bool:
-        """Delete metadata by file path (for deleted-file cleanup).
+        """Forget the File at ``file_path`` (sync's ``--cleanup-deleted``).
+
+        The Asset is deleted with it only when no other File holds it.
 
         Args:
-            file_path: The original file path of the record to delete.
+            file_path: The path of the File to forget.
 
         Returns:
-            True if a record was deleted, False if not found.
+            True if a File was forgotten, False if the path is unknown.
         """
         ...
 

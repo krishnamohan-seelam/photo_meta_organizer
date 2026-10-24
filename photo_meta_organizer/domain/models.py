@@ -257,6 +257,20 @@ class FileInfo:
 
 
 @dataclass(frozen=True)
+class StoredFile:
+    """One File the library has recorded: a path holding an Asset (ADR-003 R3).
+
+    What a scan compares the disk against: the path, the content hash it held when
+    last read, and the (size, mtime) fingerprint taken then.
+    """
+
+    path: str
+    file_hash: str
+    size_bytes: int
+    modified_time: datetime | None
+
+
+@dataclass(frozen=True)
 class FileState:
     """Represents the detected state of a single file during synchronization.
 
@@ -274,6 +288,8 @@ class FileState:
         refresh_fingerprint: UNCHANGED files only: the stored size/mtime is missing or stale
             (legacy record, a ``touch``), so sync should record ``size_bytes`` and
             ``last_modified`` without re-extracting.
+        recorded_path: The path as the library recorded the File (None for NEW). It can
+            differ from the normalised ``file_path``, so writes about that File use it.
     """
 
     file_path: str
@@ -283,6 +299,7 @@ class FileState:
     last_modified: datetime | None = None
     previous_hash: str | None = None  # Only set for MODIFIED
     refresh_fingerprint: bool = False  # Only meaningful for UNCHANGED
+    recorded_path: str | None = None
 
 
 @dataclass

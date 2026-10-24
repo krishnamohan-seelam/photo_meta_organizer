@@ -32,7 +32,6 @@ from photo_meta_organizer.application.interfaces.image_retriever import (
     ImageRetriever,
     RemoteFileHandle,
 )
-from photo_meta_organizer.domain.curation import carry_over_curation
 from photo_meta_organizer.domain.models import FileState, ImageMetadata, SyncResult
 
 
@@ -130,12 +129,12 @@ class SyncOrchestrator:
     Receives a pre-computed list of FileState objects (from MetadataStateAnalyzer)
     and dispatches each one to the correct action:
 
-    - NEW      → extract metadata + repository.save(), keeping the curation of any
-                 record that already has the same content
-    - MODIFIED → extract metadata + repository.replace(previous_hash, ...): the old
-                 record is swapped out (not left behind as a duplicate of the same
-                 path) and the user's rating/flag/labels carry over
-    - DELETED  → repository.delete_by_path() / repository.delete()
+    - NEW      → extract metadata + repository.save(); content already in the library
+                 gains another File and keeps its curation
+    - MODIFIED → extract metadata + repository.save(): the path's File now points at
+                 the new content, and the repository carries the curation over
+    - DELETED  → repository.delete_by_path(): the File is forgotten, and its Asset too
+                 once no File holds it
     - UNCHANGED → skip, except that a missing or stale (size, mtime) fingerprint is
                  recorded via repository.refresh_fingerprints() in one batch
 
@@ -193,14 +192,15 @@ class SyncOrchestrator:
             SyncResult with counters for each action taken.
         """
         result = SyncResult()
-        stale_fingerprints: list[tuple[str, int, datetime]] = []
+        stale_fingerprints: list[tuple[str, int, datetime]] = []  # (path, size, mtime)
         total = len(file_states)
 
         for done, fs in enumerate(file_states, start=1):
             if fs.state == "UNCHANGED":
                 result.unchanged_files += 1
-                if fs.refresh_fingerprint and fs.file_hash and fs.last_modified:
-                    stale_fingerprints.append((fs.file_hash, fs.size_bytes or 0, fs.last_modified))
+                if fs.refresh_fingerprint and fs.last_modified:
+                    path = fs.recorded_path or fs.file_path
+                    stale_fingerprints.append((path, fs.size_bytes or 0, fs.last_modified))
             else:
                 acts = (
                     (fs.state == "DELETED" and cleanup_deleted)
@@ -230,18 +230,14 @@ class SyncOrchestrator:
     def _delete_entry(self, fs: FileState, result: SyncResult) -> None:
         """Remove a DELETED entry from the repository.
 
-        Tries delete_by_path first (path-based cleanup), then falls back
-        to delete-by-hash in case the path changed but the hash is known.
+        Only the File is forgotten: other Files of the same content keep it.
 
         Args:
             fs: FileState with state == "DELETED".
             result: Mutable SyncResult to update.
         """
         try:
-            deleted = self._repository.delete_by_path(fs.file_path)
-            if not deleted and fs.file_hash:
-                deleted = self._repository.delete(fs.file_hash)
-            if deleted:
+            if self._repository.delete_by_path(fs.recorded_path or fs.file_path):
                 result.deleted_entries += 1
                 logger.debug("Deleted orphaned entry: %s", fs.file_path)
             else:
@@ -265,29 +261,17 @@ class SyncOrchestrator:
             result.errors.append(msg)
 
     def _persist(self, fs: FileState, metadata: ImageMetadata) -> None:
-        """Save freshly extracted metadata without losing the user's curation.
-
-        A NEW file may duplicate content that is already curated; a MODIFIED file
-        replaces its own previous record (and may collapse into another one).
-        """
+        """Save freshly extracted metadata; the repository keeps the user's curation."""
+        file_info = metadata.file_info
+        if fs.recorded_path is not None:
+            # Write to the File the analyzer matched, however its path was recorded, so an
+            # edit repoints that File instead of adding a second one.
+            file_info = replace(file_info, path=fs.recorded_path)
         if fs.last_modified is not None:
             # Stamp the mtime the analyzer saw, so the next scan compares like with like.
-            metadata = replace(
-                metadata, file_info=replace(metadata.file_info, modified_time=fs.last_modified)
-            )
-
-        previous = self._repository.get_by_filehash(fs.previous_hash) if fs.previous_hash else None
-        same_content = self._repository.get_by_filehash(metadata.file_hash)
-        sources = [r for r in (previous, same_content) if r is not None]
-        metadata = carry_over_curation(metadata, *sources)
-        if previous is not None:
-            # A re-extracted photo was still added to the library when first indexed.
-            metadata = replace(metadata, added_at=previous.added_at)
-
-        if fs.previous_hash:
-            self._repository.replace(fs.previous_hash, metadata)
-        else:
-            self._repository.save(metadata)
+            file_info = replace(file_info, modified_time=fs.last_modified)
+        metadata = replace(metadata, file_info=file_info)
+        self._repository.save(metadata)
 
     def _extract_and_save(self, fs: FileState, result: SyncResult) -> None:
         """Extract metadata for a NEW or MODIFIED file and persist it.

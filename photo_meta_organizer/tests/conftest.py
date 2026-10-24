@@ -32,6 +32,7 @@ from photo_meta_organizer.domain.models import (
     ImageExifData,
     ImageFileInfo,
     ImageMetadata,
+    StoredFile,
 )
 
 # ============================================================================
@@ -422,11 +423,17 @@ class MockImageMetadataRepository:
         for metadata in items:
             self.save(metadata)
 
-    def replace(self, old_hash: str, metadata: ImageMetadata) -> None:
-        """Swap the record stored under ``old_hash`` for ``metadata``."""
-        if old_hash != metadata.file_hash:
-            self.storage.pop(old_hash, None)
-        self.save(metadata)
+    def list_files(self) -> list[StoredFile]:
+        """One File per stored record (this mock keeps one path per hash)."""
+        return [
+            StoredFile(
+                path=m.file_info.path,
+                file_hash=m.file_hash,
+                size_bytes=m.file_info.size_bytes,
+                modified_time=m.file_info.modified_time,
+            )
+            for m in self.storage.values()
+        ]
 
     def count(self) -> int:
         """Return the number of stored records."""

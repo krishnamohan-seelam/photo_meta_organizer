@@ -5,11 +5,6 @@ domain services, orchestrators, and repositories to fulfill
 user-facing operations.
 """
 
-from photo_meta_organizer.application.use_cases.dedupe_paths_use_case import (
-    DedupePathsUseCase,
-    DedupeResult,
-    DuplicatePathGroup,
-)
 from photo_meta_organizer.application.use_cases.index_photos_use_case import (
     IndexPhotosUseCase,
 )
@@ -38,7 +33,4 @@ __all__ = [
     "PaginatedResult",
     "PruneNonImagesUseCase",
     "PruneResult",
-    "DedupePathsUseCase",
-    "DedupeResult",
-    "DuplicatePathGroup",
 ]
