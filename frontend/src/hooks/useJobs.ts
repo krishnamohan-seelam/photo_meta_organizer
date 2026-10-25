@@ -6,6 +6,7 @@ import {
   errorMessage,
   isJobFinished,
   listJobsApi,
+  pauseJobApi,
   resumeJobApi,
   startIndexJobApi,
   startSyncJobApi,
@@ -73,7 +74,7 @@ function useJobMutation(call: (jobId: string) => Promise<Job>, verb: string) {
   })
 }
 
-/** Start, cancel, resume and dismiss jobs. Failures to start (e.g. a 409 because the folder is busy) become error toasts. */
+/** Start, cancel, pause, resume and dismiss jobs. Failures to start (e.g. a 409 because the folder is busy) become error toasts. */
 export function useJobActions() {
   const qc = useQueryClient()
   const showToast = useUiStore((s) => s.showToast)
@@ -87,14 +88,16 @@ export function useJobActions() {
   })
 
   const cancel = useJobMutation(cancelJobApi, 'Cancel')
+  const pause = useJobMutation(pauseJobApi, 'Pause')
   const resume = useJobMutation(resumeJobApi, 'Resume')
   const dismiss = useJobMutation(dismissJobApi, 'Dismiss')
 
   const startJob = useCallback((input: StartJobInput) => start.mutateAsync(input), [start])
   const cancelJob = useCallback((jobId: string) => cancel.mutate(jobId), [cancel])
+  const pauseJob = useCallback((jobId: string) => pause.mutate(jobId), [pause])
   const resumeJob = useCallback((jobId: string) => resume.mutate(jobId), [resume])
   const dismissJob = useCallback((jobId: string) => dismiss.mutate(jobId), [dismiss])
-  return { startJob, isStarting: start.isPending, cancelJob, resumeJob, dismissJob }
+  return { startJob, isStarting: start.isPending, cancelJob, pauseJob, resumeJob, dismissJob }
 }
 
 function finishedNotice(job: Job): { text: string; kind: 'success' | 'error' } {

@@ -584,3 +584,27 @@ class AcceptAboveRequest(BaseModel):
         description="The number the user confirmed. If the suggestions at or above the confidence "
         "number something else now, nothing is accepted (409) so the user can look again.",
     )
+
+
+class KeepAnalysedResponse(ResponseModel):
+    """The "keep the library analysed" setting and what it is doing (ticket 11)."""
+
+    enabled: bool
+    threshold: int = Field(description="Photos waiting above which the user is asked first")
+    pending: int = Field(description="Photos still to analyse")
+    state: Literal[
+        "off",
+        "up_to_date",
+        "waiting_for_model",
+        "busy",
+        "paused",
+        "needs_approval",
+        "waiting_for_idle",
+        "on_battery",
+        "stalled",
+        "ready",
+    ] = Field(description="Why it is or is not analysing right now")
+
+
+class KeepAnalysedRequest(BaseModel):
+    enabled: bool

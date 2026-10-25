@@ -107,6 +107,7 @@ class TestDesktopSettings:
             cache_dir=tmp_path / "thumbnails",
             log_dir=tmp_path / "logs",
             model_dir=tmp_path / "models",
+            ac_power_only=True,  # the desktop app: background analysis waits for AC power
         )
 
     def test_environment_applies_when_no_flag_is_given(self, tmp_path, monkeypatch):

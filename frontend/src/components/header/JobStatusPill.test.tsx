@@ -75,3 +75,31 @@ describe('JobStatusPill', () => {
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
   })
 })
+
+describe('JobStatusPill: pause and the approval prompt (ticket 11)', () => {
+  it('a running job can be paused, which asks the server to pause it', async () => {
+    show([job({ status: 'running', kind: 'analyze', processed: 3, total: 10 })])
+    const spy = answer(job({ status: 'running', kind: 'analyze' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pause job' }))
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    expect((spy.mock.calls[0] as unknown as [string])[0]).toBe('/api/jobs/j1/pause')
+  })
+
+  it('the model download cannot be paused', () => {
+    show([job({ status: 'running', kind: 'model-download' })])
+    expect(screen.queryByRole('button', { name: 'Pause job' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Cancel job' })).toBeTruthy()
+  })
+
+  it('too many photos waiting: the pill says how many and offers to analyse them', async () => {
+    const qc = testQueryClient()
+    qc.setQueryData(jobsKey, [])
+    qc.setQueryData(['analysis', 'keep'], { enabled: true, threshold: 2000, pending: 2500, state: 'needs_approval' })
+    renderWithQuery(<JobStatusPill />, qc)
+    expect(screen.getByText('2,500 photos to analyse')).toBeTruthy()
+    const spy = answer(job({ kind: 'analyze', status: 'running' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Analyse' }))
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    expect((spy.mock.calls[0] as unknown as [string])[0]).toBe('/api/analysis/run')
+  })
+})

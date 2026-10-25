@@ -5,6 +5,7 @@ import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useUiStore } from '../../stores/useUiStore'
 import { formatBytes } from '../../utils/photoFormat'
 import { analysisStep } from '../../utils/analysis'
+import { KeepAnalysedToggle } from './KeepAnalysedToggle'
 
 /**
  * Set up search by meaning: tell the user what is downloaded (size, source, licence) and ask,
@@ -95,6 +96,8 @@ const DialogBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             meaning”. Newly imported photos are picked up the next time you analyse.
           </p>
         )}
+
+        {step.kind !== 'loading' && step.kind !== 'no-runtime' && <KeepAnalysedToggle />}
 
         <div className="dialog-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>

@@ -153,6 +153,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analysis/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Is the library kept analysed automatically?
+         * @description The setting (off by default) and why analysis is or is not running by itself right now.
+         *
+         *     ``needs_approval`` means more photos wait than ``threshold``: show the count and let the
+         *     user start the analysis (``POST /api/analysis/run``) instead of doing it unasked.
+         */
+        get: operations["get_keep_analysed_api_analysis_keep_get"];
+        /**
+         * Turn keeping the library analysed on or off
+         * @description Analysis then starts by itself, unasked, when the model is installed, no more than
+         *     ``threshold`` photos wait, nothing else runs, you have been still for a while and (on the
+         *     desktop app) the computer is plugged in. It is an ordinary job: pause or cancel it from the
+         *     job pill.
+         */
+        put: operations["set_keep_analysed_api_analysis_keep_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analysis/model/download": {
         parameters: {
             query?: never;
@@ -521,6 +551,29 @@ export interface paths {
          *     404 for an unknown job, 409 if it is not interrupted.
          */
         post: operations["dismiss_job_api_jobs__job_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a job
+         * @description Ask a running job to stop and wait. It finishes the file in hand, then shows as
+         *     ``interrupted``, and ``POST /api/jobs/{id}/resume`` carries on where it left off.
+         *
+         *     404 for an unknown job, 409 if it is not running.
+         */
+        post: operations["pause_job_api_jobs__job_id__pause_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1567,6 +1620,35 @@ export interface components {
             /** Total */
             total: number | null;
         };
+        /** KeepAnalysedRequest */
+        KeepAnalysedRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /**
+         * KeepAnalysedResponse
+         * @description The "keep the library analysed" setting and what it is doing (ticket 11).
+         */
+        KeepAnalysedResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Pending
+             * @description Photos still to analyse
+             */
+            pending: number;
+            /**
+             * State
+             * @description Why it is or is not analysing right now
+             * @enum {string}
+             */
+            state: "off" | "up_to_date" | "waiting_for_model" | "busy" | "paused" | "needs_approval" | "waiting_for_idle" | "on_battery" | "stalled" | "ready";
+            /**
+             * Threshold
+             * @description Photos waiting above which the user is asked first
+             */
+            threshold: number;
+        };
         /**
          * LibraryStatsSchema
          * @description Whole-library totals (PMO-27).
@@ -2274,6 +2356,59 @@ export interface operations {
             };
         };
     };
+    get_keep_analysed_api_analysis_keep_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepAnalysedResponse"];
+                };
+            };
+        };
+    };
+    set_keep_analysed_api_analysis_keep_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeepAnalysedRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepAnalysedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_model_api_analysis_model_download_post: {
         parameters: {
             query?: never;
@@ -2774,6 +2909,37 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_job_api_jobs__job_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

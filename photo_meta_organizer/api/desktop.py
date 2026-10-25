@@ -58,6 +58,7 @@ def resolve_settings(args: argparse.Namespace) -> Settings:
         cache_dir=args.cache_dir,
         log_dir=args.log_dir,
         log_to_file=True,
+        ac_power_only=True,
     )
 
 

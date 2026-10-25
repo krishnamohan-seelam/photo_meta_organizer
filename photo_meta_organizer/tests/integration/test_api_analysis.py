@@ -552,3 +552,77 @@ class TestReviewQueue:
             ).json()["total"]
             == 1
         )
+
+
+class TestKeepAnalysed:
+    def test_it_is_off_by_default_and_counts_what_waits(self, api):
+        body = api.client.get("/api/analysis/keep").json()
+        assert body == {"enabled": False, "threshold": 2000, "pending": 3, "state": "off"}
+
+    def test_turning_it_on_waits_for_the_model_and_never_downloads_it(self, api):
+        body = api.client.put("/api/analysis/keep", json={"enabled": True}).json()
+        assert body["enabled"] is True and body["state"] == "waiting_for_model"
+        assert not api.store.is_installed()
+
+    def test_after_a_change_the_app_counts_as_busy_so_it_waits_for_quiet(self, api):
+        _install(api)
+        body = api.client.put("/api/analysis/keep", json={"enabled": True}).json()
+        assert body["state"] == "waiting_for_idle"  # this very request was activity
+
+    def test_everything_else_in_place_it_is_ready_once_the_user_is_still(self, api):
+        _install(api)
+        api.client.put("/api/analysis/keep", json={"enabled": True})
+        api.app.state.services.keep_analysed._activity._last = None  # nobody has done anything
+        assert api.client.get("/api/analysis/keep").json()["state"] == "ready"
+        job_id = api.app.state.services.keep_analysed.tick()
+        job = wait_for_job(api.client, api.client.get(f"/api/jobs/{job_id}").json())
+        assert job["kind"] == "analyze" and job["status"] == "succeeded"
+        assert job["counts"]["analyzed"] == 3
+        assert api.client.get("/api/analysis/keep").json()["state"] == "up_to_date"
+
+    def test_the_setting_survives_a_restart(self, api):
+        api.client.put("/api/analysis/keep", json={"enabled": True})
+        again = TestClient(
+            create_app(settings=api.settings, model_store=api.store, embedder=api.embedder)
+        )
+        assert again.get("/api/analysis/keep").json()["enabled"] is True
+
+    def test_it_asks_when_more_photos_wait_than_the_threshold(self, api):
+        small = Settings(**{**api.settings.__dict__, "keep_analysed_max": 2})
+        app = create_app(settings=small, model_store=api.store, embedder=api.embedder)
+        _install(api)
+        with TestClient(app) as client:
+            client.put("/api/analysis/keep", json={"enabled": True})
+            body = client.get("/api/analysis/keep").json()
+        assert (body["state"], body["pending"], body["threshold"]) == ("needs_approval", 3, 2)
+
+    def test_a_bad_body_is_422(self, api):
+        assert api.client.put("/api/analysis/keep", json={"enabled": "maybe"}).status_code == 422
+
+
+class TestPauseRoute:
+    def test_pausing_a_running_job_leaves_it_interrupted_and_resumable(self, api):
+        import threading
+
+        from photo_meta_organizer.application.jobs import JobOutcome
+
+        started = threading.Event()
+
+        def work(ctx):
+            started.set()
+            ctx.wait_for_cancel(5)
+            return JobOutcome(cancelled=True, message="stopped")
+
+        job = api.app.state.services.jobs.submit("sync", str(api.tmp / "lib"), work)
+        started.wait(5)
+        response = api.client.post(f"/api/jobs/{job.id}/pause")
+        assert response.status_code == 202
+        done = api.app.state.services.jobs.wait(job.id, timeout=5)
+        assert done.status.value == "interrupted" and done.message.startswith("Paused")
+        assert api.client.get(f"/api/jobs/{job.id}").json()["status"] == "interrupted"
+
+    def test_pausing_a_finished_or_unknown_job_is_refused(self, api):
+        _install(api)
+        job = _analyze(api)
+        assert api.client.post(f"/api/jobs/{job['id']}/pause").status_code == 409
+        assert api.client.post("/api/jobs/nope/pause").status_code == 404

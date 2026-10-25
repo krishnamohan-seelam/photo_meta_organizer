@@ -34,6 +34,8 @@ from photo_meta_organizer.api.schemas import (
     AnalyzeRequest,
     FacetCountSchema,
     JobResponse,
+    KeepAnalysedRequest,
+    KeepAnalysedResponse,
     ModelDownloadRequest,
     ResolveAiTagRequest,
     ReviewCountResponse,
@@ -93,6 +95,46 @@ def analysis_status(services: Services = Depends(get_services)) -> AnalysisStatu
         active_job_id=active.id if active else None,
         active_job_kind=active.kind if active else None,
     )
+
+
+def _keep_response(services: Services) -> KeepAnalysedResponse:
+    status = services.keep_analysed.status()
+    return KeepAnalysedResponse(
+        enabled=status.enabled,
+        threshold=status.threshold,
+        pending=status.pending,
+        state=status.state.value,
+    )
+
+
+@analysis_router.get(
+    "/analysis/keep",
+    response_model=KeepAnalysedResponse,
+    summary="Is the library kept analysed automatically?",
+)
+def get_keep_analysed(services: Services = Depends(get_services)) -> KeepAnalysedResponse:
+    """The setting (off by default) and why analysis is or is not running by itself right now.
+
+    ``needs_approval`` means more photos wait than ``threshold``: show the count and let the
+    user start the analysis (``POST /api/analysis/run``) instead of doing it unasked.
+    """
+    return _keep_response(services)
+
+
+@analysis_router.put(
+    "/analysis/keep",
+    response_model=KeepAnalysedResponse,
+    summary="Turn keeping the library analysed on or off",
+)
+def set_keep_analysed(
+    request: KeepAnalysedRequest, services: Services = Depends(get_services)
+) -> KeepAnalysedResponse:
+    """Analysis then starts by itself, unasked, when the model is installed, no more than
+    ``threshold`` photos wait, nothing else runs, you have been still for a while and (on the
+    desktop app) the computer is plugged in. It is an ordinary job: pause or cancel it from the
+    job pill."""
+    services.keep_analysed.set_enabled(request.enabled)
+    return _keep_response(services)
 
 
 @analysis_router.post(

@@ -25,6 +25,7 @@ from photo_meta_organizer.application.interfaces.image_repository import (
 from photo_meta_organizer.application.interfaces.job_store import JobStore
 from photo_meta_organizer.application.interfaces.progress import ProgressSink
 from photo_meta_organizer.application.interfaces.root_store import RootStore
+from photo_meta_organizer.application.interfaces.state_store import StateStore
 from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.application.use_cases.scan_library import ScanLibrary
 from photo_meta_organizer.application.zero_shot_tagger import ZeroShotTagger
@@ -185,6 +186,20 @@ def build_root_store(repository: ImageMetadataRepository) -> RootStore:
     if isinstance(repository, SqliteRepository):
         return SqliteRootStore(repository.connection, repository.lock)
     raise TypeError(f"unsupported repository type for roots: {type(repository)!r}")
+
+
+def build_state_store(repository: ImageMetadataRepository) -> StateStore:
+    """Build the store of small remembered values sharing storage with ``repository``."""
+    from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+        SqliteRepository,
+    )
+    from photo_meta_organizer.infrastructure.repositories.sqlite_state_store import (
+        SqliteStateStore,
+    )
+
+    if isinstance(repository, SqliteRepository):
+        return SqliteStateStore(repository.connection, repository.lock)
+    raise TypeError(f"unsupported repository type for state: {type(repository)!r}")
 
 
 def build_folder_watcher() -> FolderWatcher:

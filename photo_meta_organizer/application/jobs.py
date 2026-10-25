@@ -170,6 +170,7 @@ class JobManager:
             {}
         )  # per job: last delivered, under ``_announce_lock``
         self._announce_lock = threading.Lock()
+        self._paused: set[str] = set()  # jobs asked to pause rather than cancel
         if store is not None:
             store.interrupt_active(INTERRUPTED_MESSAGE)
             for job in reversed(store.load(history)):
@@ -244,6 +245,26 @@ class JobManager:
         self._announce(JOB_FINISHED, stamped)
         return stamped[1]
 
+    def pause(self, job_id: str) -> Job:
+        """Ask a job to stop and wait to be resumed: it ends ``interrupted`` (Resume / Dismiss).
+
+        Cooperative, like cancel: the work finishes what is in hand. Resuming runs it again with
+        its stored parameters, which is cheap because the work skips what is done.
+
+        Raises:
+            KeyError: Unknown job.
+            JobStateError: The job is not running.
+        """
+        with self._lock:
+            job = self._jobs[job_id]
+            if job.status.is_terminal:
+                raise JobStateError(f"Job {job_id} is {job.status.value}, not running.")
+            self._paused.add(job_id)
+            self._cancel_events[job_id].set()
+            stamped = self._stamp(job)
+        self._announce(JOB_PROGRESS, stamped)
+        return stamped[1]
+
     def get(self, job_id: str) -> Job:
         """Snapshot of one job. Raises ``KeyError`` if unknown (or aged out)."""
         with self._lock:
@@ -260,6 +281,7 @@ class JobManager:
             job = self._jobs[job_id]
             asked = not job.status.is_terminal
             if asked:
+                self._paused.discard(job_id)
                 job.cancel_requested = True
                 self._cancel_events[job_id].set()
                 self._save(job)
@@ -345,7 +367,7 @@ class JobManager:
                 job_id,
                 **final,
                 status=self._stopped_status(job_id) if outcome.cancelled else JobStatus.SUCCEEDED,
-                message=outcome.message,
+                message=self._paused_message(job_id, outcome),
                 counts=dict(outcome.counts),
                 errors=self._cap(outcome.errors),
                 finished_at=datetime.now(),
@@ -356,6 +378,12 @@ class JobManager:
                 done = self._done.get(job_id)
             if done is not None:
                 done.set()
+
+    def _paused_message(self, job_id: str, outcome: JobOutcome) -> str:
+        with self._lock:
+            paused = job_id in self._paused
+            self._paused.discard(job_id)
+        return f"Paused. {outcome.message}" if paused and outcome.cancelled else outcome.message
 
     def _stopped_status(self, job_id: str) -> JobStatus:
         with self._lock:

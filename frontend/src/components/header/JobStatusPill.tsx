@@ -1,7 +1,9 @@
 import React from 'react'
-import { X } from 'lucide-react'
+import { Pause, X } from 'lucide-react'
 import type { Job } from '../../types/metadata'
+import { useAnalysisActions } from '../../hooks/useAnalysis'
 import { useJobActions, useJobs } from '../../hooks/useJobs'
+import { useKeepAnalysed } from '../../hooks/useKeepAnalysed'
 import { useUiStore } from '../../stores/useUiStore'
 import { formatBytes } from '../../utils/photoFormat'
 
@@ -26,7 +28,9 @@ const NOUNS: Record<string, string> = { sync: 'Sync', analyze: 'Analysis', 'mode
  */
 export const JobStatusPill: React.FC = () => {
   const { activeJob, interruptedJob } = useJobs()
-  const { cancelJob, resumeJob, dismissJob } = useJobActions()
+  const { cancelJob, pauseJob, resumeJob, dismissJob } = useJobActions()
+  const { data: keep } = useKeepAnalysed()
+  const { startAnalysis, isStarting } = useAnalysisActions()
   const showToast = useUiStore((s) => s.showToast)
 
   if (!activeJob && interruptedJob) {
@@ -42,6 +46,19 @@ export const JobStatusPill: React.FC = () => {
         </button>
         <button type="button" className="btn-reset job-pill-action" onClick={() => dismissJob(job.id)}>
           Dismiss
+        </button>
+      </div>
+    )
+  }
+
+  if (!activeJob && keep?.state === 'needs_approval') {
+    // Too many photos wait for it to start unasked (ticket 11): say how many, and let the user decide.
+    return (
+      <div className="job-pill" role="status">
+        <span className="job-pill-dot" aria-hidden="true" />
+        <span className="job-pill-label">{`${keep.pending.toLocaleString()} photos to analyse`}</span>
+        <button type="button" className="btn-reset job-pill-action" disabled={isStarting} onClick={() => void startAnalysis()}>
+          Analyse
         </button>
       </div>
     )
@@ -86,6 +103,18 @@ export const JobStatusPill: React.FC = () => {
           />
         </span>
       </button>
+      {job.kind !== 'model-download' && (
+        <button
+          type="button"
+          className="btn-reset job-pill-cancel"
+          onClick={() => pauseJob(job.id)}
+          disabled={job.cancel_requested}
+          aria-label="Pause job"
+          title="Stop after the files in progress and wait; Resume carries on where it left off"
+        >
+          <Pause size={13} />
+        </button>
+      )}
       <button
         type="button"
         className="btn-reset job-pill-cancel"

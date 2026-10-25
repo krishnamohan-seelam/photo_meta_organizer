@@ -1518,6 +1518,63 @@
         "title": "JobResponse",
         "type": "object"
       },
+      "KeepAnalysedRequest": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "KeepAnalysedRequest",
+        "type": "object"
+      },
+      "KeepAnalysedResponse": {
+        "description": "The \"keep the library analysed\" setting and what it is doing (ticket 11).",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "pending": {
+            "description": "Photos still to analyse",
+            "title": "Pending",
+            "type": "integer"
+          },
+          "state": {
+            "description": "Why it is or is not analysing right now",
+            "enum": [
+              "off",
+              "up_to_date",
+              "waiting_for_model",
+              "busy",
+              "paused",
+              "needs_approval",
+              "waiting_for_idle",
+              "on_battery",
+              "stalled",
+              "ready"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "threshold": {
+            "description": "Photos waiting above which the user is asked first",
+            "title": "Threshold",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "threshold",
+          "pending",
+          "state"
+        ],
+        "title": "KeepAnalysedResponse",
+        "type": "object"
+      },
       "LibraryStatsSchema": {
         "description": "Whole-library totals (PMO-27).",
         "properties": {
@@ -3002,6 +3059,68 @@
         ]
       }
     },
+    "/api/analysis/keep": {
+      "get": {
+        "description": "The setting (off by default) and why analysis is or is not running by itself right now.\n\n``needs_approval`` means more photos wait than ``threshold``: show the count and let the\nuser start the analysis (``POST /api/analysis/run``) instead of doing it unasked.",
+        "operationId": "get_keep_analysed_api_analysis_keep_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeepAnalysedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Is the library kept analysed automatically?",
+        "tags": [
+          "ai"
+        ]
+      },
+      "put": {
+        "description": "Analysis then starts by itself, unasked, when the model is installed, no more than\n``threshold`` photos wait, nothing else runs, you have been still for a while and (on the\ndesktop app) the computer is plugged in. It is an ordinary job: pause or cancel it from the\njob pill.",
+        "operationId": "set_keep_analysed_api_analysis_keep_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeepAnalysedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeepAnalysedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Turn keeping the library analysed on or off",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/analysis/model/download": {
       "post": {
         "description": "Start the one-time model download as a job (progress is in bytes).\n\nThe body must say ``{\"accept\": true}``: the UI sends it only after telling the user what is\nfetched (size, source, licence). Only the model is downloaded; no photo data is sent.",
@@ -3669,6 +3788,49 @@
           }
         },
         "summary": "Dismiss a job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/pause": {
+      "post": {
+        "description": "Ask a running job to stop and wait. It finishes the file in hand, then shows as\n``interrupted``, and ``POST /api/jobs/{id}/resume`` carries on where it left off.\n\n404 for an unknown job, 409 if it is not running.",
+        "operationId": "pause_job_api_jobs__job_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause a job",
         "tags": [
           "jobs"
         ]

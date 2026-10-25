@@ -20,6 +20,7 @@ Environment variables:
                        view draws the bundled world outline and contacts no one.
     PMO_MAP_TILES_ATTRIBUTION  credit line shown on the map for that tile server
     PMO_SCAN_ON_START  0/false/no: do not rescan the stored roots when the API starts
+    PMO_KEEP_ANALYSED_MAX  photos waiting above which "keep analysed" asks first (default 2000)
     PMO_WATCH_FOLDERS  0/false/no: do not watch the stored roots for new and changed photos
     PMO_API_TOKEN     per-launch token the desktop shell sets; when present the API
                        requires it as a cookie (api/auth.py). Never logged or repr'd.
@@ -129,6 +130,8 @@ class Settings:
     # ... and keeps them up to date while running. Off by default here so that settings built by
     # hand (tests) start no file watchers; ``from_env`` turns it on unless PMO_WATCH_FOLDERS=0.
     watch_folders: bool = False
+    keep_analysed_max: int = 2000  # more photos waiting than this: ask before analysing
+    ac_power_only: bool = False  # background analysis waits for AC power (the desktop app)
 
     @property
     def thumbnail_dir(self) -> Path:
@@ -159,6 +162,7 @@ class Settings:
         map_tiles_attribution: str | None = None,
         scan_on_start: bool | None = None,
         watch_folders: bool | None = None,
+        ac_power_only: bool = False,
     ) -> "Settings":
         """Build settings from explicit values, then ``env`` (default ``os.environ``).
 
@@ -203,6 +207,8 @@ class Settings:
             map_tiles_attribution=(
                 map_tiles_attribution or env.get("PMO_MAP_TILES_ATTRIBUTION", "").strip() or None
             ),
+            keep_analysed_max=_env_int(env, "PMO_KEEP_ANALYSED_MAX") or 2000,
+            ac_power_only=ac_power_only,
             watch_folders=(
                 watch_folders
                 if watch_folders is not None

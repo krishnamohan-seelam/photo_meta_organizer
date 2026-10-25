@@ -14,6 +14,7 @@ import type {
   GeoClustersResponse,
   IndexFolderRequest,
   Job,
+  KeepAnalysed,
   PaginatedPhotosResponse,
   PatchPhotoRequest,
   PhotoId,
@@ -209,6 +210,11 @@ export function cancelJobApi(jobId: string): Promise<Job> {
   return request(`/jobs/${jobId}/cancel`, 'Cancelling the job', { method: 'POST' })
 }
 
+/** Ask a running job to stop and wait: it ends interrupted, and Resume carries on. 409 if it is not running. */
+export function pauseJobApi(jobId: string): Promise<Job> {
+  return request(`/jobs/${jobId}/pause`, 'Pausing the job', { method: 'POST' })
+}
+
 /** Run an interrupted job again with its original options. 409 if its folder is busy. */
 export function resumeJobApi(jobId: string): Promise<Job> {
   return request(`/jobs/${jobId}/resume`, 'Resuming the job', { method: 'POST' })
@@ -267,6 +273,15 @@ export function fetchAnalysisStatusApi(): Promise<AnalysisStatus> {
 /** Start the model download. The body is the user's explicit consent; the server refuses without it. */
 export function startModelDownloadApi(): Promise<Job> {
   return request('/analysis/model/download', 'Downloading the AI model', jsonInit('POST', { accept: true }))
+}
+
+/** Whether new photos are analysed automatically (off by default), and why it is or is not running now. */
+export function fetchKeepAnalysedApi(): Promise<KeepAnalysed> {
+  return request('/analysis/keep', 'Checking automatic analysis')
+}
+
+export function setKeepAnalysedApi(enabled: boolean): Promise<KeepAnalysed> {
+  return request('/analysis/keep', 'Saving the setting', jsonInit('PUT', { enabled }))
 }
 
 export function startAnalysisApi(options: { reanalyze?: boolean } = {}): Promise<Job> {

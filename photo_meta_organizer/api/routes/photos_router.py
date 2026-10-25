@@ -721,6 +721,23 @@ def cancel_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobR
 
 
 @jobs_router.post(
+    "/{job_id}/pause", response_model=JobResponse, status_code=202, summary="Pause a job"
+)
+def pause_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobResponse:
+    """Ask a running job to stop and wait. It finishes the file in hand, then shows as
+    ``interrupted``, and ``POST /api/jobs/{id}/resume`` carries on where it left off.
+
+    404 for an unknown job, 409 if it is not running.
+    """
+    try:
+        return job_response(jobs.pause(job_id))
+    except KeyError:
+        raise _job_not_found(job_id) from None
+    except JobStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@jobs_router.post(
     "/{job_id}/resume", response_model=JobResponse, status_code=202, summary="Resume a job"
 )
 def resume_job(job_id: str, services: Services = Depends(get_services)) -> JobResponse:

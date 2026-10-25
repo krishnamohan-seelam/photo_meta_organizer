@@ -22,6 +22,7 @@ from photo_meta_organizer.application.interfaces.image_repository import (
 from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
 from photo_meta_organizer.application.interfaces.root_store import RootStore
 from photo_meta_organizer.application.jobs import JobManager
+from photo_meta_organizer.application.keep_analysed import KeepAnalysed
 from photo_meta_organizer.application.root_watcher import RootWatcher
 from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.application.zero_shot_tagger import ZeroShotTagger
@@ -38,6 +39,7 @@ class Services:
     events: EventBus
     roots: RootStore
     root_watcher: RootWatcher | None  # None when folder watching is off
+    keep_analysed: KeepAnalysed
     thumbnails: ThumbnailService
     places: PlaceNamer
     analysis: AnalysisRepository

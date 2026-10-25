@@ -36,7 +36,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from photo_meta_organizer import __version__
 from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticated
 from photo_meta_organizer.api.dependencies import Services
-from photo_meta_organizer.api.job_factory import scan_work_factory
+from photo_meta_organizer.api.job_factory import scan_work_factory, work_for
 from photo_meta_organizer.api.routes.analysis_router import ai_tags_router, analysis_router
 from photo_meta_organizer.api.routes.config_router import config_router
 from photo_meta_organizer.api.routes.duplicates_router import duplicates_router, files_router
@@ -56,6 +56,7 @@ from photo_meta_organizer.api.routes.photos_router import (
 )
 from photo_meta_organizer.api.routes.roots_router import roots_router
 from photo_meta_organizer.application import composition
+from photo_meta_organizer.application.activity import ActivityTracker
 from photo_meta_organizer.application.composition import (
     build_collection_repository,
     build_repository,
@@ -63,6 +64,7 @@ from photo_meta_organizer.application.composition import (
 from photo_meta_organizer.application.events import LIBRARY_CHANGED, EventBus
 from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.jobs import JobManager
+from photo_meta_organizer.application.keep_analysed import ANALYZE_PARAMS, KeepAnalysed
 from photo_meta_organizer.application.root_watcher import RootWatcher
 from photo_meta_organizer.application.roots import scan_roots
 from photo_meta_organizer.application.settings import (  # noqa: F401 (re-exported)
@@ -70,9 +72,14 @@ from photo_meta_organizer.application.settings import (  # noqa: F401 (re-export
     DEFAULT_CORS_ORIGINS,
     Settings,
 )
+from photo_meta_organizer.infrastructure import power
+from photo_meta_organizer.infrastructure.analysis import runtime
 from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
 from photo_meta_organizer.infrastructure.geo.offline_place_namer import OfflinePlaceNamer
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
+
+# Requests that are the app talking to itself, not the user doing something.
+_NOT_ACTIVITY = frozenset({"/api/roots/recheck"})
 
 
 def default_frontend_dist() -> Path:
@@ -127,6 +134,7 @@ def create_app(
     # Built below, once the library is open: the job history lives in it (ADR-003 R5a).
     job_manager: JobManager | None = None
     bus = EventBus()
+    activity = ActivityTracker()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -136,7 +144,9 @@ def create_app(
             scan_roots(services.roots, services.jobs, scan_work_factory(services))
         if services.root_watcher is not None:
             services.root_watcher.start()
+        services.keep_analysed.start()
         yield
+        services.keep_analysed.stop()
         if services.root_watcher is not None:
             services.root_watcher.stop()
         # Stop background jobs cleanly so none is killed mid-write at exit; they are
@@ -176,6 +186,17 @@ def create_app(
     )
 
     @app.middleware("http")
+    async def track_activity(request: Request, call_next: Callable[..., Any]) -> Any:
+        """Note that someone is using the app, so background analysis waits for quiet (ticket 11).
+
+        Only requests that change something count; reading (thumbnails, polling) does not, and
+        neither do the app's own housekeeping calls.
+        """
+        if request.method != "GET" and request.url.path not in _NOT_ACTIVITY:
+            activity.touch()
+        return await call_next(request)
+
+    @app.middleware("http")
     async def announce_library_changes(request: Request, call_next: Callable[..., Any]) -> Any:
         """Tell event listeners when a request has edited the library (ADR-003 R5b)."""
         response = await call_next(request)
@@ -205,6 +226,21 @@ def create_app(
     )
     store = model_store or composition.build_model_store(settings)
     ai_embedder = embedder or composition.build_embedder(store)
+    keep_analysed = KeepAnalysed(
+        composition.build_state_store(repository),
+        repository,
+        composition.build_analysis_repository(repository),
+        job_manager,
+        model_id=ai_embedder.model_id,
+        folder=str(settings.models_dir),
+        make_work=lambda: work_for(
+            "analyze", str(settings.models_dir), ANALYZE_PARAMS, app.state.services
+        ),
+        model_ready=lambda: runtime.ai_runtime_installed() and store.is_installed(),
+        activity=activity,
+        on_battery=power.on_battery if settings.ac_power_only else None,
+        threshold=settings.keep_analysed_max,
+    )
     app.state.services = Services(
         settings=settings,
         repository=repository,
@@ -213,6 +249,7 @@ def create_app(
         events=bus,
         roots=roots,
         root_watcher=root_watcher,
+        keep_analysed=keep_analysed,
         thumbnails=ThumbnailService(
             str(settings.thumbnail_dir),
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
