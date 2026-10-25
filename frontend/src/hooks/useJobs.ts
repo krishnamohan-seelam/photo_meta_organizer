@@ -28,20 +28,30 @@ export interface StartJobInput {
   sync?: SyncOptions
 }
 
-function upsert(jobs: Job[] | undefined, job: Job): Job[] {
-  return [job, ...(jobs ?? []).filter((j) => j.id !== job.id)]
+/** Whether the event stream (`useEventStream`) is connected. While it is not, running jobs are polled. */
+export const eventsLiveKey = ['events', 'live'] as const
+
+/** `job` in place of the cached copy with its id, or first in the list when it is new. */
+export function upsertJob(jobs: Job[] | undefined, job: Job): Job[] {
+  const list = jobs ?? []
+  return list.some((j) => j.id === job.id) ? list.map((j) => (j.id === job.id ? job : j)) : [job, ...list]
 }
 
 /**
- * The job list, polled only while a job is running. Because it reads `GET /api/jobs`,
- * a reload (or a second window) picks up a job that is already running.
+ * The job list. The event stream pushes changes; only while it is down is a running job
+ * polled. Because it reads `GET /api/jobs`, a reload (or a second window) picks up a job
+ * that is already running.
  */
 export function useJobs() {
+  const qc = useQueryClient()
   const { data } = useQuery({
     queryKey: jobsKey,
     queryFn: listJobsApi,
     enabled: !isDemoMode(),
-    refetchInterval: (query) => (query.state.data?.some((j) => !isJobFinished(j)) ? POLL_MS : false),
+    refetchInterval: (query) => {
+      if (qc.getQueryData(eventsLiveKey) === true) return false
+      return query.state.data?.some((j) => !isJobFinished(j)) ? POLL_MS : false
+    },
   })
   const jobs = data ?? []
   return {
@@ -58,7 +68,7 @@ function useJobMutation(call: (jobId: string) => Promise<Job>, verb: string) {
   const showToast = useUiStore((s) => s.showToast)
   return useMutation({
     mutationFn: call,
-    onSuccess: (job) => qc.setQueryData<Job[]>(jobsKey, (jobs) => upsert(jobs, job)),
+    onSuccess: (job) => qc.setQueryData<Job[]>(jobsKey, (jobs) => upsertJob(jobs, job)),
     onError: (err) => showToast(`${verb} failed: ${errorMessage(err)}`, 'error'),
   })
 }
@@ -71,7 +81,7 @@ export function useJobActions() {
   const start = useMutation({
     mutationFn: ({ kind, folderPath, sync }: StartJobInput) =>
       kind === 'index' ? startIndexJobApi(folderPath) : startSyncJobApi(folderPath, sync),
-    onSuccess: (job) => qc.setQueryData<Job[]>(jobsKey, (jobs) => upsert(jobs, job)),
+    onSuccess: (job) => qc.setQueryData<Job[]>(jobsKey, (jobs) => upsertJob(jobs, job)),
     onError: (err, { kind }) =>
       showToast(`${kind === 'index' ? 'Indexing' : 'Sync'} could not start: ${errorMessage(err)}`, 'error'),
   })

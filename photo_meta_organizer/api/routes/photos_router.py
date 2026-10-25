@@ -566,7 +566,7 @@ def _search_query(request: SearchRequest) -> SearchPhotosQuery:
     )
 
 
-def _job_response(job: Job) -> JobResponse:
+def job_response(job: Job) -> JobResponse:
     return JobResponse(
         id=job.id,
         kind=job.kind,
@@ -605,7 +605,7 @@ def _submit(
 ) -> JobResponse:
     """Start a job, storing ``params`` so it can be resumed (409 if its folder is busy)."""
     try:
-        return _job_response(jobs.submit(kind, folder_path, work, params=params))
+        return job_response(jobs.submit(kind, folder_path, work, params=params))
     except JobConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -669,14 +669,14 @@ def sync_directory(
 def list_jobs(jobs: JobManager = Depends(get_job_manager)) -> list[JobResponse]:
     """Recent background jobs, newest first. They are stored in the library, so they
     survive a restart; one that was running then is listed as ``interrupted``."""
-    return [_job_response(j) for j in jobs.list()]
+    return [job_response(j) for j in jobs.list()]
 
 
 @jobs_router.get("/{job_id}", response_model=JobResponse, summary="Get a job")
 def get_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobResponse:
     """Progress and, once finished, the result of one job."""
     try:
-        return _job_response(jobs.get(job_id))
+        return job_response(jobs.get(job_id))
     except KeyError:
         raise _job_not_found(job_id) from None
 
@@ -690,7 +690,7 @@ def cancel_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobR
     Cancelling a job that already finished is a no-op that returns it unchanged.
     """
     try:
-        return _job_response(jobs.cancel(job_id))
+        return job_response(jobs.cancel(job_id))
     except KeyError:
         raise _job_not_found(job_id) from None
 
@@ -711,7 +711,7 @@ def resume_job(job_id: str, services: Services = Depends(get_services)) -> JobRe
         if job.kind in ("index", "sync"):
             _existing_directory(job.folder_path)
         work = work_for(job.kind, job.folder_path, job.params, services)
-        return _job_response(services.jobs.resume(job_id, work))
+        return job_response(services.jobs.resume(job_id, work))
     except KeyError:
         raise _job_not_found(job_id) from None
     except (JobStateError, JobConflictError) as exc:
@@ -725,7 +725,7 @@ def dismiss_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> Job
     404 for an unknown job, 409 if it is not interrupted.
     """
     try:
-        return _job_response(jobs.dismiss(job_id))
+        return job_response(jobs.dismiss(job_id))
     except KeyError:
         raise _job_not_found(job_id) from None
     except JobStateError as exc:

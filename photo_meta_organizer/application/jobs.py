@@ -19,6 +19,8 @@ Rules:
       does one stopped by ``shutdown()``. An interrupted job is never restarted on
       its own: the user resumes it (``resume``, with work rebuilt from its
       ``params``) or dismisses it (``dismiss``).
+    * A change worth telling the UI about (a new job, progress at most four times a second,
+      a job ending) goes to the ``on_event`` callback, outside the manager's lock.
 """
 
 import builtins
@@ -33,12 +35,17 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from photo_meta_organizer.application.events import JOB_FINISHED, JOB_PROGRESS
+
 if TYPE_CHECKING:
     from photo_meta_organizer.application.interfaces.job_store import JobStore
 
 INTERRUPTED_MESSAGE = "Interrupted: the app stopped while this job was running."
 DISMISSED_MESSAGE = "Interrupted, then dismissed."
 PROGRESS_SAVE_SECONDS = 1.0  # progress reaches the store at most this often
+PROGRESS_EVENT_SECONDS = 0.25  # ... and the event callback at most this often
+
+JobEventHandler = Callable[[str, "Job"], None]  # (events.JOB_PROGRESS | JOB_FINISHED, snapshot)
 
 
 class JobStatus(StrEnum):
@@ -139,9 +146,14 @@ class JobManager:
     """Runs jobs on background threads and keeps their recent history."""
 
     def __init__(
-        self, max_errors: int = 100, history: int = 50, store: "JobStore | None" = None
+        self,
+        max_errors: int = 100,
+        history: int = 50,
+        store: "JobStore | None" = None,
+        on_event: JobEventHandler | None = None,
     ) -> None:
         self._max_errors = max_errors
+        self._on_event = on_event
         self._history = history
         self._store = store
         self._lock = threading.Lock()
@@ -150,6 +162,7 @@ class JobManager:
         self._threads: dict[str, threading.Thread] = {}
         self._done: dict[str, threading.Event] = {}
         self._saved_at: dict[str, float] = {}
+        self._announced_at: dict[str, float] = {}
         if store is not None:
             store.interrupt_active(INTERRUPTED_MESSAGE)
             for job in reversed(store.load(history)):
@@ -177,6 +190,7 @@ class JobManager:
             thread = self._prepare(job, work)
             self._trim_history()
             snapshot = copy.deepcopy(job)
+        self._announce(JOB_PROGRESS, snapshot)
         thread.start()
         return snapshot
 
@@ -202,6 +216,7 @@ class JobManager:
             self._jobs[job_id] = fresh
             thread = self._prepare(fresh, work)
             snapshot = copy.deepcopy(fresh)
+        self._announce(JOB_PROGRESS, snapshot)
         thread.start()
         return snapshot
 
@@ -218,7 +233,9 @@ class JobManager:
             job.message = DISMISSED_MESSAGE
             job.finished_at = datetime.now()
             self._save(job)
-            return copy.deepcopy(job)
+            snapshot = copy.deepcopy(job)
+        self._announce(JOB_FINISHED, snapshot)
+        return snapshot
 
     def get(self, job_id: str) -> Job:
         """Snapshot of one job. Raises ``KeyError`` if unknown (or aged out)."""
@@ -234,11 +251,15 @@ class JobManager:
         """Ask a job to stop. A finished job is returned unchanged."""
         with self._lock:
             job = self._jobs[job_id]
-            if not job.status.is_terminal:
+            asked = not job.status.is_terminal
+            if asked:
                 job.cancel_requested = True
                 self._cancel_events[job_id].set()
                 self._save(job)
-            return copy.deepcopy(job)
+            snapshot = copy.deepcopy(job)
+        if asked:
+            self._announce(JOB_PROGRESS, snapshot)
+        return snapshot
 
     def wait(self, job_id: str, timeout: float | None = None) -> Job:
         """Block until the job finishes (or ``timeout``), then return its snapshot."""
@@ -343,15 +364,28 @@ class JobManager:
 
     def _update(self, job_id: str, **changes: object) -> None:
         progress_only = changes.keys() <= {"total", "processed", "failed_count"}
+        now = time.monotonic()
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
                 return
             for name, value in changes.items():
                 setattr(job, name, value)
-            saved = self._saved_at.get(job_id, 0.0)
-            if not progress_only or time.monotonic() - saved >= PROGRESS_SAVE_SECONDS:
+            if not progress_only or now - self._saved_at.get(job_id, 0.0) >= PROGRESS_SAVE_SECONDS:
                 self._save(job)
+            finished = job.status.is_terminal
+            due = now - self._announced_at.get(job_id, 0.0) >= PROGRESS_EVENT_SECONDS
+            announce = self._on_event is not None and (finished or not progress_only or due)
+            snapshot = copy.deepcopy(job) if announce else None
+        if snapshot is not None:
+            self._announce(JOB_FINISHED if finished else JOB_PROGRESS, snapshot)
+
+    def _announce(self, event_type: str, job: Job) -> None:
+        """Tell ``on_event`` about ``job`` (no lock held: the callback may take its own)."""
+        if self._on_event is None:
+            return
+        self._announced_at[job.id] = time.monotonic()
+        self._on_event(event_type, job)
 
     def _save(self, job: Job) -> None:
         """Write the job through to the store, if there is one (lock held)."""
@@ -379,5 +413,6 @@ class JobManager:
             self._cancel_events.pop(jid, None)
             self._done.pop(jid, None)
             self._saved_at.pop(jid, None)
+            self._announced_at.pop(jid, None)
         if dropped and self._store is not None:
             self._store.delete(dropped)

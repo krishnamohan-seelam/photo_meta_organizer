@@ -38,6 +38,11 @@ from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticate
 from photo_meta_organizer.api.dependencies import Services
 from photo_meta_organizer.api.routes.analysis_router import ai_tags_router, analysis_router
 from photo_meta_organizer.api.routes.config_router import config_router
+from photo_meta_organizer.api.routes.events_router import (
+    changes_library,
+    events_router,
+    job_event_handler,
+)
 from photo_meta_organizer.api.routes.export_router import export_router
 from photo_meta_organizer.api.routes.photos_router import (
     collections_router,
@@ -52,6 +57,7 @@ from photo_meta_organizer.application.composition import (
     build_collection_repository,
     build_repository,
 )
+from photo_meta_organizer.application.events import LIBRARY_CHANGED, EventBus
 from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.settings import (  # noqa: F401 (re-exported)
@@ -115,6 +121,7 @@ def create_app(
 
     # Built below, once the library is open: the job history lives in it (ADR-003 R5a).
     job_manager: JobManager | None = None
+    bus = EventBus()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -123,6 +130,7 @@ def create_app(
         # stored as interrupted and offered for resuming next time.
         if job_manager is not None:
             job_manager.shutdown()
+        bus.close()  # release the event streams so the server can stop
 
     app = FastAPI(
         lifespan=lifespan,
@@ -154,13 +162,23 @@ def create_app(
         allowed_hosts=list(settings.allowed_hosts),
     )
 
+    @app.middleware("http")
+    async def announce_library_changes(request: Request, call_next: Callable[..., Any]) -> Any:
+        """Tell event listeners when a request has edited the library (ADR-003 R5b)."""
+        response = await call_next(request)
+        if changes_library(request.method, request.url.path, response.status_code):
+            bus.publish(LIBRARY_CHANGED, {"reason": "edit"})
+        return response
+
     # The composition root: build the services once; routes reach them through
     # api.dependencies (typed as the application Protocols).
     db = str(settings.db_path)
     if db != ":memory:":
         settings.db_path.parent.mkdir(parents=True, exist_ok=True)
     repository = build_repository(db)
-    job_manager = JobManager(store=composition.build_job_store(repository))
+    job_manager = JobManager(
+        store=composition.build_job_store(repository), on_event=job_event_handler(bus)
+    )
     store = model_store or composition.build_model_store(settings)
     ai_embedder = embedder or composition.build_embedder(store)
     app.state.services = Services(
@@ -168,6 +186,7 @@ def create_app(
         repository=repository,
         collections=build_collection_repository(repository),
         jobs=job_manager,
+        events=bus,
         thumbnails=ThumbnailService(
             str(settings.thumbnail_dir),
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
@@ -186,6 +205,7 @@ def create_app(
     app.include_router(index_router)
     app.include_router(sync_router)
     app.include_router(jobs_router)
+    app.include_router(events_router)
     app.include_router(export_router)
     app.include_router(config_router)
     app.include_router(analysis_router)

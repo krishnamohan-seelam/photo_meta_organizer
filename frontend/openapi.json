@@ -2580,6 +2580,52 @@
         ]
       }
     },
+    "/api/events": {
+      "get": {
+        "description": "Server-sent events: ``job_progress``, ``job_finished``, ``library_changed`` and\n``resync``, each with an increasing ``id``.\n\nReconnect with ``Last-Event-ID`` to be replayed what you missed (the last 200 events are\nkept). If you were away longer, or the server restarted, you get one ``resync`` event:\nreload the photos, facets and jobs instead. Job events carry the job as\n``GET /api/jobs/{id}`` shows it.",
+        "operationId": "stream_events_api_events_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream job progress and library changes",
+        "tags": [
+          "events"
+        ]
+      }
+    },
     "/api/export/json": {
       "post": {
         "description": "Metadata of the selected photos, or of the whole library when none are given.",

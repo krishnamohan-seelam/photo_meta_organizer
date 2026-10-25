@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
+from photo_meta_organizer.application.events import EventBus
 from photo_meta_organizer.application.interfaces.analysis_repository import AnalysisRepository
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
@@ -32,6 +33,7 @@ class Services:
     repository: ImageMetadataRepository
     collections: CollectionRepository
     jobs: JobManager
+    events: EventBus
     thumbnails: ThumbnailService
     places: PlaceNamer
     analysis: AnalysisRepository
@@ -57,6 +59,10 @@ def get_collection_repository(request: Request) -> CollectionRepository:
 
 def get_job_manager(request: Request) -> JobManager:
     return get_services(request).jobs
+
+
+def get_event_bus(request: Request) -> EventBus:
+    return get_services(request).events
 
 
 def get_thumbnail_service(request: Request) -> ThumbnailService:

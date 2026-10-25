@@ -173,6 +173,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream job progress and library changes
+         * @description Server-sent events: ``job_progress``, ``job_finished``, ``library_changed`` and
+         *     ``resync``, each with an increasing ``id``.
+         *
+         *     Reconnect with ``Last-Event-ID`` to be replayed what you missed (the last 200 events are
+         *     kept). If you were away longer, or the server restarted, you get one ``resync`` event:
+         *     reload the photos, facets and jobs instead. Job events carry the job as
+         *     ``GET /api/jobs/{id}`` shows it.
+         */
+        get: operations["stream_events_api_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/json": {
         parameters: {
             query?: never;
@@ -1819,6 +1845,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppConfigResponse"];
+                };
+            };
+        };
+    };
+    stream_events_api_events_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "last-event-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
