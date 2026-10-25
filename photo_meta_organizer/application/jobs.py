@@ -20,7 +20,9 @@ Rules:
       its own: the user resumes it (``resume``, with work rebuilt from its
       ``params``) or dismisses it (``dismiss``).
     * A change worth telling the UI about (a new job, progress at most four times a second,
-      a job ending) goes to the ``on_event`` callback, outside the manager's lock.
+      a job ending) goes to the ``on_event`` callback, outside the manager's lock. Each change
+      is numbered when it happens and a numbered change is dropped if a later one has already
+      been delivered, so the last event a listener gets for a job is always its latest state.
 """
 
 import builtins
@@ -163,6 +165,11 @@ class JobManager:
         self._done: dict[str, threading.Event] = {}
         self._saved_at: dict[str, float] = {}
         self._announced_at: dict[str, float] = {}
+        self._event_seq: dict[str, int] = {}  # per job: numbers changes, under ``_lock``
+        self._published_seq: dict[str, int] = (
+            {}
+        )  # per job: last delivered, under ``_announce_lock``
+        self._announce_lock = threading.Lock()
         if store is not None:
             store.interrupt_active(INTERRUPTED_MESSAGE)
             for job in reversed(store.load(history)):
@@ -189,10 +196,10 @@ class JobManager:
             self._jobs[job.id] = job
             thread = self._prepare(job, work)
             self._trim_history()
-            snapshot = copy.deepcopy(job)
-        self._announce(JOB_PROGRESS, snapshot)
+            stamped = self._stamp(job)
+        self._announce(JOB_PROGRESS, stamped)
         thread.start()
-        return snapshot
+        return stamped[1]
 
     def resume(self, job_id: str, work: Work) -> Job:
         """Run an interrupted job again, under the same id, with ``work`` rebuilt from its
@@ -215,10 +222,10 @@ class JobManager:
             )
             self._jobs[job_id] = fresh
             thread = self._prepare(fresh, work)
-            snapshot = copy.deepcopy(fresh)
-        self._announce(JOB_PROGRESS, snapshot)
+            stamped = self._stamp(fresh)
+        self._announce(JOB_PROGRESS, stamped)
         thread.start()
-        return snapshot
+        return stamped[1]
 
     def dismiss(self, job_id: str) -> Job:
         """Give up on an interrupted job: it ends ``cancelled`` and is not offered again.
@@ -233,9 +240,9 @@ class JobManager:
             job.message = DISMISSED_MESSAGE
             job.finished_at = datetime.now()
             self._save(job)
-            snapshot = copy.deepcopy(job)
-        self._announce(JOB_FINISHED, snapshot)
-        return snapshot
+            stamped = self._stamp(job)
+        self._announce(JOB_FINISHED, stamped)
+        return stamped[1]
 
     def get(self, job_id: str) -> Job:
         """Snapshot of one job. Raises ``KeyError`` if unknown (or aged out)."""
@@ -256,10 +263,10 @@ class JobManager:
                 job.cancel_requested = True
                 self._cancel_events[job_id].set()
                 self._save(job)
-            snapshot = copy.deepcopy(job)
+            stamped = self._stamp(job)
         if asked:
-            self._announce(JOB_PROGRESS, snapshot)
-        return snapshot
+            self._announce(JOB_PROGRESS, stamped)
+        return stamped[1]
 
     def wait(self, job_id: str, timeout: float | None = None) -> Job:
         """Block until the job finishes (or ``timeout``), then return its snapshot."""
@@ -376,16 +383,32 @@ class JobManager:
             finished = job.status.is_terminal
             due = now - self._announced_at.get(job_id, 0.0) >= PROGRESS_EVENT_SECONDS
             announce = self._on_event is not None and (finished or not progress_only or due)
-            snapshot = copy.deepcopy(job) if announce else None
-        if snapshot is not None:
-            self._announce(JOB_FINISHED if finished else JOB_PROGRESS, snapshot)
+            stamped = self._stamp(job) if announce else None
+        if stamped is not None:
+            self._announce(JOB_FINISHED if finished else JOB_PROGRESS, stamped)
 
-    def _announce(self, event_type: str, job: Job) -> None:
-        """Tell ``on_event`` about ``job`` (no lock held: the callback may take its own)."""
+    def _stamp(self, job: Job) -> tuple[int, Job]:
+        """A snapshot of ``job`` numbered in the order its changes happened (lock held)."""
+        number = self._event_seq.get(job.id, 0) + 1
+        self._event_seq[job.id] = number
+        return number, copy.deepcopy(job)
+
+    def _announce(self, event_type: str, stamped: tuple[int, Job]) -> None:
+        """Tell ``on_event`` about a numbered change, unless a later one was delivered first.
+
+        Called with the manager's lock released, so two threads can arrive out of order (a
+        cancel and the job finishing); the number settles it. The callback runs under
+        ``_announce_lock`` to keep deliveries in order, and must not call back into the manager.
+        """
         if self._on_event is None:
             return
-        self._announced_at[job.id] = time.monotonic()
-        self._on_event(event_type, job)
+        number, job = stamped
+        with self._announce_lock:
+            if number <= self._published_seq.get(job.id, 0):
+                return
+            self._published_seq[job.id] = number
+            self._announced_at[job.id] = time.monotonic()
+            self._on_event(event_type, job)
 
     def _save(self, job: Job) -> None:
         """Write the job through to the store, if there is one (lock held)."""
@@ -414,5 +437,7 @@ class JobManager:
             self._done.pop(jid, None)
             self._saved_at.pop(jid, None)
             self._announced_at.pop(jid, None)
+            self._event_seq.pop(jid, None)
+            self._published_seq.pop(jid, None)
         if dropped and self._store is not None:
             self._store.delete(dropped)

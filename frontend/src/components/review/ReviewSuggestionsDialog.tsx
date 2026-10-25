@@ -165,7 +165,8 @@ const BulkAccept: React.FC<{ label: string }> = ({ label }) => {
   const count = valid ? (data?.count ?? null) : null
 
   const apply = async () => {
-    await acceptAbove(label, parsed)
+    if (count === null) return
+    await acceptAbove(label, parsed, count)
     setConfirming(false)
   }
 

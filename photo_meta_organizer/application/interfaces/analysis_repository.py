@@ -122,9 +122,14 @@ class AnalysisRepository(Protocol):
     def review_items(
         self, label: str, limit: int | None = None, offset: int = 0, min_confidence: float = 0.0
     ) -> list[ReviewItem]:
-        """Open suggestions of ``label`` at or above ``min_confidence``, most confident first."""
+        """Open suggestions of ``label`` at or above ``min_confidence``, most confident first.
+
+        "At or above" holds to six decimals, so a confidence typed as 0.7 reaches one stored as
+        0.69999999.
+        """
         ...
 
     def count_open(self, label: str, min_confidence: float = 0.0) -> int:
-        """How many photos have an open suggestion of ``label`` at or above ``min_confidence``."""
+        """How many photos have an open suggestion of ``label`` at or above ``min_confidence``
+        (to six decimals, like :meth:`review_items`)."""
         ...

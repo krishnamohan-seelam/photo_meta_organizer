@@ -302,9 +302,16 @@ export function fetchReviewCountApi(label: string, minConfidence: number): Promi
   )
 }
 
-/** Accept a label on every photo whose open suggestion is at or above the confidence. */
-export function acceptAboveApi(label: string, minConfidence: number): Promise<AiTagBatchResponse> {
-  return request('/ai-tags/accept-above', 'Accepting the suggestions', jsonInit('POST', { label, min_confidence: minConfidence }))
+/**
+ * Accept a label on every photo whose open suggestion is at or above the confidence. `expectedCount` is the
+ * number the user confirmed: if the server counts something else now it accepts nothing (409).
+ */
+export function acceptAboveApi(label: string, minConfidence: number, expectedCount: number): Promise<AiTagBatchResponse> {
+  return request(
+    '/ai-tags/accept-above',
+    'Accepting the suggestions',
+    jsonInit('POST', { label, min_confidence: minConfidence, expected_count: expectedCount })
+  )
 }
 
 export function resolveAiTagsBatchApi(photoHashes: string[], action: 'accept' | 'reject'): Promise<AiTagBatchResponse> {

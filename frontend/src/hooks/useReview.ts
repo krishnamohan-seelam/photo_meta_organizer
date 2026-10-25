@@ -66,14 +66,17 @@ export function useReviewDecision() {
   })
 }
 
-/** Accept a label on every photo at or above a confidence; resolves to how many were accepted. */
+/**
+ * Accept a label on every photo at or above a confidence, as many as the user confirmed; resolves to how many
+ * were accepted. If the count changed meanwhile the server refuses, the reason is shown and the counts reload.
+ */
 export function useAcceptAbove() {
   const qc = useQueryClient()
   const showToast = useUiStore((s) => s.showToast)
   return useCallback(
-    async (label: string, minConfidence: number) => {
+    async (label: string, minConfidence: number, expectedCount: number) => {
       try {
-        const r = await acceptAboveApi(label, minConfidence)
+        const r = await acceptAboveApi(label, minConfidence, expectedCount)
         showToast(`Accepted “${label}” on ${r.photos_changed} photo${r.photos_changed === 1 ? '' : 's'}`)
         void qc.invalidateQueries({ queryKey: analysisKey })
         void qc.invalidateQueries({ queryKey: photosKey })
@@ -81,6 +84,7 @@ export function useAcceptAbove() {
         return r.photos_changed
       } catch (err) {
         showToast(`Could not accept: ${errorMessage(err)}`, 'error')
+        void qc.invalidateQueries({ queryKey: analysisKey })
         return 0
       }
     },

@@ -56,7 +56,11 @@ export interface paths {
         /**
          * Accept every open suggestion of a label above a confidence
          * @description Accept the label on every photo whose open suggestion is at or above
-         *     ``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first and show the user the count.
+         *     ``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first, show the user the count and
+         *     send it back as ``expected_count``: a different count now is a 409 and nothing is accepted.
+         *
+         *     Each photo is accepted on its own, so if the server stops midway the ones done stay done;
+         *     asking again finishes the rest.
          */
         post: operations["accept_above_api_ai_tags_accept_above_post"];
         delete?: never;
@@ -897,6 +901,11 @@ export interface components {
          * @description Accept every open suggestion of a label at or above a confidence.
          */
         AcceptAboveRequest: {
+            /**
+             * Expected Count
+             * @description The number the user confirmed. If the suggestions at or above the confidence number something else now, nothing is accepted (409) so the user can look again.
+             */
+            expected_count?: number | null;
             /** Label */
             label: string;
             /** Min Confidence */

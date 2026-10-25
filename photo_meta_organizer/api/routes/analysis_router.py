@@ -301,7 +301,19 @@ def accept_above(
     request: AcceptAboveRequest, services: Services = Depends(get_services)
 ) -> AiTagBatchResponse:
     """Accept the label on every photo whose open suggestion is at or above
-    ``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first and show the user the count."""
+    ``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first, show the user the count and
+    send it back as ``expected_count``: a different count now is a 409 and nothing is accepted.
+
+    Each photo is accepted on its own, so if the server stops midway the ones done stay done;
+    asking again finishes the rest."""
+    if request.expected_count is not None:
+        now = services.analysis.count_open(request.label, request.min_confidence)
+        if now != request.expected_count:
+            raise HTTPException(
+                status_code=409,
+                detail=f"The number of matching suggestions changed ({request.expected_count} "
+                f"confirmed, {now} now). Nothing was accepted; look again.",
+            )
     result = ResolveAiTagsUseCase(services.analysis, services.repository).accept_above(
         request.label, request.min_confidence
     )

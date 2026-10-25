@@ -44,6 +44,16 @@ def _to_blob(vector: Sequence[float]) -> bytes:
     return np.asarray(normalize(vector), dtype=_FLOAT32).tobytes()
 
 
+# Confidences are stored as 32-bit floats widened to 64-bit, so a threshold typed as 0.7 would miss
+# a suggestion stored as 0.69999999. A threshold counts as met within this slack.
+_CONFIDENCE_SLACK = 1e-6
+
+
+# Confidences are stored as 32-bit floats widened to 64-bit, so a threshold typed as 0.7 would miss
+# a suggestion stored as 0.69999999. A threshold counts as met within this slack.
+_CONFIDENCE_SLACK = 1e-6
+
+
 class SqliteAnalysisRepository:
     """SQLite-backed storage for embeddings and suggested tags."""
 
@@ -298,7 +308,7 @@ class SqliteAnalysisRepository:
                 (
                     label,
                     AiTagStatus.SUGGESTED.value,
-                    min_confidence,
+                    min_confidence - _CONFIDENCE_SLACK,
                     -1 if limit is None else limit,
                     offset,
                 ),
@@ -310,6 +320,6 @@ class SqliteAnalysisRepository:
             row = self._conn.execute(
                 "SELECT COUNT(*) FROM photo_ai_tags WHERE label = ? AND status = ? "
                 "AND confidence >= ?",
-                (label, AiTagStatus.SUGGESTED.value, min_confidence),
+                (label, AiTagStatus.SUGGESTED.value, min_confidence - _CONFIDENCE_SLACK),
             ).fetchone()
         return int(row[0])

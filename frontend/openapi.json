@@ -4,6 +4,19 @@
       "AcceptAboveRequest": {
         "description": "Accept every open suggestion of a label at or above a confidence.",
         "properties": {
+          "expected_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number the user confirmed. If the suggestions at or above the confidence number something else now, nothing is accepted (409) so the user can look again.",
+            "title": "Expected Count"
+          },
           "label": {
             "title": "Label",
             "type": "string"
@@ -2748,7 +2761,7 @@
     },
     "/api/ai-tags/accept-above": {
       "post": {
-        "description": "Accept the label on every photo whose open suggestion is at or above\n``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first and show the user the count.",
+        "description": "Accept the label on every photo whose open suggestion is at or above\n``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first, show the user the count and\nsend it back as ``expected_count``: a different count now is a 409 and nothing is accepted.\n\nEach photo is accepted on its own, so if the server stops midway the ones done stay done;\nasking again finishes the rest.",
         "operationId": "accept_above_api_ai_tags_accept_above_post",
         "requestBody": {
           "content": {

@@ -102,7 +102,27 @@ describe('ReviewSuggestionsDialog', () => {
     expect(screen.getByRole('alert').textContent).toContain('Add “tiger” to 2 photos?')
     expect(calls).toEqual([])
     fireEvent.click(screen.getByRole('button', { name: 'Accept 2' }))
-    await waitFor(() => expect(calls[0]).toBe('POST /api/ai-tags/accept-above {"label":"tiger","min_confidence":0.3}'))
+    await waitFor(() => expect(calls[0]).toBe('POST /api/ai-tags/accept-above {"label":"tiger","min_confidence":0.3,"expected_count":2}'))
+  })
+
+  it('shows why when the server refuses because the count changed, and counts again', async () => {
+    open()
+    const spy = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const detail = 'The number of matching suggestions changed (2 confirmed, 1 now).'
+        return new Response(JSON.stringify({ detail }), { status: 409 })
+      }
+      let body: unknown = { count: 1 }
+      if (url.includes('/review/items')) body = tigerItems
+      else if (url.endsWith('/ai-tags/review')) body = labels
+      return new Response(JSON.stringify(body), { status: 200 })
+    })
+    vi.stubGlobal('fetch', spy)
+    fireEvent.click(screen.getByRole('button', { name: /Accept all/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept 2' }))
+    await waitFor(() => expect(useUiStore.getState().toastMessage).toContain('1 now'))
+    expect(useUiStore.getState().toastKind).toBe('error')
+    await waitFor(() => expect(spy.mock.calls.some(([url]) => String(url).includes('/review/count'))).toBe(true))
   })
 
   it('cancelling the confirmation applies nothing', () => {

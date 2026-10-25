@@ -578,3 +578,9 @@ class AcceptAboveRequest(BaseModel):
 
     label: str
     min_confidence: float = Field(ge=0, le=1)
+    expected_count: int | None = Field(
+        default=None,
+        ge=0,
+        description="The number the user confirmed. If the suggestions at or above the confidence "
+        "number something else now, nothing is accepted (409) so the user can look again.",
+    )

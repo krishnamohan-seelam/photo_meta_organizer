@@ -187,3 +187,58 @@ class TestJobManager:
         assert started.wait(5)
         manager.shutdown(timeout=5)
         assert manager.get(job.id).status is JobStatus.INTERRUPTED
+
+
+# ---- events arrive in the order the changes happened (ticket 08, review fix)
+
+
+class TestEventOrder:
+    def test_a_late_stale_event_is_dropped(self, tmp_path):
+        """A cancel's snapshot taken before the job finished must not be delivered after it."""
+        seen: list[tuple[str, JobStatus]] = []
+        manager = JobManager(on_event=lambda kind, job: seen.append((kind, job.status)))
+        job = manager.submit("index", str(tmp_path), lambda ctx: JobOutcome())
+        manager.wait(job.id, timeout=5)
+        seen.clear()
+
+        with manager._lock:  # two changes, numbered in the order they happened
+            record = manager._jobs[job.id]
+            before = manager._stamp(record)
+            record.status = JobStatus.RUNNING  # what the older snapshot said...
+            older = manager._stamp(record)
+            record.status = JobStatus.SUCCEEDED  # ...and what the job did next
+            newer = manager._stamp(record)
+        manager._announce("job_finished", newer)
+        manager._announce("job_progress", older)  # arrives late
+        manager._announce("job_progress", before)
+
+        assert seen == [("job_finished", JobStatus.SUCCEEDED)]
+
+    def test_a_cancelled_job_ends_on_its_finished_event(self, tmp_path):
+        """Cancel while the job ends, many times over: the last event is always the final state."""
+        last: dict[str, JobStatus] = {}
+        lock = threading.Lock()
+
+        def record(kind, job):
+            with lock:
+                last[job.id] = job.status
+
+        manager = JobManager(on_event=record, history=100)
+        ids = []
+        for i in range(40):
+            started = threading.Event()
+
+            def work(ctx, started=started):
+                started.set()
+                ctx.wait_for_cancel(0.05)
+                return JobOutcome(cancelled=ctx.cancel_requested())
+
+            job = manager.submit("index", str(tmp_path / str(i)), work)
+            started.wait(5)
+            threading.Thread(target=manager.cancel, args=(job.id,)).start()
+            ids.append(job.id)
+        for job_id in ids:
+            manager.wait(job_id, timeout=5)
+
+        manager.shutdown()
+        assert all(last[job_id].is_terminal for job_id in ids)

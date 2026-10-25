@@ -525,3 +525,30 @@ class TestReviewQueue:
             "/api/ai-tags/accept-above", json={"label": "zoo", "min_confidence": 2}
         )
         assert bad.status_code == 422
+
+    def test_accept_above_refuses_when_the_count_changed_since_it_was_confirmed(self, api):
+        body = {"label": "zoo", "min_confidence": 0.3, "expected_count": 3}
+        response = api.client.post("/api/ai-tags/accept-above", json=body)
+        assert response.status_code == 409
+        assert "2 now" in response.json()["detail"]
+        assert api.client.get("/api/photos/h-city").json()["labels"] == []  # nothing happened
+
+    def test_accept_above_applies_when_the_confirmed_count_still_holds(self, api):
+        body = {"label": "zoo", "min_confidence": 0.3, "expected_count": 2}
+        response = api.client.post("/api/ai-tags/accept-above", json=body)
+        assert response.status_code == 200 and response.json()["photos_changed"] == 2
+
+    def test_a_threshold_reaches_a_confidence_stored_a_hair_below_it(self, api):
+        api.analysis.save_ai_tags(
+            "h-beach", [AiTag("beach", 0.8, "m"), AiTag("sea", 0.6999999, "m")]
+        )
+        count = api.client.get(
+            "/api/ai-tags/review/count", params={"label": "sea", "min_confidence": 0.7}
+        )
+        assert count.json() == {"count": 1}
+        assert (
+            api.client.get(
+                "/api/ai-tags/review/items", params={"label": "sea", "min_confidence": 0.7}
+            ).json()["total"]
+            == 1
+        )

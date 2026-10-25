@@ -10,3 +10,5 @@
 - [x] A 'Review suggestions' view ordered by the top open suggestion's confidence, grouped by label
 - [x] Keys: A accept, R reject, J/K next and previous
 - [x] Bulk 'accept all above 0.30 for this label' shows the count before it applies
+
+**Review fixes (2026-10-25):** `accept-above` takes the count the user confirmed (`expected_count`) and answers 409 without accepting anything if the server counts something else now; the dialog sends it and counts again after a refusal. A threshold holds to six decimals (`_CONFIDENCE_SLACK`), so 0.7 reaches a confidence stored as 0.69999999. **Known limit:** the accept is one photo at a time, not one transaction (the curation write and the tag status live in two repositories whose `with connection` blocks each commit); each photo is idempotent, so after a failure midway, asking again finishes the rest.
