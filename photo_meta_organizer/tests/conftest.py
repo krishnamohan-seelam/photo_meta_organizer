@@ -84,6 +84,7 @@ def user_dirs(tmp_path_factory, monkeypatch) -> UserDirs:
     monkeypatch.setattr(settings_module, "user_dirs", lambda: dirs)
     for var in ("PMO_DATA_DIR", "PMO_DB", "PMO_CACHE_DIR", "PMO_LOG_DIR", "PMO_MODEL_DIR"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("PMO_WATCH_FOLDERS", "0")  # no file watchers unless a test asks for one
     return dirs
 
 

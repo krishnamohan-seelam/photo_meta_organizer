@@ -4334,6 +4334,21 @@
         ]
       }
     },
+    "/api/roots/recheck": {
+      "post": {
+        "description": "A hint that a drive may have been plugged in or removed: the roots are tested again\nnow instead of at the next timer, and a root that came back is scanned. Does nothing when\nfolder watching is off.",
+        "operationId": "recheck_roots_api_roots_recheck_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Look at the roots again",
+        "tags": [
+          "roots"
+        ]
+      }
+    },
     "/api/roots/suggestions": {
       "get": {
         "description": "For a library that has photos but no roots: the folders its files lie in, to be\noffered as a checkbox list. Nothing is added until ``POST /api/roots``. Empty once there\nis a root or the user skipped the offer.",

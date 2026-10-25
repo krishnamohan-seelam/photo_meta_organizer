@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import type { Job, Root, RootSuggestions } from '../../types/metadata'
 import { jobsKey } from '../../hooks/useJobs'
-import { rootsKey, rootSuggestionsKey } from '../../hooks/useRoots'
+import { rootsKey, rootSuggestionsKey, useRecheckRootsOnFocus } from '../../hooks/useRoots'
 import { useUiStore } from '../../stores/useUiStore'
 import { renderWithQuery, testQueryClient } from '../../test/render'
 import { FirstRunState } from '../states/FirstRunState'
@@ -128,5 +128,30 @@ describe('FoldersDialog', () => {
     expect(screen.getByText(/offline/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Stop watching E:\\usb' }))
     await waitFor(() => expect(calls).toContain('DELETE /api/roots?path=E%3A%5Cusb'))
+  })
+})
+
+describe('useRecheckRootsOnFocus', () => {
+  function Mount() {
+    useRecheckRootsOnFocus()
+    return null
+  }
+
+  it('asks the server to look at the roots when the window regains focus, at most every few seconds', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const qc = testQueryClient()
+      renderWithQuery(<Mount />, qc)
+      const calls = serve({ 'POST /api/roots/recheck': null, 'GET /api/roots': [] })
+      fireEvent.focus(window)
+      fireEvent.focus(window)
+      await waitFor(() => expect(calls).toContain('POST /api/roots/recheck'))
+      expect(calls.filter((c) => c === 'POST /api/roots/recheck')).toHaveLength(1)
+      vi.setSystemTime(Date.now() + 11_000)
+      fireEvent.focus(window)
+      await waitFor(() => expect(calls.filter((c) => c === 'POST /api/roots/recheck')).toHaveLength(2))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

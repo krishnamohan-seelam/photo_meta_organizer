@@ -249,6 +249,11 @@ export function fetchRootSuggestionsApi(): Promise<RootSuggestions> {
   return request('/roots/suggestions', 'Looking for your photo folders')
 }
 
+/** A hint that a drive may have come or gone: the server tests the roots now instead of at its next timer. */
+export function recheckRootsApi(): Promise<void> {
+  return request('/roots/recheck', 'Checking the folders', { method: 'POST' })
+}
+
 /** Skip the suggested folders for good; watching stays off. */
 export function dismissRootSuggestionsApi(): Promise<void> {
   return request('/roots/suggestions/dismiss', 'Skipping the suggestions', { method: 'POST' })

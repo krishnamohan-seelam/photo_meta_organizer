@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   addRootApi,
@@ -7,6 +7,7 @@ import {
   fetchRootSuggestionsApi,
   getJobApi,
   listRootsApi,
+  recheckRootsApi,
   removeRootApi,
 } from '../api/client'
 import type { Job } from '../types/metadata'
@@ -68,4 +69,30 @@ export function useRootActions() {
   const removeRoot = useCallback((path: string) => remove.mutate(path), [remove])
   const skipSuggestions = useCallback(() => skip.mutate(), [skip])
   return { addRoot, isAdding: add.isPending, removeRoot, skipSuggestions }
+}
+
+/** Do not ask the server to look at the roots again more often than this. */
+export const RECHECK_THROTTLE_MS = 10_000
+
+/**
+ * Mount once (App): when the window gets focus again, tell the server to look at the watched folders
+ * (a drive may have been plugged in while the app was in the background) and refresh their online state.
+ * A quiet hint: nothing is shown and a failure is ignored.
+ */
+export function useRecheckRootsOnFocus() {
+  const qc = useQueryClient()
+  useEffect(() => {
+    if (isDemoMode()) return
+    let last = 0
+    const onFocus = () => {
+      const now = Date.now()
+      if (now - last < RECHECK_THROTTLE_MS) return
+      last = now
+      recheckRootsApi()
+        .then(() => qc.invalidateQueries({ queryKey: rootsKey }))
+        .catch(() => {})
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [qc])
 }

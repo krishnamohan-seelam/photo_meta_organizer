@@ -71,6 +71,8 @@ def build_backend():
         "--collect-all",
         "tinydb",
         "--collect-all",
+        "watchfiles",
+        "--collect-all",
         "PIL",
         "--collect-all",
         "exifread",

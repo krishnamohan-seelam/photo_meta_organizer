@@ -158,3 +158,51 @@ def test_a_library_with_roots_is_not_offered_suggestions(settings, library) -> N
     with TestClient(create_app(settings=settings)) as client:
         client.post("/api/roots", json={"folder_path": str(library), "scan": False})
         assert client.get("/api/roots/suggestions").json()["suggestions"] == []
+
+
+# ---- folder watching (ticket 10)
+
+
+@pytest.fixture
+def watched(settings, monkeypatch):
+    from tests.fakes import FakeFolderWatcher
+
+    from photo_meta_organizer.application import composition
+
+    fake = FakeFolderWatcher()
+    monkeypatch.setattr(composition, "build_folder_watcher", lambda: fake)
+    on = Settings(**{**settings.__dict__, "watch_folders": True})
+    return fake, on
+
+
+def test_the_app_watches_its_roots_while_it_runs(watched, library) -> None:
+    fake, on = watched
+    with TestClient(create_app(settings=on)) as client:
+        client.post("/api/roots", json={"folder_path": str(library), "scan": False})
+        assert client.post("/api/roots/recheck").status_code == 204
+        assert fake.started == []  # the watcher looks at the next tick, not in the request
+    assert fake.stopped == 0  # nothing was watched yet
+
+
+def test_roots_stored_before_the_start_are_watched_from_the_start(watched, library) -> None:
+    fake, on = watched
+    with TestClient(create_app(settings=on)) as client:
+        client.post("/api/roots", json={"folder_path": str(library), "scan": False})
+    with TestClient(create_app(settings=on)):
+        assert fake.started == [(str(library),)]
+    assert fake.stopped == 1  # stopped with the app
+
+
+def test_no_watcher_runs_when_folder_watching_is_off(watched, library) -> None:
+    fake, _ = watched
+    off = Settings(db_path=watched[1].db_path, cache_dir=watched[1].cache_dir)
+    with TestClient(create_app(settings=off)) as client:
+        client.post("/api/roots", json={"folder_path": str(library), "scan": False})
+        assert client.post("/api/roots/recheck").status_code == 204
+    assert fake.started == []
+
+
+def test_watching_is_on_unless_the_environment_turns_it_off() -> None:
+    assert Settings.from_env({}).watch_folders is True
+    assert Settings.from_env({"PMO_WATCH_FOLDERS": "0"}).watch_folders is False
+    assert Settings.from_env({"PMO_WATCH_FOLDERS": "no"}).watch_folders is False

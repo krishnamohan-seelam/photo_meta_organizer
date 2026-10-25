@@ -20,6 +20,7 @@ Environment variables:
                        view draws the bundled world outline and contacts no one.
     PMO_MAP_TILES_ATTRIBUTION  credit line shown on the map for that tile server
     PMO_SCAN_ON_START  0/false/no: do not rescan the stored roots when the API starts
+    PMO_WATCH_FOLDERS  0/false/no: do not watch the stored roots for new and changed photos
     PMO_API_TOKEN     per-launch token the desktop shell sets; when present the API
                        requires it as a cookie (api/auth.py). Never logged or repr'd.
 
@@ -125,6 +126,9 @@ class Settings:
     map_tiles_url: str | None = None
     map_tiles_attribution: str | None = None
     scan_on_start: bool = True  # the API/desktop backend rescans the library's roots at start
+    # ... and keeps them up to date while running. Off by default here so that settings built by
+    # hand (tests) start no file watchers; ``from_env`` turns it on unless PMO_WATCH_FOLDERS=0.
+    watch_folders: bool = False
 
     @property
     def thumbnail_dir(self) -> Path:
@@ -154,6 +158,7 @@ class Settings:
         map_tiles_url: str | None = None,
         map_tiles_attribution: str | None = None,
         scan_on_start: bool | None = None,
+        watch_folders: bool | None = None,
     ) -> "Settings":
         """Build settings from explicit values, then ``env`` (default ``os.environ``).
 
@@ -197,6 +202,11 @@ class Settings:
             map_tiles_url=_tiles_url(map_tiles_url or env.get("PMO_MAP_TILES_URL")),
             map_tiles_attribution=(
                 map_tiles_attribution or env.get("PMO_MAP_TILES_ATTRIBUTION", "").strip() or None
+            ),
+            watch_folders=(
+                watch_folders
+                if watch_folders is not None
+                else env.get("PMO_WATCH_FOLDERS", "1").strip().lower() not in ("0", "false", "no")
             ),
             scan_on_start=(
                 scan_on_start

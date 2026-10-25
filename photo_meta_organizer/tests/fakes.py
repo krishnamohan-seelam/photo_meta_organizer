@@ -45,3 +45,28 @@ class FakeImageEmbedder:
 
     def embed_text(self, text: str) -> Sequence[float]:
         return self.vector_for(text.encode("utf-8"))
+
+
+class FakeFolderWatcher:
+    """A ``FolderWatcher`` that reports only the changes a test emits."""
+
+    def __init__(self) -> None:
+        self.started: list[tuple[str, ...]] = []  # the folders of every watch started, in order
+        self.stopped = 0
+        self._on_change = None
+
+    def start(self, folders, on_change):
+        self.started.append(tuple(folders))
+        self._on_change = on_change
+        watcher = self
+
+        class Handle:
+            def stop(self) -> None:
+                watcher.stopped += 1
+
+        return Handle()
+
+    def emit(self, *paths: str) -> None:
+        assert self._on_change is not None, "nothing is being watched"
+        for path in paths:
+            self._on_change(path)

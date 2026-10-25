@@ -5,6 +5,7 @@ import { isDemoMode, usePhotoSearch } from './hooks/usePhotos'
 import { useFacetsQuery } from './hooks/useFacets'
 import { useJobCompletionNotices } from './hooks/useJobs'
 import { useEventStream } from './hooks/useEventStream'
+import { useRecheckRootsOnFocus } from './hooks/useRoots'
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys'
 import { useUiStore } from './stores/useUiStore'
 import { NavRail } from './components/shell/NavRail'
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
   const facets = useFacetsQuery()
   const libraryIsEmpty = facets.data?.stats.total_count === 0 && !isDemoMode()
   useEventStream()
+  useRecheckRootsOnFocus()
   useJobCompletionNotices()
   useGlobalHotkeys()
 

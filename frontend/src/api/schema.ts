@@ -739,6 +739,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/roots/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Look at the roots again
+         * @description A hint that a drive may have been plugged in or removed: the roots are tested again
+         *     now instead of at the next timer, and a root that came back is scanned. Does nothing when
+         *     folder watching is off.
+         */
+        post: operations["recheck_roots_api_roots_recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/roots/suggestions": {
         parameters: {
             query?: never;
@@ -3213,6 +3235,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    recheck_roots_api_roots_recheck_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

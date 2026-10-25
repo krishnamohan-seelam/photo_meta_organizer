@@ -23,6 +23,12 @@ from photo_meta_organizer.application.roots import Root, is_online, start_scan, 
 roots_router = APIRouter(prefix="/api/roots", tags=["roots"])
 
 
+def _look_again(services: Services) -> None:
+    """Tell the folder watcher the set of roots (or what is readable) may have changed."""
+    if services.root_watcher is not None:
+        services.root_watcher.recheck()
+
+
 def _response(root: Root, job_id: str | None = None) -> RootResponse:
     return RootResponse(
         path=root.path, added_at=root.added_at, online=is_online(root.path), job_id=job_id
@@ -51,6 +57,7 @@ def add_root(request: AddRootRequest, services: Services = Depends(get_services)
             detail=f"Directory '{request.folder_path}' does not exist or is not a directory.",
         )
     root = services.roots.add_root(folder)
+    _look_again(services)
     return _response(
         root,
         start_scan(services.jobs, scan_work_factory(services), folder) if request.scan else None,
@@ -65,6 +72,16 @@ def remove_root(
     """Forget a root. Its photos stay in the library; they are just no longer rescanned."""
     if not services.roots.remove_root(path):
         raise HTTPException(status_code=404, detail=f"'{path}' is not a root.")
+    _look_again(services)
+    return Response(status_code=204)
+
+
+@roots_router.post("/recheck", status_code=204, summary="Look at the roots again")
+def recheck_roots(services: Services = Depends(get_services)) -> Response:
+    """A hint that a drive may have been plugged in or removed: the roots are tested again
+    now instead of at the next timer, and a root that came back is scanned. Does nothing when
+    folder watching is off."""
+    _look_again(services)
     return Response(status_code=204)
 
 

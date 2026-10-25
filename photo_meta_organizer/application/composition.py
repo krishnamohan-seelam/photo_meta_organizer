@@ -17,6 +17,7 @@ from photo_meta_organizer.application.interfaces.analysis_repository import Anal
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
 )
+from photo_meta_organizer.application.interfaces.folder_watcher import FolderWatcher
 from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
@@ -184,6 +185,15 @@ def build_root_store(repository: ImageMetadataRepository) -> RootStore:
     if isinstance(repository, SqliteRepository):
         return SqliteRootStore(repository.connection, repository.lock)
     raise TypeError(f"unsupported repository type for roots: {type(repository)!r}")
+
+
+def build_folder_watcher() -> FolderWatcher:
+    """The operating system's folder change notifications (ticket 10)."""
+    from photo_meta_organizer.infrastructure.watching.watchfiles_watcher import (
+        WatchfilesFolderWatcher,
+    )
+
+    return WatchfilesFolderWatcher()
 
 
 def build_model_store(settings: Settings) -> "ModelStore":

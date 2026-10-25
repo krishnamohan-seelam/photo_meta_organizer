@@ -63,6 +63,7 @@ from photo_meta_organizer.application.composition import (
 from photo_meta_organizer.application.events import LIBRARY_CHANGED, EventBus
 from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.jobs import JobManager
+from photo_meta_organizer.application.root_watcher import RootWatcher
 from photo_meta_organizer.application.roots import scan_roots
 from photo_meta_organizer.application.settings import (  # noqa: F401 (re-exported)
     DEFAULT_ALLOWED_HOSTS,
@@ -130,10 +131,14 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # The one automatic piece of work: rescan the library's roots (ADR-003 R5a, R11).
+        services = _app.state.services
         if settings.scan_on_start:
-            services = _app.state.services
             scan_roots(services.roots, services.jobs, scan_work_factory(services))
+        if services.root_watcher is not None:
+            services.root_watcher.start()
         yield
+        if services.root_watcher is not None:
+            services.root_watcher.stop()
         # Stop background jobs cleanly so none is killed mid-write at exit; they are
         # stored as interrupted and offered for resuming next time.
         if job_manager is not None:
@@ -187,6 +192,17 @@ def create_app(
     job_manager = JobManager(
         store=composition.build_job_store(repository), on_event=job_event_handler(bus)
     )
+    roots = composition.build_root_store(repository)
+    root_watcher = (
+        RootWatcher(
+            roots,
+            job_manager,
+            lambda folder, params: scan_work_factory(app.state.services)(folder, params),
+            composition.build_folder_watcher(),
+        )
+        if settings.watch_folders
+        else None
+    )
     store = model_store or composition.build_model_store(settings)
     ai_embedder = embedder or composition.build_embedder(store)
     app.state.services = Services(
@@ -195,7 +211,8 @@ def create_app(
         collections=build_collection_repository(repository),
         jobs=job_manager,
         events=bus,
-        roots=composition.build_root_store(repository),
+        roots=roots,
+        root_watcher=root_watcher,
         thumbnails=ThumbnailService(
             str(settings.thumbnail_dir),
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
