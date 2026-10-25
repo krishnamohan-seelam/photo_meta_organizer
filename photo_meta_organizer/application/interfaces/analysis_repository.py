@@ -22,6 +22,23 @@ class PendingPhoto:
     path: str
 
 
+@dataclass(frozen=True)
+class ReviewLabel:
+    """A label with open suggestions: how many photos, and how sure the best one is."""
+
+    label: str
+    count: int
+    top_confidence: float
+
+
+@dataclass(frozen=True)
+class ReviewItem:
+    """One open suggestion of a label: a photo and the model's confidence."""
+
+    file_hash: str
+    confidence: float
+
+
 @runtime_checkable
 class AnalysisRepository(Protocol):
     # ---- embeddings
@@ -94,4 +111,20 @@ class AnalysisRepository(Protocol):
 
     def ai_tag_counts(self, status: AiTagStatus = AiTagStatus.SUGGESTED) -> list[tuple[str, int]]:
         """Each label and how many photos carry it in ``status``, most common first."""
+        ...
+
+    # ---- reviewing suggestions
+
+    def review_labels(self) -> list[ReviewLabel]:
+        """Labels with open suggestions, the one with the most confident suggestion first."""
+        ...
+
+    def review_items(
+        self, label: str, limit: int | None = None, offset: int = 0, min_confidence: float = 0.0
+    ) -> list[ReviewItem]:
+        """Open suggestions of ``label`` at or above ``min_confidence``, most confident first."""
+        ...
+
+    def count_open(self, label: str, min_confidence: float = 0.0) -> int:
+        """How many photos have an open suggestion of ``label`` at or above ``min_confidence``."""
         ...

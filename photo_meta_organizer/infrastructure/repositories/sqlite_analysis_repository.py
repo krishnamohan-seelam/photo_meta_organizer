@@ -18,7 +18,11 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from photo_meta_organizer.application.interfaces.analysis_repository import PendingPhoto
+from photo_meta_organizer.application.interfaces.analysis_repository import (
+    PendingPhoto,
+    ReviewItem,
+    ReviewLabel,
+)
 from photo_meta_organizer.application.interfaces.search_types import SearchQuery
 from photo_meta_organizer.domain.analysis import (
     AiTag,
@@ -273,3 +277,39 @@ class SqliteAnalysisRepository:
                 (status.value,),
             ).fetchall()
         return [(r["label"], r["n"]) for r in rows]
+
+    def review_labels(self) -> list[ReviewLabel]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT label, COUNT(*) AS n, MAX(confidence) AS top FROM photo_ai_tags "
+                "WHERE status = ? GROUP BY label ORDER BY top DESC, n DESC, label",
+                (AiTagStatus.SUGGESTED.value,),
+            ).fetchall()
+        return [ReviewLabel(r["label"], r["n"], r["top"]) for r in rows]
+
+    def review_items(
+        self, label: str, limit: int | None = None, offset: int = 0, min_confidence: float = 0.0
+    ) -> list[ReviewItem]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT file_hash, confidence FROM photo_ai_tags "
+                "WHERE label = ? AND status = ? AND confidence >= ? "
+                "ORDER BY confidence DESC, file_hash LIMIT ? OFFSET ?",
+                (
+                    label,
+                    AiTagStatus.SUGGESTED.value,
+                    min_confidence,
+                    -1 if limit is None else limit,
+                    offset,
+                ),
+            ).fetchall()
+        return [ReviewItem(r["file_hash"], r["confidence"]) for r in rows]
+
+    def count_open(self, label: str, min_confidence: float = 0.0) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM photo_ai_tags WHERE label = ? AND status = ? "
+                "AND confidence >= ?",
+                (label, AiTagStatus.SUGGESTED.value, min_confidence),
+            ).fetchone()
+        return int(row[0])

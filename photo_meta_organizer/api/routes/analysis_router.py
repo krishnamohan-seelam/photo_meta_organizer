@@ -14,6 +14,8 @@ and per-file errors come from ``/api/jobs``. Both share one job "folder" (the mo
 so they cannot run at once. A suggestion becomes a label only when accepted.
 """
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from photo_meta_organizer.api.dependencies import Services, get_services
@@ -24,6 +26,7 @@ from photo_meta_organizer.api.routes.photos_router import (
     to_responses,
 )
 from photo_meta_organizer.api.schemas import (
+    AcceptAboveRequest,
     AiTagBatchRequest,
     AiTagBatchResponse,
     AiTagSchema,
@@ -33,6 +36,10 @@ from photo_meta_organizer.api.schemas import (
     JobResponse,
     ModelDownloadRequest,
     ResolveAiTagRequest,
+    ReviewCountResponse,
+    ReviewItemSchema,
+    ReviewItemsResponse,
+    ReviewLabelSchema,
     SemanticHitSchema,
     SemanticSearchRequest,
     SemanticSearchResponse,
@@ -221,6 +228,86 @@ def ai_tag_counts(
 ) -> list[FacetCountSchema]:
     """Each label and how many photos carry it in ``status``, most common first."""
     return [FacetCountSchema(name=n, count=c) for n, c in services.analysis.ai_tag_counts(status)]
+
+
+@ai_tags_router.get(
+    "/review",
+    response_model=list[ReviewLabelSchema],
+    summary="Labels with open suggestions, most confident first",
+)
+def review_labels(services: Services = Depends(get_services)) -> list[ReviewLabelSchema]:
+    """The review queue's groups: each label that still has open suggestions, with how many
+    photos and the confidence of its best one. The label with the most confident suggestion
+    comes first."""
+    return [
+        ReviewLabelSchema(label=r.label, count=r.count, top_confidence=r.top_confidence)
+        for r in services.analysis.review_labels()
+    ]
+
+
+@ai_tags_router.get(
+    "/review/items",
+    response_model=ReviewItemsResponse,
+    summary="Open suggestions of one label, most confident first",
+)
+def review_items(
+    label: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    min_confidence: float = Query(default=0.0, ge=0, le=1),
+    services: Services = Depends(get_services),
+) -> ReviewItemsResponse:
+    """One page of the photos with an open suggestion of ``label``, best first. 404 for a
+    label with none (it may have been fully reviewed meanwhile)."""
+    total = services.analysis.count_open(label, min_confidence)
+    if total == 0 and services.analysis.count_open(label) == 0:
+        raise HTTPException(status_code=404, detail=f"No open suggestions of '{label}'.")
+    items = services.analysis.review_items(label, limit, offset, min_confidence)
+    files = services.repository.files_of([i.file_hash for i in items])
+    return ReviewItemsResponse(
+        label=label,
+        total=total,
+        items=[
+            ReviewItemSchema(
+                file_hash=i.file_hash,
+                name=os.path.basename(files[i.file_hash][0].path) if i.file_hash in files else "",
+                confidence=i.confidence,
+            )
+            for i in items
+        ],
+    )
+
+
+@ai_tags_router.get(
+    "/review/count",
+    response_model=ReviewCountResponse,
+    summary="How many open suggestions of a label reach a confidence",
+)
+def review_count(
+    label: str,
+    min_confidence: float = Query(default=0.0, ge=0, le=1),
+    services: Services = Depends(get_services),
+) -> ReviewCountResponse:
+    """What ``POST /api/ai-tags/accept-above`` would accept: show it before applying."""
+    return ReviewCountResponse(count=services.analysis.count_open(label, min_confidence))
+
+
+@ai_tags_router.post(
+    "/accept-above",
+    response_model=AiTagBatchResponse,
+    summary="Accept every open suggestion of a label above a confidence",
+)
+def accept_above(
+    request: AcceptAboveRequest, services: Services = Depends(get_services)
+) -> AiTagBatchResponse:
+    """Accept the label on every photo whose open suggestion is at or above
+    ``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first and show the user the count."""
+    result = ResolveAiTagsUseCase(services.analysis, services.repository).accept_above(
+        request.label, request.min_confidence
+    )
+    return AiTagBatchResponse(
+        photos_changed=result.photos_changed, tags_changed=result.tags_changed
+    )
 
 
 @ai_tags_router.post(

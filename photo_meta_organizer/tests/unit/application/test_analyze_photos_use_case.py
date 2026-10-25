@@ -253,6 +253,25 @@ class TestRetag:
         statuses = {t.label: t.status for t in analysis.list_ai_tags("hash-a.jpg")}
         assert statuses[first] is AiTagStatus.REJECTED
 
+    def test_a_decision_belongs_to_one_photo_and_one_label(
+        self, photos, analysis, embedder, tmp_path
+    ):
+        """Rejecting a label on one photo is remembered there only, and an accepted label stays."""
+        _add(photos, tmp_path, "a.jpg")
+        _add(photos, tmp_path, "b.jpg")
+        tagger = ZeroShotTagger(embedder, ["alpha", "beta", "gamma"])
+        use_case = _use_case(analysis, embedder, tagger=tagger, tag_threshold=0.0)
+        use_case.run()
+        analysis.set_ai_tag_status("hash-a.jpg", "alpha", AiTagStatus.REJECTED)
+        analysis.set_ai_tag_status("hash-a.jpg", "beta", AiTagStatus.ACCEPTED)
+        use_case.retag()
+        use_case.retag()  # twice: still the same
+        a = {t.label: t.status for t in analysis.list_ai_tags("hash-a.jpg")}
+        b = {t.label: t.status for t in analysis.list_ai_tags("hash-b.jpg")}
+        assert a["alpha"] is AiTagStatus.REJECTED and a["beta"] is AiTagStatus.ACCEPTED
+        assert b["alpha"] is AiTagStatus.SUGGESTED  # the other photo is not affected
+        assert [t.label for t in analysis.list_ai_tags("hash-a.jpg")].count("alpha") == 1
+
     def test_needs_a_tagger(self, photos, analysis, embedder):
         with pytest.raises(ValueError, match="tagger"):
             _use_case(analysis, embedder).retag()

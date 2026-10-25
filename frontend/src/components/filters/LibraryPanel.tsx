@@ -178,7 +178,15 @@ export const LibraryPanel: React.FC = () => {
       </Section>
 
       {aiReady && aiTags.length > 0 && (
-        <Section title="Suggested by AI" onClear={s.filterAiTag ? () => s.setAiTagFilter(null) : undefined}>
+        <Section
+          title="Suggested by AI"
+          onClear={s.filterAiTag ? () => s.setAiTagFilter(null) : undefined}
+          action={
+            <button type="button" className="btn-reset link-btn" onClick={() => useUiStore.getState().setReviewDialogOpen(true)}>
+              Review…
+            </button>
+          }
+        >
           <div className="pill-list">
             {aiTags.slice(0, 40).map((t) => (
               <button

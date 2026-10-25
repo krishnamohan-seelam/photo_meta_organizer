@@ -57,6 +57,7 @@ interface UiState {
   /** The AI setup dialog (model download, analysis). */
   aiDialogOpen: boolean
   duplicatesDialogOpen: boolean
+  reviewDialogOpen: boolean
   foldersDialogOpen: boolean
   semantic: SemanticQuery | null
   /** How many matches the search by meaning asks for; "Show more" raises it. */
@@ -104,6 +105,7 @@ interface UiState {
   setJobDialog: (kind: JobDialogKind | null) => void
   setAiDialogOpen: (open: boolean) => void
   setDuplicatesDialogOpen: (open: boolean) => void
+  setReviewDialogOpen: (open: boolean) => void
   setFoldersDialogOpen: (open: boolean) => void
   setSemantic: (query: SemanticQuery | null) => void
   showMoreSemantic: () => void
@@ -145,6 +147,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   jobDialog: null,
   aiDialogOpen: false,
   duplicatesDialogOpen: false,
+  reviewDialogOpen: false,
   foldersDialogOpen: false,
   semantic: null,
   semanticLimit: SEMANTIC_PAGE,
@@ -201,6 +204,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setJobDialog: (jobDialog) => set({ jobDialog }),
   setAiDialogOpen: (aiDialogOpen) => set({ aiDialogOpen }),
   setDuplicatesDialogOpen: (duplicatesDialogOpen) => set({ duplicatesDialogOpen }),
+  setReviewDialogOpen: (reviewDialogOpen) => set({ reviewDialogOpen }),
   setFoldersDialogOpen: (foldersDialogOpen) => set({ foldersDialogOpen }),
   setSemantic: (semantic) => set({ semantic, semanticLimit: SEMANTIC_PAGE }),
   showMoreSemantic: () => set((s) => ({ semanticLimit: Math.min(SEMANTIC_MAX, s.semanticLimit + SEMANTIC_PAGE) })),

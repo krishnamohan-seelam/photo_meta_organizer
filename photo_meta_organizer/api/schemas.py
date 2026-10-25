@@ -538,3 +538,38 @@ class HideFileRequest(BaseModel):
 
     path: str
     hidden: bool = True
+
+
+class ReviewLabelSchema(ResponseModel):
+    """A label with open AI suggestions, for the review queue."""
+
+    label: str
+    count: int
+    top_confidence: float = Field(description="Confidence of the most confident open suggestion")
+
+
+class ReviewItemSchema(ResponseModel):
+    """One open suggestion of the label being reviewed."""
+
+    file_hash: str
+    name: str = Field(description="File name of the photo, for the caption")
+    confidence: float
+
+
+class ReviewItemsResponse(ResponseModel):
+    """A page of one label's open suggestions, most confident first."""
+
+    label: str
+    total: int = Field(description="Open suggestions of the label at or above min_confidence")
+    items: list[ReviewItemSchema]
+
+
+class ReviewCountResponse(ResponseModel):
+    count: int
+
+
+class AcceptAboveRequest(BaseModel):
+    """Accept every open suggestion of a label at or above a confidence."""
+
+    label: str
+    min_confidence: float = Field(ge=0, le=1)

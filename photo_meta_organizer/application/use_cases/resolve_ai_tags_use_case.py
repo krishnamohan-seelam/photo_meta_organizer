@@ -72,6 +72,17 @@ class ResolveAiTagsUseCase:
                 tags += changed
         return ResolveResult(photos_changed=photos, tags_changed=tags)
 
+    def accept_above(self, label: str, min_confidence: float) -> ResolveResult:
+        """Accept every open suggestion of ``label`` at or above ``min_confidence``.
+
+        The count to show first is ``analysis.count_open(label, min_confidence)``.
+        """
+        accepted = 0
+        for item in self._analysis.review_items(label, min_confidence=min_confidence):
+            if self.resolve(item.file_hash, label, "accept"):
+                accepted += 1
+        return ResolveResult(photos_changed=accepted, tags_changed=accepted)
+
     @staticmethod
     def _status(action: str) -> AiTagStatus:
         try:

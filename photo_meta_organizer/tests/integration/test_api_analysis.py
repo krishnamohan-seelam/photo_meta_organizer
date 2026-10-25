@@ -456,3 +456,72 @@ def test_the_token_protects_the_new_routes(tmp_path):
         ("get", "/api/ai-tags"),
     ):
         assert getattr(client, method)(path).status_code == 401, path
+
+
+class TestReviewQueue:
+    @pytest.fixture(autouse=True)
+    def suggestions(self, api):
+        api.analysis.save_ai_tags("h-tiger", [AiTag("tiger", 0.9, "m"), AiTag("zoo", 0.3, "m")])
+        api.analysis.save_ai_tags("h-beach", [AiTag("beach", 0.8, "m"), AiTag("zoo", 0.1, "m")])
+        api.analysis.save_ai_tags("h-city", [AiTag("zoo", 0.5, "m")])
+
+    def _items(self, api, label="zoo", **params):
+        response = api.client.get("/api/ai-tags/review/items", params={"label": label, **params})
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_labels_come_most_confident_first_with_counts(self, api):
+        body = api.client.get("/api/ai-tags/review").json()
+        assert [(r["label"], r["count"]) for r in body] == [("tiger", 1), ("beach", 1), ("zoo", 3)]
+        assert body[0]["top_confidence"] == pytest.approx(0.9)
+        assert body[2]["top_confidence"] == pytest.approx(0.5)
+
+    def test_a_labels_photos_come_best_first_with_their_names(self, api):
+        body = self._items(api)
+        assert [(i["file_hash"], i["name"]) for i in body["items"]] == [
+            ("h-city", "city.jpg"),
+            ("h-tiger", "tiger.jpg"),
+            ("h-beach", "beach.jpg"),
+        ]
+        assert body["total"] == 3
+        assert body["items"][0]["confidence"] == pytest.approx(0.5)
+
+    def test_items_page_and_filter_by_confidence(self, api):
+        assert [i["file_hash"] for i in self._items(api, limit=1, offset=1)["items"]] == ["h-tiger"]
+        body = self._items(api, min_confidence=0.3)
+        assert body["total"] == 2 and [i["file_hash"] for i in body["items"]] == [
+            "h-city",
+            "h-tiger",
+        ]
+
+    def test_a_label_with_nothing_open_is_404(self, api):
+        assert (
+            api.client.get("/api/ai-tags/review/items", params={"label": "nope"}).status_code == 404
+        )
+
+    def test_decided_suggestions_leave_the_queue(self, api):
+        api.client.post("/api/photos/h-city/ai-tags", json={"label": "zoo", "action": "reject"})
+        api.client.post("/api/photos/h-tiger/ai-tags", json={"label": "zoo", "action": "accept"})
+        assert [i["file_hash"] for i in self._items(api)["items"]] == ["h-beach"]
+
+    def test_the_count_says_what_accept_above_would_do(self, api):
+        count = api.client.get(
+            "/api/ai-tags/review/count", params={"label": "zoo", "min_confidence": 0.3}
+        )
+        assert count.json() == {"count": 2}
+
+    def test_accept_above_accepts_only_those_at_or_above_the_confidence(self, api):
+        response = api.client.post(
+            "/api/ai-tags/accept-above", json={"label": "zoo", "min_confidence": 0.3}
+        )
+        assert response.json() == {"photos_changed": 2, "tags_changed": 2}
+        assert api.client.get("/api/photos/h-city").json()["labels"] == ["zoo"]
+        assert api.client.get("/api/photos/h-tiger").json()["labels"] == ["zoo"]
+        assert api.client.get("/api/photos/h-beach").json()["labels"] == []
+        assert [i["file_hash"] for i in self._items(api)["items"]] == ["h-beach"]
+
+    def test_accept_above_validates_the_confidence(self, api):
+        bad = api.client.post(
+            "/api/ai-tags/accept-above", json={"label": "zoo", "min_confidence": 2}
+        )
+        assert bad.status_code == 422

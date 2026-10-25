@@ -44,6 +44,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-tags/accept-above": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept every open suggestion of a label above a confidence
+         * @description Accept the label on every photo whose open suggestion is at or above
+         *     ``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first and show the user the count.
+         */
+        post: operations["accept_above_api_ai_tags_accept_above_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-tags/batch": {
         parameters: {
             query?: never;
@@ -59,6 +80,69 @@ export interface paths {
          *     exactly those labels. Unknown photos are skipped.
          */
         post: operations["resolve_ai_tags_batch_api_ai_tags_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-tags/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Labels with open suggestions, most confident first
+         * @description The review queue's groups: each label that still has open suggestions, with how many
+         *     photos and the confidence of its best one. The label with the most confident suggestion
+         *     comes first.
+         */
+        get: operations["review_labels_api_ai_tags_review_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-tags/review/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many open suggestions of a label reach a confidence
+         * @description What ``POST /api/ai-tags/accept-above`` would accept: show it before applying.
+         */
+        get: operations["review_count_api_ai_tags_review_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-tags/review/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open suggestions of one label, most confident first
+         * @description One page of the photos with an open suggestion of ``label``, best first. 404 for a
+         *     label with none (it may have been fully reviewed meanwhile).
+         */
+        get: operations["review_items_api_ai_tags_review_items_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -807,6 +891,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AcceptAboveRequest
+         * @description Accept every open suggestion of a label at or above a confidence.
+         */
+        AcceptAboveRequest: {
+            /** Label */
+            label: string;
+            /** Min Confidence */
+            min_confidence: number;
+        };
         /**
          * AddRootRequest
          * @description Remember a folder as a root; by default scan it now.
@@ -1576,6 +1670,56 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** ReviewCountResponse */
+        ReviewCountResponse: {
+            /** Count */
+            count: number;
+        };
+        /**
+         * ReviewItemSchema
+         * @description One open suggestion of the label being reviewed.
+         */
+        ReviewItemSchema: {
+            /** Confidence */
+            confidence: number;
+            /** File Hash */
+            file_hash: string;
+            /**
+             * Name
+             * @description File name of the photo, for the caption
+             */
+            name: string;
+        };
+        /**
+         * ReviewItemsResponse
+         * @description A page of one label's open suggestions, most confident first.
+         */
+        ReviewItemsResponse: {
+            /** Items */
+            items: components["schemas"]["ReviewItemSchema"][];
+            /** Label */
+            label: string;
+            /**
+             * Total
+             * @description Open suggestions of the label at or above min_confidence
+             */
+            total: number;
+        };
+        /**
+         * ReviewLabelSchema
+         * @description A label with open AI suggestions, for the review queue.
+         */
+        ReviewLabelSchema: {
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+            /**
+             * Top Confidence
+             * @description Confidence of the most confident open suggestion
+             */
+            top_confidence: number;
+        };
         /**
          * RootResponse
          * @description A folder the library scans on its own (ADR-003 R11). ``online`` is false while the
@@ -1936,6 +2080,39 @@ export interface operations {
             };
         };
     };
+    accept_above_api_ai_tags_accept_above_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptAboveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiTagBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     resolve_ai_tags_batch_api_ai_tags_batch_post: {
         parameters: {
             query?: never;
@@ -1956,6 +2133,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiTagBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_labels_api_ai_tags_review_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewLabelSchema"][];
+                };
+            };
+        };
+    };
+    review_count_api_ai_tags_review_count_get: {
+        parameters: {
+            query: {
+                label: string;
+                min_confidence?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewCountResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_items_api_ai_tags_review_items_get: {
+        parameters: {
+            query: {
+                label: string;
+                limit?: number;
+                offset?: number;
+                min_confidence?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewItemsResponse"];
                 };
             };
             /** @description Validation Error */

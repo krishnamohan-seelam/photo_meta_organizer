@@ -18,6 +18,8 @@ import type {
   PatchPhotoRequest,
   PhotoId,
   PhotoMetadata,
+  ReviewItems,
+  ReviewLabel,
   Root,
   RootSuggestions,
   SearchRequest,
@@ -280,6 +282,29 @@ export function fetchAiTagsApi(fileHash: string): Promise<AiTag[]> {
 
 export function resolveAiTagApi(fileHash: string, label: string, action: 'accept' | 'reject' | 'reset'): Promise<AiTag[]> {
   return request(`/photos/${fileHash}/ai-tags`, 'Saving the tag decision', jsonInit('POST', { label, action }))
+}
+
+/** Labels with open suggestions, the one with the most confident suggestion first. */
+export function fetchReviewLabelsApi(): Promise<ReviewLabel[]> {
+  return request('/ai-tags/review', 'Loading suggestions to review')
+}
+
+/** Open suggestions of one label, most confident first. 404 when the label has none left. */
+export function fetchReviewItemsApi(label: string, limit: number): Promise<ReviewItems> {
+  return request(`/ai-tags/review/items?${new URLSearchParams({ label, limit: String(limit) })}`, 'Loading suggestions to review')
+}
+
+/** How many open suggestions of a label reach a confidence: what accept-above would accept. */
+export function fetchReviewCountApi(label: string, minConfidence: number): Promise<{ count: number }> {
+  return request(
+    `/ai-tags/review/count?${new URLSearchParams({ label, min_confidence: String(minConfidence) })}`,
+    'Counting suggestions'
+  )
+}
+
+/** Accept a label on every photo whose open suggestion is at or above the confidence. */
+export function acceptAboveApi(label: string, minConfidence: number): Promise<AiTagBatchResponse> {
+  return request('/ai-tags/accept-above', 'Accepting the suggestions', jsonInit('POST', { label, min_confidence: minConfidence }))
 }
 
 export function resolveAiTagsBatchApi(photoHashes: string[], action: 'accept' | 'reject'): Promise<AiTagBatchResponse> {

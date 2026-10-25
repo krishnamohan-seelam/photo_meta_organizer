@@ -1,6 +1,27 @@
 {
   "components": {
     "schemas": {
+      "AcceptAboveRequest": {
+        "description": "Accept every open suggestion of a label at or above a confidence.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "min_confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Confidence",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "min_confidence"
+        ],
+        "title": "AcceptAboveRequest",
+        "type": "object"
+      },
       "AddRootRequest": {
         "description": "Remember a folder as a root; by default scan it now.",
         "properties": {
@@ -1801,6 +1822,97 @@
         "title": "ResolveAiTagRequest",
         "type": "object"
       },
+      "ReviewCountResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "ReviewCountResponse",
+        "type": "object"
+      },
+      "ReviewItemSchema": {
+        "description": "One open suggestion of the label being reviewed.",
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "file_hash": {
+            "title": "File Hash",
+            "type": "string"
+          },
+          "name": {
+            "description": "File name of the photo, for the caption",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_hash",
+          "name",
+          "confidence"
+        ],
+        "title": "ReviewItemSchema",
+        "type": "object"
+      },
+      "ReviewItemsResponse": {
+        "description": "A page of one label's open suggestions, most confident first.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItemSchema"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "total": {
+            "description": "Open suggestions of the label at or above min_confidence",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label",
+          "total",
+          "items"
+        ],
+        "title": "ReviewItemsResponse",
+        "type": "object"
+      },
+      "ReviewLabelSchema": {
+        "description": "A label with open AI suggestions, for the review queue.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "top_confidence": {
+            "description": "Confidence of the most confident open suggestion",
+            "title": "Top Confidence",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "count",
+          "top_confidence"
+        ],
+        "title": "ReviewLabelSchema",
+        "type": "object"
+      },
       "RootResponse": {
         "description": "A folder the library scans on its own (ADR-003 R11). ``online`` is false while the\nfolder cannot be read (an unplugged drive): it is skipped, not reported as an error.\n``job_id`` names the scan this request started, if it did.",
         "properties": {
@@ -2627,6 +2739,48 @@
         ]
       }
     },
+    "/api/ai-tags/accept-above": {
+      "post": {
+        "description": "Accept the label on every photo whose open suggestion is at or above\n``min_confidence``. Ask ``GET /api/ai-tags/review/count`` first and show the user the count.",
+        "operationId": "accept_above_api_ai_tags_accept_above_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptAboveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiTagBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept every open suggestion of a label above a confidence",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/ai-tags/batch": {
       "post": {
         "description": "Without ``labels`` this takes every open suggestion of the selected photos; with them,\nexactly those labels. Unknown photos are skipped.",
@@ -2664,6 +2818,165 @@
           }
         },
         "summary": "Accept or reject suggestions across many photos",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai-tags/review": {
+      "get": {
+        "description": "The review queue's groups: each label that still has open suggestions, with how many\nphotos and the confidence of its best one. The label with the most confident suggestion\ncomes first.",
+        "operationId": "review_labels_api_ai_tags_review_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewLabelSchema"
+                  },
+                  "title": "Response Review Labels Api Ai Tags Review Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Labels with open suggestions, most confident first",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai-tags/review/count": {
+      "get": {
+        "description": "What ``POST /api/ai-tags/accept-above`` would accept: show it before applying.",
+        "operationId": "review_count_api_ai_tags_review_count_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "label",
+            "required": true,
+            "schema": {
+              "title": "Label",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_confidence",
+            "required": false,
+            "schema": {
+              "default": 0.0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Min Confidence",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "How many open suggestions of a label reach a confidence",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai-tags/review/items": {
+      "get": {
+        "description": "One page of the photos with an open suggestion of ``label``, best first. 404 for a\nlabel with none (it may have been fully reviewed meanwhile).",
+        "operationId": "review_items_api_ai_tags_review_items_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "label",
+            "required": true,
+            "schema": {
+              "title": "Label",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_confidence",
+            "required": false,
+            "schema": {
+              "default": 0.0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Min Confidence",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewItemsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open suggestions of one label, most confident first",
         "tags": [
           "ai"
         ]
