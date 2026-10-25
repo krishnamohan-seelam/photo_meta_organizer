@@ -18,6 +18,7 @@ import {
   Sparkles,
   SunMoon,
   Tag,
+  Trash2,
 } from 'lucide-react'
 import { useUiStore, type ViewMode } from '../../stores/useUiStore'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
@@ -60,7 +61,7 @@ export const CommandPalette: React.FC = () => {
 }
 
 const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen, setFoldersDialogOpen, setDuplicatesDialogOpen, setReviewDialogOpen } = useUiStore(
+  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen, setFoldersDialogOpen, setDuplicatesDialogOpen, setReviewDialogOpen, setRemovedDialogOpen } = useUiStore(
     useShallow((s) => ({
       toggleTheme: s.toggleTheme,
       toggleLightsOut: s.toggleLightsOut,
@@ -73,6 +74,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       setFoldersDialogOpen: s.setFoldersDialogOpen,
       setDuplicatesDialogOpen: s.setDuplicatesDialogOpen,
       setReviewDialogOpen: s.setReviewDialogOpen,
+      setRemovedDialogOpen: s.setRemovedDialogOpen,
     }))
   )
   const { cameras, tags } = useFacets()
@@ -98,6 +100,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     ...views,
     { id: 'scan', title: 'Import (scan a folder)…', icon: <FolderInput size={15} />, action: () => setJobDialog('index') },
     { id: 'sync', title: 'Sync a folder…', icon: <RefreshCw size={15} />, action: () => setJobDialog('sync') },
+    { id: 'removed', title: 'Removed from library…', icon: <Trash2 size={15} />, action: () => setRemovedDialogOpen(true) },
     { id: 'review', title: 'Review AI suggestions…', icon: <Sparkles size={15} />, action: () => setReviewDialogOpen(true) },
     { id: 'duplicates', title: 'Review duplicates…', icon: <Copy size={15} />, action: () => setDuplicatesDialogOpen(true) },
     { id: 'folders', title: 'Watched folders…', icon: <FolderCog size={15} />, action: () => setFoldersDialogOpen(true) },

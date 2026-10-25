@@ -293,6 +293,42 @@ ALTER TABLE files ADD COLUMN hidden_at TEXT;
 """
 
 
+# Ticket 12 (ADR-003 R11): removing photos from the library is undoable for a short while.
+# ``assets.removed_at`` hides an Asset (every view and read goes through ``live_assets``,
+# ``asset_view`` or ``photo_view``, which leave removed ones out); it is purged for good after
+# about 30 s or on the next start. Purging remembers each file's path, size and mtime in
+# ``ignored_files`` so a scan does not bring the photo straight back; a file whose size or
+# mtime differs is new content and is scanned. Files on disk are never touched.
+REMOVAL_SQL = """
+ALTER TABLE assets ADD COLUMN removed_at TEXT;
+
+CREATE TABLE ignored_files (
+    path       TEXT PRIMARY KEY,
+    file_hash  TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    mtime      TEXT,
+    removed_at TEXT NOT NULL
+);
+
+DROP VIEW photo_view;
+DROP VIEW asset_view;
+
+CREATE VIEW live_assets AS SELECT * FROM assets WHERE removed_at IS NULL;
+
+CREATE VIEW asset_view AS
+SELECT a.*, c.rating, c.flagged, c.added_at
+FROM live_assets a JOIN curation c ON c.asset_hash = a.file_hash;
+
+CREATE VIEW photo_view AS
+SELECT v.*, f.path, f.name, f.mtime, f.missing_since
+FROM asset_view v
+JOIN files f ON f.id = (
+    SELECT id FROM files WHERE asset_hash = v.file_hash
+    ORDER BY missing_since IS NOT NULL, last_seen DESC, id LIMIT 1
+);
+"""
+
+
 @dataclass(frozen=True)
 class Migration:
     """One schema step. ``rebuilds`` marks steps that rewrite tables and so need a backup."""
@@ -313,6 +349,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(4, "jobs", JOBS_SQL),
     Migration(5, "roots", ROOTS_SQL),
     Migration(6, "hidden_files", HIDDEN_FILES_SQL),
+    Migration(7, "removal", REMOVAL_SQL),
 )
 
 

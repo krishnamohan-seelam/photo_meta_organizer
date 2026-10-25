@@ -461,6 +461,22 @@ class MockImageMetadataRepository:
                 touched += 1
         return touched
 
+    # Removing photos from the library is not modelled by this mock.
+    def remove_assets(self, file_hashes) -> int:
+        return 0
+
+    def restore_assets(self, file_hashes) -> int:
+        return 0
+
+    def purge_removed(self, older_than=None) -> int:
+        return 0
+
+    def list_ignored(self) -> list:
+        return []
+
+    def forget_ignored(self, paths) -> int:
+        return 0
+
     def list_files(self) -> list[StoredFile]:
         """One File per stored record (this mock keeps one path per hash)."""
         return [

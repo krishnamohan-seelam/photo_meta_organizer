@@ -2578,3 +2578,34 @@ kbd {
   border-radius: 3px;
   opacity: 0.7;
 }
+
+/* Removed from library, toast action (ticket 12) */
+.toast-action {
+  margin-left: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  color: inherit;
+  cursor: pointer;
+}
+.removed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.removed-list li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 0.8rem;
+}
+.removed-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.removed-meta {
+  color: var(--text-muted);
+}

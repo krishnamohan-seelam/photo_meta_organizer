@@ -19,6 +19,7 @@ import type {
   PatchPhotoRequest,
   PhotoId,
   PhotoMetadata,
+  RemovedFile,
   ReviewItems,
   ReviewLabel,
   Root,
@@ -159,6 +160,21 @@ export function saveCollectionApi(
     'Saving the collection',
     jsonInit('POST', { name, photo_hashes: photoHashes, description })
   )
+}
+
+/** Bring back photos removed a moment ago (undo). Ones already purged are gone and not counted. */
+export function restorePhotosApi(photoHashes: string[]): Promise<{ restored_count: number }> {
+  return request('/photos/restore', 'Restoring the photos', jsonInit('POST', { photo_hashes: photoHashes }))
+}
+
+/** Files removed from the library for good. Scans skip them until they change on disk or are restored. */
+export function listRemovedApi(): Promise<RemovedFile[]> {
+  return request('/removed', 'Loading removed files')
+}
+
+/** Stop ignoring these files; their folders are scanned so they are recorded again. */
+export function restoreRemovedApi(paths: string[]): Promise<{ restored_count: number; job_ids: string[] }> {
+  return request('/removed/restore', 'Restoring the files', jsonInit('POST', { paths }))
 }
 
 export function getThumbnailUrl(fileHash: string, width: number = 320, height: number = 320): string {

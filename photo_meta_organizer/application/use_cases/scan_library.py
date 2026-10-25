@@ -214,6 +214,7 @@ class ScanLibrary:
             force_rehash=options.rehash,
             normalise_path=_resolve,
         )
+        file_states = self._skip_removed(file_states)
         if options.reextract:
             # Unchanged content is re-extracted in place: saving it under the same hash
             # updates the extracted columns and keeps the curation.
@@ -222,6 +223,27 @@ class ScanLibrary:
                 for fs in file_states
             ]
         return file_states
+
+    def _skip_removed(self, file_states: list[FileState]) -> list[FileState]:
+        """Mark new files the user removed from the library as ``IGNORED``.
+
+        A path counts only while the file still has the size and mtime it had when it was
+        removed; otherwise its content changed and it is scanned like any new photo.
+        """
+        ignored = {_resolve(i.path): i for i in self._repository.list_ignored()}
+        if not ignored:
+            return file_states
+        marked = []
+        for fs in file_states:
+            known = ignored.get(fs.file_path) if fs.state == "NEW" else None
+            if (
+                known is not None
+                and known.size_bytes == fs.size_bytes
+                and _same_time(known.modified_time, fs.last_modified)
+            ):
+                fs = replace(fs, state="IGNORED")
+            marked.append(fs)
+        return marked
 
     def _hash_file(self, path: str) -> str:
         """SHA-256 of ``path``, read through the retriever (so it works for any backend)."""
@@ -238,6 +260,7 @@ class ScanLibrary:
         result.new_files = count("NEW") if options.index_new else 0
         result.modified_files = count("MODIFIED") if options.reprocess_modified else 0
         result.unchanged_files = count("UNCHANGED")
+        result.ignored_files = count("IGNORED")
         missing = count("DELETED")
         result.deleted_entries = missing if options.remove_missing else 0
         result.missing_files = 0 if options.remove_missing else missing
@@ -287,6 +310,8 @@ class _Run:
                 self._result.unchanged_files += 1
                 if fs.refresh_fingerprint and fs.last_modified:
                     stale.append(_Fingerprint(path, fs.size_bytes or 0, fs.last_modified))
+            elif fs.state == "IGNORED":
+                self._result.ignored_files += 1
             elif fs.state == "DELETED" and self._options.remove_missing:
                 to_remove.append(path)
                 continue  # counted when it is removed
@@ -508,3 +533,10 @@ def _within(path: str, root: str) -> bool:
         return os.path.commonpath([p, r]) == r
     except ValueError:  # different drives
         return False
+
+
+def _same_time(a: datetime | None, b: datetime | None) -> bool:
+    """Whether two modification times are the same, to the second (file systems differ)."""
+    if a is None or b is None:
+        return a is b
+    return abs((a - b).total_seconds()) < 1

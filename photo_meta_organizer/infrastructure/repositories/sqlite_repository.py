@@ -47,6 +47,7 @@ from photo_meta_organizer.domain.geo import haversine_distance_km
 from photo_meta_organizer.domain.models import (
     CameraProfile,
     GpsCoordinates,
+    IgnoredFile,
     ImageDimensions,
     ImageExifData,
     ImageFileInfo,
@@ -197,6 +198,7 @@ class SqliteRepository:
                 now,
             ),
         )
+        self.connection.execute("DELETE FROM ignored_files WHERE path = ?", (info.path,))
         if previous is not None and previous["asset_hash"] != file_hash:
             self._carry_over(previous["asset_hash"], file_hash, adopt_added_at=not asset_existed)
 
@@ -404,6 +406,75 @@ class SqliteRepository:
             )
             return cur.rowcount
 
+    def remove_assets(self, file_hashes: Sequence[str]) -> int:
+        stamp = utc_now_naive().isoformat()
+        with self.lock, self.connection:
+            return sum(
+                self.connection.execute(
+                    "UPDATE assets SET removed_at = ? WHERE file_hash = ? AND removed_at IS NULL",
+                    (stamp, file_hash),
+                ).rowcount
+                for file_hash in dict.fromkeys(file_hashes)
+            )
+
+    def restore_assets(self, file_hashes: Sequence[str]) -> int:
+        with self.lock, self.connection:
+            return sum(
+                self.connection.execute(
+                    "UPDATE assets SET removed_at = NULL "
+                    "WHERE file_hash = ? AND removed_at IS NOT NULL",
+                    (file_hash,),
+                ).rowcount
+                for file_hash in dict.fromkeys(file_hashes)
+            )
+
+    def purge_removed(self, older_than: datetime | None = None) -> int:
+        cutoff = older_than.isoformat() if older_than is not None else None
+        stamp = utc_now_naive().isoformat()
+        with self.lock, self.connection:
+            hashes = [
+                row[0]
+                for row in self.connection.execute(
+                    "SELECT file_hash FROM assets WHERE removed_at IS NOT NULL "
+                    "AND (? IS NULL OR removed_at <= ?)",
+                    (cutoff, cutoff),
+                ).fetchall()
+            ]
+            for file_hash in hashes:
+                self.connection.execute(
+                    "INSERT OR REPLACE INTO ignored_files "
+                    "(path, file_hash, size_bytes, mtime, removed_at) "
+                    "SELECT path, asset_hash, size_bytes, mtime, ? FROM files "
+                    "WHERE asset_hash = ? AND missing_since IS NULL",
+                    (stamp, file_hash),
+                )
+                self.connection.execute("DELETE FROM assets WHERE file_hash = ?", (file_hash,))
+            return len(hashes)
+
+    def list_ignored(self) -> list[IgnoredFile]:
+        with self.lock:
+            rows = self.connection.execute(
+                "SELECT path, file_hash, size_bytes, mtime, removed_at FROM ignored_files "
+                "ORDER BY removed_at DESC, path"
+            ).fetchall()
+        return [
+            IgnoredFile(
+                path=r["path"],
+                file_hash=r["file_hash"],
+                size_bytes=r["size_bytes"],
+                modified_time=_timestamp(r["mtime"]),
+                removed_at=_timestamp(r["removed_at"]) or utc_now_naive(),
+            )
+            for r in rows
+        ]
+
+    def forget_ignored(self, paths: Sequence[str]) -> int:
+        with self.lock, self.connection:
+            return sum(
+                self.connection.execute("DELETE FROM ignored_files WHERE path = ?", (p,)).rowcount
+                for p in dict.fromkeys(paths)
+            )
+
     def find_by_paths(self, paths: list[str]) -> list[ImageMetadata]:
         """The photo held at each known path, with that path as its ``file_info``."""
         if not paths:
@@ -435,7 +506,7 @@ class SqliteRepository:
 
     def count(self) -> int:
         with self.lock:
-            return int(self.connection.execute("SELECT COUNT(*) FROM assets").fetchone()[0])
+            return int(self.connection.execute("SELECT COUNT(*) FROM live_assets").fetchone()[0])
 
     def _labels_for(self, file_hashes: Sequence[str]) -> dict[str, list[str]]:
         if not file_hashes:
@@ -579,7 +650,7 @@ class SqliteRepository:
     def facets(self) -> Facets:
         with self.lock:
             camera_rows = self.connection.execute(
-                "SELECT camera_make AS name, COUNT(*) AS n FROM assets "
+                "SELECT camera_make AS name, COUNT(*) AS n FROM live_assets "
                 "WHERE camera_make IS NOT NULL GROUP BY camera_make ORDER BY camera_make"
             ).fetchall()
             tag_rows = self.connection.execute(
@@ -587,15 +658,15 @@ class SqliteRepository:
                 "GROUP BY label ORDER BY label"
             ).fetchall()
             year_rows = self.connection.execute(
-                "SELECT strftime('%Y', captured_at) AS year, COUNT(*) AS n FROM assets "
+                "SELECT strftime('%Y', captured_at) AS year, COUNT(*) AS n FROM live_assets "
                 "WHERE captured_at IS NOT NULL GROUP BY year ORDER BY year"
             ).fetchall()
             bounds_row = self.connection.execute(
-                "SELECT MIN(gps_lat), MAX(gps_lat), MIN(gps_lon), MAX(gps_lon) FROM assets "
+                "SELECT MIN(gps_lat), MAX(gps_lat), MIN(gps_lon), MAX(gps_lon) FROM live_assets "
                 "WHERE gps_lat IS NOT NULL"
             ).fetchone()
             iso_rows = self.connection.execute(
-                "SELECT iso, COUNT(*) AS n FROM assets WHERE iso IS NOT NULL "
+                "SELECT iso, COUNT(*) AS n FROM live_assets WHERE iso IS NOT NULL "
                 "GROUP BY iso ORDER BY iso"
             ).fetchall()
             totals = self.connection.execute(
@@ -690,7 +761,7 @@ class SqliteRepository:
 
 def search_source(query: SearchQuery) -> str:
     """The table :func:`search_where` filters: ``assets``, joined to curation only if needed."""
-    return "asset_view" if query.rating is not None or query.flagged is not None else "assets"
+    return "asset_view" if query.rating is not None or query.flagged is not None else "live_assets"
 
 
 def search_where(query: SearchQuery) -> tuple[str, list[Any]]:
@@ -843,14 +914,14 @@ _DUPLICATE_HASHES = (
 _DUPLICATE_LISTING = (
     "SELECT f.asset_hash AS asset_hash, a.size_bytes AS size_bytes, "
     "a.size_bytes * MAX(SUM(f.hidden_at IS NULL) - 1, 0) AS saving FROM files f "
-    "JOIN assets a ON a.file_hash = f.asset_hash "
+    "JOIN live_assets a ON a.file_hash = f.asset_hash "
     "WHERE f.missing_since IS NULL "
     "GROUP BY f.asset_hash HAVING COUNT(*) > 1"
 )
 _DUPLICATE_SAVINGS = (
     "SELECT f.asset_hash AS asset_hash, a.size_bytes AS size_bytes, "
     "a.size_bytes * (COUNT(*) - 1) AS saving FROM files f "
-    "JOIN assets a ON a.file_hash = f.asset_hash "
+    "JOIN live_assets a ON a.file_hash = f.asset_hash "
     "WHERE f.hidden_at IS NULL AND f.missing_since IS NULL "
     "GROUP BY f.asset_hash HAVING COUNT(*) > 1"
 )

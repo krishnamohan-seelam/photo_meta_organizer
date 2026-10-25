@@ -65,6 +65,8 @@ from photo_meta_organizer.api.schemas import (
     PhotoIdSchema,
     PhotoMetadataResponse,
     PhotoPathSchema,
+    RestorePhotosRequest,
+    RestorePhotosResponse,
     SearchRequest,
     SyncFolderRequest,
 )
@@ -84,6 +86,7 @@ from photo_meta_organizer.application.jobs import (
     JobStateError,
     Work,
 )
+from photo_meta_organizer.application.trash import UNDO_SECONDS
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,
@@ -226,7 +229,7 @@ def batch_update_photos(
     """Apply one validated curation action to many photos."""
     try:
         if request.action == "delete":
-            count = repository.batch_delete(request.photo_hashes)
+            count = repository.remove_assets(request.photo_hashes)
         else:
             command = _BATCH_ACTION_COMMANDS[request.action](request.value)
             count = repository.apply_batch(request.photo_hashes, command)
@@ -236,9 +239,26 @@ def batch_update_photos(
     return BatchPhotoResponse(
         updated_count=0 if deleting else count,
         deleted_count=count if deleting else 0,
+        undo_seconds=UNDO_SECONDS if deleting else 0,
         action=request.action,
-        message=f"Successfully applied '{request.action}' to {count} photo(s).",
+        message=(
+            f"Removed {count} photo(s) from the library (files on disk are untouched)."
+            if deleting
+            else f"Successfully applied '{request.action}' to {count} photo(s)."
+        ),
     )
+
+
+@photos_router.post(
+    "/restore", response_model=RestorePhotosResponse, summary="Undo removing photos"
+)
+def restore_photos(
+    request: RestorePhotosRequest,
+    repository: ImageMetadataRepository = Depends(get_repository),
+) -> RestorePhotosResponse:
+    """Bring back photos removed less than ``undo_seconds`` ago, with their ratings, labels and
+    collections. Ones already purged are gone for good and are not counted."""
+    return RestorePhotosResponse(restored_count=repository.restore_assets(request.photo_hashes))
 
 
 @photos_router.get(
@@ -400,25 +420,27 @@ def patch_photo(
 @photos_router.delete(
     "/{file_hash}",
     response_model=DeleteResponse,
-    summary="Delete photo from index",
+    summary="Remove a photo from the library",
 )
 def delete_photo(
     file_hash: str,
     repository: ImageMetadataRepository = Depends(get_repository),
-    collection_repository: CollectionRepository = Depends(get_collection_repository),
 ) -> DeleteResponse:
-    """Remove a photo from the metadata index by its SHA-256 file hash."""
-    deleted = repository.delete(file_hash)
-    if not deleted:
+    """Remove a photo from the library by its SHA-256 file hash. The file on disk is untouched.
+
+    The photo can be brought back with ``POST /api/photos/restore`` for ``undo_seconds``; after
+    that it is gone for good (and scans leave the file alone).
+    """
+    if repository.get_by_filehash(file_hash) is None or not repository.remove_assets([file_hash]):
         raise HTTPException(
             status_code=404,
             detail=f"Photo with hash '{file_hash}' not found.",
         )
-    collection_repository.remove_photo_from_all(file_hash)
     return DeleteResponse(
         deleted=True,
         file_hash=file_hash,
-        message=f"Photo '{file_hash}' removed from index.",
+        undo_seconds=UNDO_SECONDS,
+        message=f"Photo '{file_hash}' removed from the library.",
     )
 
 

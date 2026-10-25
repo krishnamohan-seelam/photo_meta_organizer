@@ -84,6 +84,7 @@ def _sync_outcome(result: SyncResult, folder_path: str, dry_run: bool) -> JobOut
             "missing": result.missing_files,
             "found_again": result.found_again,
             "unchanged": result.unchanged_files,
+            "ignored": result.ignored_files,
             "fingerprints_refreshed": result.fingerprints_refreshed,
             "failed": failures,
         },

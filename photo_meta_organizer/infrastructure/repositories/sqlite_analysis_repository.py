@@ -283,6 +283,7 @@ class SqliteAnalysisRepository:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT label, COUNT(*) AS n FROM photo_ai_tags WHERE status = ? "
+                "AND file_hash IN (SELECT file_hash FROM live_assets) "
                 "GROUP BY label ORDER BY n DESC, label",
                 (status.value,),
             ).fetchall()
@@ -292,7 +293,8 @@ class SqliteAnalysisRepository:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT label, COUNT(*) AS n, MAX(confidence) AS top FROM photo_ai_tags "
-                "WHERE status = ? GROUP BY label ORDER BY top DESC, n DESC, label",
+                "WHERE status = ? AND file_hash IN (SELECT file_hash FROM live_assets) "
+                "GROUP BY label ORDER BY top DESC, n DESC, label",
                 (AiTagStatus.SUGGESTED.value,),
             ).fetchall()
         return [ReviewLabel(r["label"], r["n"], r["top"]) for r in rows]
@@ -304,6 +306,7 @@ class SqliteAnalysisRepository:
             rows = self._conn.execute(
                 "SELECT file_hash, confidence FROM photo_ai_tags "
                 "WHERE label = ? AND status = ? AND confidence >= ? "
+                "AND file_hash IN (SELECT file_hash FROM live_assets) "
                 "ORDER BY confidence DESC, file_hash LIMIT ? OFFSET ?",
                 (
                     label,
@@ -319,7 +322,7 @@ class SqliteAnalysisRepository:
         with self._lock:
             row = self._conn.execute(
                 "SELECT COUNT(*) FROM photo_ai_tags WHERE label = ? AND status = ? "
-                "AND confidence >= ?",
+                "AND confidence >= ? AND file_hash IN (SELECT file_hash FROM live_assets)",
                 (label, AiTagStatus.SUGGESTED.value, min_confidence - _CONFIDENCE_SLACK),
             ).fetchone()
         return int(row[0])

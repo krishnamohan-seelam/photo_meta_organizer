@@ -7,6 +7,12 @@ import { DEFAULT_GAP_HOURS, GAP_PRESETS } from '../utils/chapters'
 
 export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
 export type ToastKind = 'success' | 'error'
+
+/** A button on a toast, such as Undo. */
+export interface ToastAction {
+  label: string
+  run: () => void
+}
 export type JobDialogKind = 'index' | 'sync'
 export type LibraryLayout = 'grid' | 'table'
 /** A search by meaning: free text, or "photos like this one". Replaces the Library's list while set. */
@@ -58,6 +64,7 @@ interface UiState {
   aiDialogOpen: boolean
   duplicatesDialogOpen: boolean
   reviewDialogOpen: boolean
+  removedDialogOpen: boolean
   foldersDialogOpen: boolean
   semantic: SemanticQuery | null
   /** How many matches the search by meaning asks for; "Show more" raises it. */
@@ -91,6 +98,7 @@ interface UiState {
   filterDuplicates: boolean | null
   toastMessage: string | null
   toastKind: ToastKind
+  toastAction: ToastAction | null
 
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
@@ -106,6 +114,7 @@ interface UiState {
   setAiDialogOpen: (open: boolean) => void
   setDuplicatesDialogOpen: (open: boolean) => void
   setReviewDialogOpen: (open: boolean) => void
+  setRemovedDialogOpen: (open: boolean) => void
   setFoldersDialogOpen: (open: boolean) => void
   setSemantic: (query: SemanticQuery | null) => void
   showMoreSemantic: () => void
@@ -128,7 +137,7 @@ interface UiState {
   setSort: (sortBy: SortField, sortOrder: 'asc' | 'desc') => void
   setFilterArea: (area: BoundingBox | null) => void
   resetFilters: () => void
-  showToast: (msg: string, kind?: ToastKind) => void
+  showToast: (msg: string, kind?: ToastKind, action?: ToastAction) => void
   hideToast: () => void
 }
 
@@ -148,6 +157,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   aiDialogOpen: false,
   duplicatesDialogOpen: false,
   reviewDialogOpen: false,
+  removedDialogOpen: false,
   foldersDialogOpen: false,
   semantic: null,
   semanticLimit: SEMANTIC_PAGE,
@@ -172,6 +182,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   filterDuplicates: null,
   toastMessage: null,
   toastKind: 'success',
+  toastAction: null,
 
   setTheme: (theme) => {
     saveTheme(theme)
@@ -205,6 +216,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setAiDialogOpen: (aiDialogOpen) => set({ aiDialogOpen }),
   setDuplicatesDialogOpen: (duplicatesDialogOpen) => set({ duplicatesDialogOpen }),
   setReviewDialogOpen: (reviewDialogOpen) => set({ reviewDialogOpen }),
+  setRemovedDialogOpen: (removedDialogOpen) => set({ removedDialogOpen }),
   setFoldersDialogOpen: (foldersDialogOpen) => set({ foldersDialogOpen }),
   setSemantic: (semantic) => set({ semantic, semanticLimit: SEMANTIC_PAGE }),
   showMoreSemantic: () => set((s) => ({ semanticLimit: Math.min(SEMANTIC_MAX, s.semanticLimit + SEMANTIC_PAGE) })),
@@ -264,19 +276,21 @@ export const useUiStore = create<UiState>((set, get) => ({
     set({ semantic: null, semanticLimit: SEMANTIC_PAGE })
   },
 
-  showToast: (toastMessage, toastKind = 'success') => {
+  showToast: (toastMessage, toastKind = 'success', toastAction) => {
     // One timer: an older toast's timeout must not dismiss the newer one early (an error would vanish).
     if (toastTimer) clearTimeout(toastTimer)
-    set({ toastMessage, toastKind })
+    set({ toastMessage, toastKind, toastAction: toastAction ?? null })
+    // A toast with an action (Undo) stays long enough to be used.
+    const visibleMs = toastAction ? 15000 : toastKind === 'error' ? 6000 : 2500
     toastTimer = setTimeout(() => {
       toastTimer = null
-      set({ toastMessage: null })
-    }, toastKind === 'error' ? 6000 : 2500)
+      set({ toastMessage: null, toastAction: null })
+    }, visibleMs)
   },
 
   hideToast: () => {
     if (toastTimer) clearTimeout(toastTimer)
     toastTimer = null
-    set({ toastMessage: null })
+    set({ toastMessage: null, toastAction: null })
   },
 }))

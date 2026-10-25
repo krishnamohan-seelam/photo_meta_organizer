@@ -282,6 +282,21 @@ class StoredFile:
 
 
 @dataclass(frozen=True)
+class IgnoredFile:
+    """A path the user removed from the library for good (ticket 12).
+
+    A scan skips it while the file on disk still has the size and mtime it had when removed;
+    a different size or mtime means new content, which is scanned like any new photo.
+    """
+
+    path: str
+    file_hash: str
+    size_bytes: int
+    modified_time: datetime | None
+    removed_at: datetime
+
+
+@dataclass(frozen=True)
 class FileState:
     """Represents the detected state of a single file during synchronization.
 
@@ -291,7 +306,8 @@ class FileState:
 
     Attributes:
         file_path: Normalised absolute file path.
-        state: Classification — NEW, MODIFIED, UNCHANGED, or DELETED.
+        state: Classification — NEW, MODIFIED, UNCHANGED, DELETED, or IGNORED (a path the
+            user removed from the library, with the size and mtime it had then).
         file_hash: Current content hash (None for DELETED files).
         size_bytes: Current size in bytes (None for DELETED files).
         last_modified: Current mtime (None for DELETED files).
@@ -305,7 +321,7 @@ class FileState:
     """
 
     file_path: str
-    state: Literal["NEW", "MODIFIED", "UNCHANGED", "DELETED"]
+    state: Literal["NEW", "MODIFIED", "UNCHANGED", "DELETED", "IGNORED"]
     file_hash: str | None = None
     size_bytes: int | None = None
     last_modified: datetime | None = None
@@ -326,6 +342,7 @@ class SyncResult:
         missing_files: Files not found by this scan and kept, flagged as missing.
         found_again: Files recorded as missing that this scan found again.
         unchanged_files: Number of files skipped (identical fingerprint).
+        ignored_files: New files skipped because the user removed them from the library.
         fingerprints_refreshed: UNCHANGED files whose stored size/mtime was
             missing (legacy record) or stale (``touch``) and was brought up to date.
         errors: List of error messages for files that failed processing.
@@ -339,6 +356,7 @@ class SyncResult:
     missing_files: int = 0
     found_again: int = 0
     unchanged_files: int = 0
+    ignored_files: int = 0
     fingerprints_refreshed: int = 0
     errors: list[str] = field(default_factory=list)
     duration_seconds: float = 0.0

@@ -54,6 +54,7 @@ from photo_meta_organizer.api.routes.photos_router import (
     search_router,
     sync_router,
 )
+from photo_meta_organizer.api.routes.removed_router import removed_router
 from photo_meta_organizer.api.routes.roots_router import roots_router
 from photo_meta_organizer.application import composition
 from photo_meta_organizer.application.activity import ActivityTracker
@@ -72,6 +73,7 @@ from photo_meta_organizer.application.settings import (  # noqa: F401 (re-export
     DEFAULT_CORS_ORIGINS,
     Settings,
 )
+from photo_meta_organizer.application.trash import TrashPurger
 from photo_meta_organizer.infrastructure import power
 from photo_meta_organizer.infrastructure.analysis import runtime
 from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
@@ -145,7 +147,10 @@ def create_app(
         if services.root_watcher is not None:
             services.root_watcher.start()
         services.keep_analysed.start()
+        services.trash.purge_all()  # whatever was removed before the last stop is final now
+        services.trash.start()
         yield
+        services.trash.stop()
         services.keep_analysed.stop()
         if services.root_watcher is not None:
             services.root_watcher.stop()
@@ -250,6 +255,7 @@ def create_app(
         roots=roots,
         root_watcher=root_watcher,
         keep_analysed=keep_analysed,
+        trash=TrashPurger(repository),
         thumbnails=ThumbnailService(
             str(settings.thumbnail_dir),
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
@@ -270,6 +276,7 @@ def create_app(
     app.include_router(jobs_router)
     app.include_router(events_router)
     app.include_router(roots_router)
+    app.include_router(removed_router)
     app.include_router(duplicates_router)
     app.include_router(files_router)
     app.include_router(export_router)

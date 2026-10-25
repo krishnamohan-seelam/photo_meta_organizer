@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { ChevronUp, Download, Flag, FolderPlus, Plus, Sparkles, Star, Tag, X } from 'lucide-react'
+import { ChevronUp, Download, Flag, FolderPlus, Plus, Sparkles, Star, Tag, Trash2, X } from 'lucide-react'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { useExport } from '../../hooks/useExport'
+import { useRemovePhotos } from '../../hooks/useRemoval'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { aiSearchReady, useAnalysisStatus, useResolveAiTagsBatch } from '../../hooks/useAnalysis'
 import { useCollections, useSaveCollection } from '../../hooks/useCollections'
 import { formatBytes } from '../../utils/photoFormat'
 import { NameDialog } from './NameDialog'
 
 type Menu = 'rate' | 'collection' | 'export'
-type Dialog = 'tag' | 'collection'
+type Dialog = 'tag' | 'collection' | 'remove'
 
 /** Close an open popover on Escape or a click outside it. */
 function useDismiss(ref: React.RefObject<HTMLElement | null>, open: boolean, close: () => void) {
@@ -46,6 +48,7 @@ export const SelectionDock: React.FC = () => {
   const aiReady = aiSearchReady(useAnalysisStatus())
   const resolveAiTags = useResolveAiTagsBatch()
   const saveCollection = useSaveCollection()
+  const removePhotos = useRemovePhotos()
   const [menu, setMenu] = useState<Menu | null>(null)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const dockRef = useRef<HTMLDivElement>(null)
@@ -202,6 +205,10 @@ export const SelectionDock: React.FC = () => {
           )}
         </div>
 
+        <button type="button" className="btn btn-sm" onClick={() => setDialog('remove')}>
+          <Trash2 size={14} /> Remove
+        </button>
+
         <button type="button" className="btn btn-sm icon-btn" onClick={clearSelection} aria-label="Clear selection" title="Clear selection (Esc)">
           <X size={14} />
         </button>
@@ -214,6 +221,15 @@ export const SelectionDock: React.FC = () => {
           placeholder="e.g. highlights"
           submitLabel="Add tag"
           onSubmit={(tag) => batchPhotos({ photo_hashes: hashes(), action: 'add_tag', value: tag }, `Added #${tag} to ${plural}`)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'remove' && (
+        <ConfirmDialog
+          title={`Remove ${plural} from the library?`}
+          message="The files stay on your disk and are not touched. You can undo this for a short while; after that the photos, their ratings and tags are gone from the library, and scans leave the files alone."
+          confirmLabel={`Remove ${plural}`}
+          onConfirm={() => void removePhotos(hashes())}
           onClose={() => setDialog(null)}
         />
       )}

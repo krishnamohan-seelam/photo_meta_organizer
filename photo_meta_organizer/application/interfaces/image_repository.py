@@ -24,7 +24,7 @@ from photo_meta_organizer.application.interfaces.search_types import (
     SearchQuery,
 )
 from photo_meta_organizer.domain.curation import CurationCommand
-from photo_meta_organizer.domain.models import ImageMetadata, StoredFile
+from photo_meta_organizer.domain.models import IgnoredFile, ImageMetadata, StoredFile
 
 
 @runtime_checkable
@@ -161,6 +161,36 @@ class ImageMetadataRepository(Protocol):
 
         Returns False if ``path`` is not a recorded File.
         """
+        ...
+
+    def remove_assets(self, file_hashes: Sequence[str]) -> int:
+        """Take photos out of the library, undoably: they disappear from every read.
+
+        They stay in storage, hidden, until :meth:`purge_removed`; :meth:`restore_assets` brings
+        them back untouched. Files on disk are never touched. Returns how many were removed
+        (unknown or already removed hashes are skipped).
+        """
+        ...
+
+    def restore_assets(self, file_hashes: Sequence[str]) -> int:
+        """Bring removed photos back, with their curation. Purged ones are gone: skipped."""
+        ...
+
+    def purge_removed(self, older_than: datetime | None = None) -> int:
+        """Delete removed photos for good (curation, embeddings, tags, collection membership).
+
+        Only those removed at or before ``older_than`` (all of them for ``None``). Each file that
+        was on disk is remembered as an :class:`IgnoredFile`, so scans leave it alone. Returns how
+        many photos were purged.
+        """
+        ...
+
+    def list_ignored(self) -> list[IgnoredFile]:
+        """Every path removed for good, newest first."""
+        ...
+
+    def forget_ignored(self, paths: Sequence[str]) -> int:
+        """Stop ignoring these paths (the next scan records them again). Returns how many."""
         ...
 
     def get_by_filehash(self, file_hash: str) -> ImageMetadata | None:

@@ -645,6 +645,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/photos/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo removing photos
+         * @description Bring back photos removed less than ``undo_seconds`` ago, with their ratings, labels and
+         *     collections. Ones already purged are gone for good and are not counted.
+         */
+        post: operations["restore_photos_api_photos_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/photos/{file_hash}": {
         parameters: {
             query?: never;
@@ -660,8 +681,11 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete photo from index
-         * @description Remove a photo from the metadata index by its SHA-256 file hash.
+         * Remove a photo from the library
+         * @description Remove a photo from the library by its SHA-256 file hash. The file on disk is untouched.
+         *
+         *     The photo can be brought back with ``POST /api/photos/restore`` for ``undo_seconds``; after
+         *     that it is gone for good (and scans leave the file alone).
          */
         delete: operations["delete_photo_api_photos__file_hash__delete"];
         options?: never;
@@ -755,6 +779,49 @@ export interface paths {
         get: operations["get_photo_thumbnail_api_photos__file_hash__thumbnail_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/removed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Files removed from the library
+         * @description Files removed for good, newest first. Scans skip them while they are unchanged on disk.
+         */
+        get: operations["list_removed_api_removed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/removed/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bring removed files back
+         * @description Stop ignoring these files and scan their folders so they are recorded again.
+         *
+         *     A folder that is already being scanned is left to that scan; the file is picked up by it
+         *     or by the next one.
+         */
+        post: operations["restore_removed_api_removed_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1161,6 +1228,12 @@ export interface components {
             deleted_count: number;
             /** Message */
             message: string;
+            /**
+             * Undo Seconds
+             * @description After a delete: how long it can be undone with POST /api/photos/restore
+             * @default 0
+             */
+            undo_seconds: number;
             /** Updated Count */
             updated_count: number;
         };
@@ -1218,6 +1291,12 @@ export interface components {
             file_hash: string;
             /** Message */
             message: string;
+            /**
+             * Undo Seconds
+             * @description How long it can be undone with POST /api/photos/restore
+             * @default 0
+             */
+            undo_seconds: number;
         };
         /**
          * DimensionsSchema
@@ -1783,6 +1862,23 @@ export interface components {
             /** Size Bytes */
             size_bytes: number;
         };
+        /**
+         * RemovedFileSchema
+         * @description A file the user removed from the library for good. Scans skip it until it is restored.
+         */
+        RemovedFileSchema: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /**
+             * Removed At
+             * Format: date-time
+             */
+            removed_at: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
         /** ResolveAiTagRequest */
         ResolveAiTagRequest: {
             /**
@@ -1793,6 +1889,37 @@ export interface components {
             action: "accept" | "reject" | "reset";
             /** Label */
             label: string;
+        };
+        /**
+         * RestorePhotosRequest
+         * @description Bring photos removed a moment ago back into the library.
+         */
+        RestorePhotosRequest: {
+            /** Photo Hashes */
+            photo_hashes: string[];
+        };
+        /** RestorePhotosResponse */
+        RestorePhotosResponse: {
+            /**
+             * Restored Count
+             * @description Photos brought back; purged ones are gone for good
+             */
+            restored_count: number;
+        };
+        /** RestoreRemovedRequest */
+        RestoreRemovedRequest: {
+            /** Paths */
+            paths: string[];
+        };
+        /** RestoreRemovedResponse */
+        RestoreRemovedResponse: {
+            /**
+             * Job Ids
+             * @description Scans started to bring the files back
+             */
+            job_ids: string[];
+            /** Restored Count */
+            restored_count: number;
         };
         /** ReviewCountResponse */
         ReviewCountResponse: {
@@ -3060,6 +3187,39 @@ export interface operations {
             };
         };
     };
+    restore_photos_api_photos_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestorePhotosRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestorePhotosResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_photo_api_photos__file_hash__get: {
         parameters: {
             query?: never;
@@ -3308,6 +3468,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_removed_api_removed_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemovedFileSchema"][];
+                };
+            };
+        };
+    };
+    restore_removed_api_removed_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRemovedRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreRemovedResponse"];
                 };
             };
             /** @description Validation Error */

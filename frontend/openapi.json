@@ -368,6 +368,12 @@
             "title": "Message",
             "type": "string"
           },
+          "undo_seconds": {
+            "default": 0,
+            "description": "After a delete: how long it can be undone with POST /api/photos/restore",
+            "title": "Undo Seconds",
+            "type": "integer"
+          },
           "updated_count": {
             "title": "Updated Count",
             "type": "integer"
@@ -376,6 +382,7 @@
         "required": [
           "updated_count",
           "deleted_count",
+          "undo_seconds",
           "action",
           "message"
         ],
@@ -491,11 +498,18 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "undo_seconds": {
+            "default": 0,
+            "description": "How long it can be undone with POST /api/photos/restore",
+            "title": "Undo Seconds",
+            "type": "integer"
           }
         },
         "required": [
           "deleted",
           "file_hash",
+          "undo_seconds",
           "message"
         ],
         "title": "DeleteResponse",
@@ -1874,6 +1888,36 @@
         "title": "PhotoPathSchema",
         "type": "object"
       },
+      "RemovedFileSchema": {
+        "description": "A file the user removed from the library for good. Scans skip it until it is restored.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "removed_at": {
+            "format": "date-time",
+            "title": "Removed At",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "size_bytes",
+          "removed_at"
+        ],
+        "title": "RemovedFileSchema",
+        "type": "object"
+      },
       "ResolveAiTagRequest": {
         "properties": {
           "action": {
@@ -1897,6 +1941,77 @@
           "action"
         ],
         "title": "ResolveAiTagRequest",
+        "type": "object"
+      },
+      "RestorePhotosRequest": {
+        "description": "Bring photos removed a moment ago back into the library.",
+        "properties": {
+          "photo_hashes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Photo Hashes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "photo_hashes"
+        ],
+        "title": "RestorePhotosRequest",
+        "type": "object"
+      },
+      "RestorePhotosResponse": {
+        "properties": {
+          "restored_count": {
+            "description": "Photos brought back; purged ones are gone for good",
+            "title": "Restored Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "restored_count"
+        ],
+        "title": "RestorePhotosResponse",
+        "type": "object"
+      },
+      "RestoreRemovedRequest": {
+        "properties": {
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "RestoreRemovedRequest",
+        "type": "object"
+      },
+      "RestoreRemovedResponse": {
+        "properties": {
+          "job_ids": {
+            "description": "Scans started to bring the files back",
+            "items": {
+              "type": "string"
+            },
+            "title": "Job Ids",
+            "type": "array"
+          },
+          "restored_count": {
+            "title": "Restored Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "restored_count",
+          "job_ids"
+        ],
+        "title": "RestoreRemovedResponse",
         "type": "object"
       },
       "ReviewCountResponse": {
@@ -4006,9 +4121,51 @@
         ]
       }
     },
+    "/api/photos/restore": {
+      "post": {
+        "description": "Bring back photos removed less than ``undo_seconds`` ago, with their ratings, labels and\ncollections. Ones already purged are gone for good and are not counted.",
+        "operationId": "restore_photos_api_photos_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestorePhotosRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestorePhotosResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo removing photos",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
     "/api/photos/{file_hash}": {
       "delete": {
-        "description": "Remove a photo from the metadata index by its SHA-256 file hash.",
+        "description": "Remove a photo from the library by its SHA-256 file hash. The file on disk is untouched.\n\nThe photo can be brought back with ``POST /api/photos/restore`` for ``undo_seconds``; after\nthat it is gone for good (and scans leave the file alone).",
         "operationId": "delete_photo_api_photos__file_hash__delete",
         "parameters": [
           {
@@ -4043,7 +4200,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Delete photo from index",
+        "summary": "Remove a photo from the library",
         "tags": [
           "photos"
         ]
@@ -4391,6 +4548,74 @@
         "summary": "Stream WebP thumbnail",
         "tags": [
           "photos"
+        ]
+      }
+    },
+    "/api/removed": {
+      "get": {
+        "description": "Files removed for good, newest first. Scans skip them while they are unchanged on disk.",
+        "operationId": "list_removed_api_removed_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RemovedFileSchema"
+                  },
+                  "title": "Response List Removed Api Removed Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Files removed from the library",
+        "tags": [
+          "removed"
+        ]
+      }
+    },
+    "/api/removed/restore": {
+      "post": {
+        "description": "Stop ignoring these files and scan their folders so they are recorded again.\n\nA folder that is already being scanned is left to that scan; the file is picked up by it\nor by the next one.",
+        "operationId": "restore_removed_api_removed_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRemovedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreRemovedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bring removed files back",
+        "tags": [
+          "removed"
         ]
       }
     },

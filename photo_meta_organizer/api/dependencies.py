@@ -25,6 +25,7 @@ from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.keep_analysed import KeepAnalysed
 from photo_meta_organizer.application.root_watcher import RootWatcher
 from photo_meta_organizer.application.settings import Settings
+from photo_meta_organizer.application.trash import TrashPurger
 from photo_meta_organizer.application.zero_shot_tagger import ZeroShotTagger
 from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
@@ -40,6 +41,7 @@ class Services:
     roots: RootStore
     root_watcher: RootWatcher | None  # None when folder watching is off
     keep_analysed: KeepAnalysed
+    trash: TrashPurger
     thumbnails: ThumbnailService
     places: PlaceNamer
     analysis: AnalysisRepository

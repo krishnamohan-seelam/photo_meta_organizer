@@ -207,6 +207,10 @@ class BatchPhotoResponse(ResponseModel):
 
     updated_count: int
     deleted_count: int = 0
+    undo_seconds: int = Field(
+        default=0,
+        description="After a delete: how long it can be undone with POST /api/photos/restore",
+    )
     action: str
     message: str
 
@@ -233,6 +237,9 @@ class DeleteResponse(ResponseModel):
 
     deleted: bool
     file_hash: str
+    undo_seconds: int = Field(
+        default=0, description="How long it can be undone with POST /api/photos/restore"
+    )
     message: str
 
 
@@ -608,3 +615,31 @@ class KeepAnalysedResponse(ResponseModel):
 
 class KeepAnalysedRequest(BaseModel):
     enabled: bool
+
+
+class RestorePhotosRequest(BaseModel):
+    """Bring photos removed a moment ago back into the library."""
+
+    photo_hashes: list[str] = Field(min_length=1)
+
+
+class RestorePhotosResponse(ResponseModel):
+    restored_count: int = Field(description="Photos brought back; purged ones are gone for good")
+
+
+class RemovedFileSchema(ResponseModel):
+    """A file the user removed from the library for good. Scans skip it until it is restored."""
+
+    path: str
+    name: str
+    size_bytes: int
+    removed_at: datetime
+
+
+class RestoreRemovedRequest(BaseModel):
+    paths: list[str] = Field(min_length=1)
+
+
+class RestoreRemovedResponse(ResponseModel):
+    restored_count: int
+    job_ids: list[str] = Field(description="Scans started to bring the files back")

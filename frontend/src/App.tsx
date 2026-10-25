@@ -24,6 +24,7 @@ import { DashboardView } from './components/dashboard/DashboardView'
 import { LightboxModal } from './components/lightbox/LightboxModal'
 import { ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
 import { FirstRunState } from './components/states/FirstRunState'
+import { RemovedDialog } from './components/removed/RemovedDialog'
 import { ReviewSuggestionsDialog } from './components/review/ReviewSuggestionsDialog'
 import { DuplicatesDialog } from './components/duplicates/DuplicatesDialog'
 import { FoldersDialog } from './components/jobs/FoldersDialog'
@@ -34,7 +35,7 @@ import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
 const MapExplorerView = lazy(() => import('./components/maps/MapExplorerView').then((m) => ({ default: m.MapExplorerView })))
 
 export const App: React.FC = () => {
-  const { theme, activeView, lightsOut, inspectedHash, setInspectedHash, toastMessage, toastKind } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind })))
+  const { theme, activeView, lightsOut, inspectedHash, setInspectedHash, toastMessage, toastKind, toastAction } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind, toastAction: s.toastAction })))
 
   // The server filters, sorts and pages the library (PMO-27); views read the loaded pages from one cache entry.
   const { data, photos, isPending, isError, error, refetch, isFetching } = usePhotoSearch()
@@ -115,6 +116,7 @@ export const App: React.FC = () => {
       <FoldersDialog />
       <DuplicatesDialog />
       <ReviewSuggestionsDialog />
+      <RemovedDialog />
       <RootSuggestionsDialog />
       <LightboxModal />
 
@@ -122,6 +124,11 @@ export const App: React.FC = () => {
         <div className={`toast-notice${toastKind === 'error' ? ' toast-error' : ''}`} role={toastKind === 'error' ? 'alert' : 'status'}>
           {toastKind === 'error' ? <AlertCircle size={16} className="toast-icon-error" /> : <CheckCircle2 size={16} className="toast-icon-ok" />}
           <span>{toastMessage}</span>
+          {toastAction && (
+            <button type="button" className="btn-reset toast-action" onClick={toastAction.run}>
+              {toastAction.label}
+            </button>
+          )}
         </div>
       )}
     </div>
