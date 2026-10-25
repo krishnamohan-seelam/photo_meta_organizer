@@ -17,7 +17,7 @@ The word the interface and the API use for an asset.
 _Avoid_: Image
 
 **Duplicate**:
-An asset that has more than one file.
+An asset that has more than one file. A *copy* is one of those files while it is on disk and the user has not hidden it; hiding a copy takes it out of the duplicate count and the reclaimable space, and never touches the file.
 _Avoid_: Dupe, clone
 
 **Primary file**:

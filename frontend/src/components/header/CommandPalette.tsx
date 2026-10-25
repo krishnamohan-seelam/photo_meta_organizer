@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Camera,
   Columns3,
+  Copy,
   Download,
   EyeOff,
   FolderCog,
@@ -59,7 +60,7 @@ export const CommandPalette: React.FC = () => {
 }
 
 const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen, setFoldersDialogOpen } = useUiStore(
+  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen, setFoldersDialogOpen, setDuplicatesDialogOpen } = useUiStore(
     useShallow((s) => ({
       toggleTheme: s.toggleTheme,
       toggleLightsOut: s.toggleLightsOut,
@@ -70,6 +71,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       setShortcutsOpen: s.setShortcutsOpen,
       setAiDialogOpen: s.setAiDialogOpen,
       setFoldersDialogOpen: s.setFoldersDialogOpen,
+      setDuplicatesDialogOpen: s.setDuplicatesDialogOpen,
     }))
   )
   const { cameras, tags } = useFacets()
@@ -95,6 +97,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     ...views,
     { id: 'scan', title: 'Import (scan a folder)…', icon: <FolderInput size={15} />, action: () => setJobDialog('index') },
     { id: 'sync', title: 'Sync a folder…', icon: <RefreshCw size={15} />, action: () => setJobDialog('sync') },
+    { id: 'duplicates', title: 'Review duplicates…', icon: <Copy size={15} />, action: () => setDuplicatesDialogOpen(true) },
     { id: 'folders', title: 'Watched folders…', icon: <FolderCog size={15} />, action: () => setFoldersDialogOpen(true) },
     { id: 'ai', title: 'Search by meaning: set up and analyze…', icon: <Sparkles size={15} />, action: () => setAiDialogOpen(true) },
     { id: 'theme', title: 'Toggle light/dark theme', icon: <SunMoon size={15} />, action: () => toggleTheme() },

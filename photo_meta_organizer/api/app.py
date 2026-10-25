@@ -38,6 +38,7 @@ from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticate
 from photo_meta_organizer.api.dependencies import Services
 from photo_meta_organizer.api.routes.analysis_router import ai_tags_router, analysis_router
 from photo_meta_organizer.api.routes.config_router import config_router
+from photo_meta_organizer.api.routes.duplicates_router import duplicates_router, files_router
 from photo_meta_organizer.api.routes.events_router import (
     changes_library,
     events_router,
@@ -212,6 +213,8 @@ def create_app(
     app.include_router(jobs_router)
     app.include_router(events_router)
     app.include_router(roots_router)
+    app.include_router(duplicates_router)
+    app.include_router(files_router)
     app.include_router(export_router)
     app.include_router(config_router)
     app.include_router(analysis_router)

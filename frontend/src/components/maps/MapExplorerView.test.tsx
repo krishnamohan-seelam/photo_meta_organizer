@@ -28,7 +28,7 @@ const FACETS: Facets = {
   years: [],
   isos: [],
   gps_bounds: { min_lat: 35, max_lat: 36, min_lon: 135, max_lon: 140 },
-  stats: { total_count: 10, flagged_count: 0, geotagged_count: 3, undated_count: 0, total_bytes: 0, avg_megapixels: 0 },
+  stats: { total_count: 10, flagged_count: 0, geotagged_count: 3, undated_count: 0, total_bytes: 0, avg_megapixels: 0, duplicate_count: 0, reclaimable_bytes: 0 },
 }
 
 const CLUSTERS: GeoClustersResponse = {

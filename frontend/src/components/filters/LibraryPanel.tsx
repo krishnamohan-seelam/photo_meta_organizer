@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Camera, Flag, Folder, Images, Plus, Sparkles, Star } from 'lucide-react'
+import { Camera, Copy, Flag, Folder, Images, Plus, Sparkles, Star } from 'lucide-react'
 import { useUiStore } from '../../stores/useUiStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useFacets } from '../../hooks/useFacets'
 import { aiSearchReady, useAiTagCounts, useAnalysisStatus } from '../../hooks/useAnalysis'
 import { useCollections, useSaveCollection } from '../../hooks/useCollections'
 import { NameDialog } from '../collections/NameDialog'
+import { formatBytes } from '../../utils/photoFormat'
 
 interface RowProps {
   icon: React.ReactNode
@@ -63,6 +64,8 @@ export const LibraryPanel: React.FC = () => {
       filterRating: st.filterRating,
       setRatingFilter: st.setRatingFilter,
       filterAiTag: st.filterAiTag,
+      filterDuplicates: st.filterDuplicates,
+      setDuplicatesDialogOpen: st.setDuplicatesDialogOpen,
       setAiTagFilter: st.setAiTagFilter,
     }))
   )
@@ -87,6 +90,20 @@ export const LibraryPanel: React.FC = () => {
       <section className="lib-sec" aria-label="Library">
         <PanelRow icon={<Images size={15} />} label="All photos" count={stats.total_count} pressed={s.filterCollection === 'all'} onClick={() => s.setCollectionFilter('all')} />
         <PanelRow icon={<Flag size={15} />} label="Picks" count={stats.flagged_count} pressed={s.filterCollection === 'Favorites'} onClick={() => s.setCollectionFilter('Favorites')} />
+        {stats.duplicate_count > 0 && (
+          <>
+            <PanelRow
+              icon={<Copy size={15} />}
+              label="Duplicates"
+              count={stats.duplicate_count}
+              pressed={s.filterDuplicates === true}
+              onClick={() => useUiStore.setState({ filterDuplicates: s.filterDuplicates === true ? null : true })}
+            />
+            <button type="button" className="btn-reset link-btn lib-review" onClick={() => s.setDuplicatesDialogOpen(true)}>
+              Review and see {formatBytes(stats.reclaimable_bytes)} of extra copies…
+            </button>
+          </>
+        )}
       </section>
 
       <Section title="Rating" onClear={s.filterRating !== null ? () => s.setRatingFilter(null) : undefined}>

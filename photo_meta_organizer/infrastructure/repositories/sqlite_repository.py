@@ -20,6 +20,8 @@ from typing import Any, NamedTuple, TypeVar
 
 from photo_meta_organizer.application.interfaces.search_types import (
     BoundingBox,
+    DuplicateGroup,
+    DuplicatePage,
     FacetCount,
     Facets,
     GeoCluster,
@@ -312,18 +314,53 @@ class SqliteRepository:
     def list_files(self) -> list[StoredFile]:
         with self.lock:
             rows = self.connection.execute(
-                "SELECT path, asset_hash, size_bytes, mtime, missing_since FROM files ORDER BY id"
+                f"SELECT {_FILE_COLUMNS} FROM files ORDER BY id"
             ).fetchall()
-        return [
-            StoredFile(
-                path=r["path"],
-                file_hash=r["asset_hash"],
-                size_bytes=r["size_bytes"],
-                modified_time=_timestamp(r["mtime"]),
-                missing_since=_timestamp(r["missing_since"]),
-            )
+        return [_stored_file(r) for r in rows]
+
+    def files_of(self, file_hashes: Sequence[str]) -> dict[str, list[StoredFile]]:
+        found: dict[str, list[StoredFile]] = {}
+        hashes = list(dict.fromkeys(file_hashes))
+        with self.lock:
+            for start in range(0, len(hashes), _SQL_CHUNK):
+                chunk = hashes[start : start + _SQL_CHUNK]
+                marks = ", ".join("?" for _ in chunk)
+                rows = self.connection.execute(
+                    f"SELECT {_FILE_COLUMNS} FROM files WHERE asset_hash IN ({marks}) "
+                    "ORDER BY missing_since IS NOT NULL, last_seen DESC, id",
+                    chunk,
+                ).fetchall()
+                for row in rows:
+                    found.setdefault(row["asset_hash"], []).append(_stored_file(row))
+        return found
+
+    def duplicate_groups(self, limit: int, offset: int = 0) -> DuplicatePage:
+        with self.lock:
+            totals = self.connection.execute(
+                "SELECT COUNT(*), COALESCE(SUM(saving), 0) FROM " f"({_DUPLICATE_SAVINGS})"
+            ).fetchone()
+            rows = self.connection.execute(
+                f"SELECT asset_hash, size_bytes FROM ({_DUPLICATE_SAVINGS}) "
+                "ORDER BY saving DESC, asset_hash LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
+            files = self.files_of([r["asset_hash"] for r in rows])
+        groups = [
+            DuplicateGroup(r["asset_hash"], r["size_bytes"], files.get(r["asset_hash"], []))
             for r in rows
         ]
+        return DuplicatePage(groups, total_groups=totals[0], reclaimable_bytes=totals[1])
+
+    def set_file_hidden(self, path: str, hidden: bool) -> bool:
+        stamp = utc_now_naive().isoformat() if hidden else None
+        sql = (
+            "UPDATE files SET hidden_at = COALESCE(hidden_at, ?) WHERE path = ?"
+            if hidden
+            else "UPDATE files SET hidden_at = NULL WHERE path = ?"
+        )
+        with self.lock, self.connection:
+            cur = self.connection.execute(sql, (stamp, path) if hidden else (path,))
+            return cur.rowcount > 0
 
     def delete(self, file_hash: str) -> bool:
         with self.lock, self.connection:
@@ -556,6 +593,9 @@ class SqliteRepository:
                 "SUM(gps_lat IS NOT NULL AND gps_lon IS NOT NULL), SUM(captured_at IS NULL), "
                 "SUM(size_bytes), AVG(width * height / 1e6) FROM asset_view"
             ).fetchone()
+            dupes = self.connection.execute(
+                f"SELECT COUNT(*), COALESCE(SUM(saving), 0) FROM ({_DUPLICATE_SAVINGS})"
+            ).fetchone()
 
         gps_bounds = None
         if bounds_row and bounds_row[0] is not None:
@@ -579,6 +619,8 @@ class SqliteRepository:
                 undated_count=totals[3] or 0,
                 total_bytes=totals[4] or 0,
                 avg_megapixels=totals[5] or 0.0,
+                duplicate_count=dupes[0],
+                reclaimable_bytes=dupes[1],
             ),
         )
 
@@ -678,6 +720,8 @@ def search_where(query: SearchQuery) -> tuple[str, list[Any]]:
             "file_hash IN (SELECT file_hash FROM collection_photos WHERE collection = ?)"
         )
         params.append(query.collection)
+    if query.duplicates is not None:
+        clauses.append(f"file_hash {'IN' if query.duplicates else 'NOT IN'} ({_DUPLICATE_HASHES})")
     if query.ai_tag is not None:
         clauses.append(
             "file_hash IN (SELECT file_hash FROM photo_ai_tags WHERE label = ? "
@@ -773,6 +817,34 @@ def _asset_row(metadata: ImageMetadata, extracted_at: str) -> dict[str, Any]:
         "raw_tags": json.dumps(dict(exif.raw_tags)),
         "extracted_at": extracted_at,
     }
+
+
+_SQL_CHUNK = 500  # hashes per IN (...) list, well under SQLite's variable limit
+_FILE_COLUMNS = "path, asset_hash, size_bytes, mtime, missing_since, hidden_at"
+
+# Assets with more than one copy: Files on disk that the user has not hidden.
+_DUPLICATE_HASHES = (
+    "SELECT asset_hash FROM files WHERE hidden_at IS NULL AND missing_since IS NULL "
+    "GROUP BY asset_hash HAVING COUNT(*) > 1"
+)
+_DUPLICATE_SAVINGS = (
+    "SELECT f.asset_hash AS asset_hash, a.size_bytes AS size_bytes, "
+    "a.size_bytes * (COUNT(*) - 1) AS saving FROM files f "
+    "JOIN assets a ON a.file_hash = f.asset_hash "
+    "WHERE f.hidden_at IS NULL AND f.missing_since IS NULL "
+    "GROUP BY f.asset_hash HAVING COUNT(*) > 1"
+)
+
+
+def _stored_file(row: sqlite3.Row) -> StoredFile:
+    return StoredFile(
+        path=row["path"],
+        file_hash=row["asset_hash"],
+        size_bytes=row["size_bytes"],
+        modified_time=_timestamp(row["mtime"]),
+        missing_since=_timestamp(row["missing_since"]),
+        hidden_at=_timestamp(row["hidden_at"]),
+    )
 
 
 def _timestamp(value: str | None) -> datetime | None:

@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Generic, TypeVar
 
 from photo_meta_organizer.domain.datetimes import to_naive
+from photo_meta_organizer.domain.models import StoredFile
 
 T = TypeVar("T")
 
@@ -44,7 +45,8 @@ class SearchQuery:
     suggestion; accepted ones are ordinary labels, rejected ones are gone).
     ``has_capture_date=False`` selects photos with an unknown date (PMO-24),
     ``has_location`` geotagged (or not) photos, ``within`` photos inside a map area,
-    ``collection`` a named collection's members.
+    ``collection`` a named collection's members, ``duplicates`` Assets with more than one
+    copy (or only those with one).
     """
 
     search_term: str | None = None
@@ -58,6 +60,7 @@ class SearchQuery:
     within: BoundingBox | None = None
     collection: str | None = None
     ai_tag: str | None = None
+    duplicates: bool | None = None
     location_lat: float | None = None
     location_lon: float | None = None
     radius_km: float | None = None
@@ -133,6 +136,8 @@ class LibraryStats:
     undated_count: int = 0
     total_bytes: int = 0
     avg_megapixels: float = 0.0
+    duplicate_count: int = 0  # Assets with more than one copy
+    reclaimable_bytes: int = 0  # what the extra copies take
 
 
 @dataclass(frozen=True)
@@ -145,3 +150,31 @@ class Facets:
     gps_bounds: GpsBounds | None = None
     isos: list[FacetCount] = field(default_factory=list)
     stats: LibraryStats = field(default_factory=LibraryStats)
+
+
+@dataclass(frozen=True)
+class DuplicateGroup:
+    """One Asset kept at several paths: every File of it, primary first (ticket 03)."""
+
+    file_hash: str
+    size_bytes: int
+    files: list[StoredFile]
+
+    @property
+    def copies(self) -> int:
+        """Files that count as copies: on disk and not hidden."""
+        return sum(1 for f in self.files if f.is_copy)
+
+    @property
+    def reclaimable_bytes(self) -> int:
+        """What the extra copies take: all but one."""
+        return self.size_bytes * max(self.copies - 1, 0)
+
+
+@dataclass(frozen=True)
+class DuplicatePage:
+    """A page of duplicate groups, biggest saving first, with the totals over all of them."""
+
+    groups: list[DuplicateGroup]
+    total_groups: int = 0
+    reclaimable_bytes: int = 0

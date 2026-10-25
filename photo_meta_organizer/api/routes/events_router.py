@@ -31,7 +31,7 @@ RETRY_MS = 3000  # how long the browser waits before reconnecting
 # Methods and path prefixes whose success changes what the library shows. Searches are POSTs
 # too but only read; jobs announce their own end.
 _MUTATING_METHODS = frozenset({"POST", "PATCH", "DELETE", "PUT"})
-_LIBRARY_PREFIXES = ("/api/photos", "/api/collections", "/api/ai-tags")
+_LIBRARY_PREFIXES = ("/api/photos", "/api/collections", "/api/ai-tags", "/api/files")
 
 
 def changes_library(method: str, path: str, status_code: int) -> bool:

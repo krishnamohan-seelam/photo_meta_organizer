@@ -17,6 +17,7 @@ from typing import Protocol, runtime_checkable
 
 from photo_meta_organizer.application.interfaces.search_types import (
     BoundingBox,
+    DuplicatePage,
     Facets,
     GeoCluster,
     Page,
@@ -141,6 +142,24 @@ class ImageMetadataRepository(Protocol):
         """Every File the library has recorded, one per path (what a scan compares).
 
         An Asset held at several paths appears once per path.
+        """
+        ...
+
+    def files_of(self, file_hashes: Sequence[str]) -> dict[str, list[StoredFile]]:
+        """Every File of each Asset, primary first (a present File, then the latest seen).
+
+        Hashes the library does not know are absent from the result. One query for all.
+        """
+        ...
+
+    def duplicate_groups(self, limit: int, offset: int = 0) -> DuplicatePage:
+        """Assets with more than one copy (on disk, not hidden), biggest saving first."""
+        ...
+
+    def set_file_hidden(self, path: str, hidden: bool) -> bool:
+        """Hide or show one File as a copy. It stays recorded; nothing on disk changes.
+
+        Returns False if ``path`` is not a recorded File.
         """
         ...
 

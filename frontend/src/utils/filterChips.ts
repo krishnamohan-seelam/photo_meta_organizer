@@ -1,7 +1,7 @@
 import { UNKNOWN_DATE } from './captureDate'
 import type { LibraryFilters } from './search'
 
-export type ChipKind = 'search' | 'camera' | 'model' | 'tag' | 'rating' | 'collection' | 'year' | 'date' | 'geo' | 'near' | 'area' | 'aitag'
+export type ChipKind = 'search' | 'camera' | 'model' | 'tag' | 'rating' | 'collection' | 'year' | 'date' | 'geo' | 'dupes' | 'near' | 'area' | 'aitag'
 
 export interface FilterChip {
   id: string
@@ -39,6 +39,9 @@ export function filterChips(f: LibraryFilters): FilterChip[] {
   }
   if (f.filterHasLocation !== null) {
     chips.push({ id: 'geo', kind: 'geo', value: String(f.filterHasLocation), label: f.filterHasLocation ? 'Geotagged' : 'No location' })
+  }
+  if (f.filterDuplicates !== null && f.filterDuplicates !== undefined) {
+    chips.push({ id: 'dupes', kind: 'dupes', value: String(f.filterDuplicates), label: f.filterDuplicates ? 'Duplicates' : 'No duplicates' })
   }
   if (f.filterNear) {
     const { lat, lon, km } = f.filterNear

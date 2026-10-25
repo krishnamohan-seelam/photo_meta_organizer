@@ -21,7 +21,7 @@ from photo_meta_organizer.api.job_factory import require_model, require_runtime,
 from photo_meta_organizer.api.routes.photos_router import (
     _search_query,
     _submit,
-    _to_response,
+    to_responses,
 )
 from photo_meta_organizer.api.schemas import (
     AiTagBatchRequest,
@@ -159,8 +159,11 @@ def semantic_search(
         raise HTTPException(status_code=409, detail=str(err)) from err
     except ModelUnavailableError as err:
         raise HTTPException(status_code=503, detail=str(err)) from err
+    photos = to_responses([h.photo for h in hits], services.repository)
     return SemanticSearchResponse(
-        items=[SemanticHitSchema(photo=_to_response(h.photo), score=h.score) for h in hits],
+        items=[
+            SemanticHitSchema(photo=p, score=h.score) for p, h in zip(photos, hits, strict=True)
+        ],
         model_id=services.embedder.model_id,
     )
 

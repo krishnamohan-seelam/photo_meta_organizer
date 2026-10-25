@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Job } from '../types/metadata'
 import { isDemoMode, photosKey } from './usePhotos'
+import { duplicatesKey } from './useDuplicates'
 import { facetsKey } from './useFacets'
 import { eventsLiveKey, jobsKey, upsertJob } from './useJobs'
 
@@ -28,6 +29,7 @@ export function useEventStream() {
     const reloadLibrary = () => {
       void qc.invalidateQueries({ queryKey: photosKey })
       void qc.invalidateQueries({ queryKey: facetsKey })
+      void qc.invalidateQueries({ queryKey: duplicatesKey })
     }
     const reloadAll = () => {
       reloadLibrary()

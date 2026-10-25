@@ -35,6 +35,9 @@ export function makePhoto(overrides: Partial<PhotoMetadata> = {}): PhotoMetadata
     rating: null,
     flagged: false,
     added_at: '2026-01-01T00:00:00',
+    paths: [
+      { path: `/photos/${hash.slice(0, 6)}.jpg`, name: `${hash.slice(0, 6)}.jpg`, size_bytes: 2_097_152, missing: false, hidden: false },
+    ],
     ...overrides,
   }
 }

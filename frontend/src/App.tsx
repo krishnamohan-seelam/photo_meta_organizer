@@ -23,6 +23,7 @@ import { DashboardView } from './components/dashboard/DashboardView'
 import { LightboxModal } from './components/lightbox/LightboxModal'
 import { ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
 import { FirstRunState } from './components/states/FirstRunState'
+import { DuplicatesDialog } from './components/duplicates/DuplicatesDialog'
 import { FoldersDialog } from './components/jobs/FoldersDialog'
 import { RootSuggestionsDialog } from './components/jobs/RootSuggestionsDialog'
 import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
@@ -109,6 +110,7 @@ export const App: React.FC = () => {
       <FolderJobDialog />
       <AiSetupDialog />
       <FoldersDialog />
+      <DuplicatesDialog />
       <RootSuggestionsDialog />
       <LightboxModal />
 

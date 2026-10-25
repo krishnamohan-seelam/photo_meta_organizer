@@ -56,6 +56,7 @@ interface UiState {
   jobDialog: JobDialogKind | null
   /** The AI setup dialog (model download, analysis). */
   aiDialogOpen: boolean
+  duplicatesDialogOpen: boolean
   foldersDialogOpen: boolean
   semantic: SemanticQuery | null
   /** How many matches the search by meaning asks for; "Show more" raises it. */
@@ -86,6 +87,7 @@ interface UiState {
   /** Map area picked on the Map view; narrows the Library like any other filter. */
   filterArea: BoundingBox | null
   filterNear: NearFilter | null
+  filterDuplicates: boolean | null
   toastMessage: string | null
   toastKind: ToastKind
 
@@ -101,6 +103,7 @@ interface UiState {
   setCommandPaletteOpen: (open: boolean) => void
   setJobDialog: (kind: JobDialogKind | null) => void
   setAiDialogOpen: (open: boolean) => void
+  setDuplicatesDialogOpen: (open: boolean) => void
   setFoldersDialogOpen: (open: boolean) => void
   setSemantic: (query: SemanticQuery | null) => void
   showMoreSemantic: () => void
@@ -141,6 +144,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   commandPaletteOpen: false,
   jobDialog: null,
   aiDialogOpen: false,
+  duplicatesDialogOpen: false,
   foldersDialogOpen: false,
   semantic: null,
   semanticLimit: SEMANTIC_PAGE,
@@ -162,6 +166,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   sortOrder: 'desc',
   filterArea: null,
   filterNear: null,
+  filterDuplicates: null,
   toastMessage: null,
   toastKind: 'success',
 
@@ -195,6 +200,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
   setJobDialog: (jobDialog) => set({ jobDialog }),
   setAiDialogOpen: (aiDialogOpen) => set({ aiDialogOpen }),
+  setDuplicatesDialogOpen: (duplicatesDialogOpen) => set({ duplicatesDialogOpen }),
   setFoldersDialogOpen: (foldersDialogOpen) => set({ foldersDialogOpen }),
   setSemantic: (semantic) => set({ semantic, semanticLimit: SEMANTIC_PAGE }),
   showMoreSemantic: () => set((s) => ({ semanticLimit: Math.min(SEMANTIC_MAX, s.semanticLimit + SEMANTIC_PAGE) })),
@@ -234,6 +240,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       filterArea: f.filterArea ?? null,
       filterAiTag: f.filterAiTag ?? null,
       filterNear: f.filterNear ?? null,
+      filterDuplicates: f.filterDuplicates ?? null,
     }),
   setLibraryLayout: (libraryLayout) => {
     savePref(LAYOUT_KEY, libraryLayout)

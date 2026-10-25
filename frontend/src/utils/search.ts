@@ -32,6 +32,7 @@ export function toSearchRequest(f: LibraryFilters): SearchRequest {
   }
   if (f.filterArea) request.within = f.filterArea
   if (f.filterAiTag) request.ai_tag = f.filterAiTag
+  if (f.filterDuplicates !== null && f.filterDuplicates !== undefined) request.duplicates = f.filterDuplicates
   if (f.filterDateRange) {
     request.date_start = `${f.filterDateRange.start}T00:00:00`
     request.date_end = `${f.filterDateRange.end}T23:59:59.999999`

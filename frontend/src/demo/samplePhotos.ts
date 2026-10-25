@@ -2,7 +2,7 @@ import type { PhotoMetadata } from '../types/metadata'
 
 // Demo dataset, shown only when the app is opened with ?demo=1 (see hooks/usePhotos.ts).
 // It is never a fallback for a real library.
-export const SAMPLE_PHOTOS: PhotoMetadata[] = [
+const SAMPLES: Omit<PhotoMetadata, 'paths'>[] = [
   {
     file_hash: '3f8b9a1c4d2e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4',
     file_info: {
@@ -136,3 +136,8 @@ export const SAMPLE_PHOTOS: PhotoMetadata[] = [
     added_at: '2026-05-19T08:00:00Z',
   },
 ]
+
+export const SAMPLE_PHOTOS: PhotoMetadata[] = SAMPLES.map((p) => ({
+  ...p,
+  paths: [{ path: p.file_info.path, name: p.file_info.name, size_bytes: p.file_info.size_bytes, missing: false, hidden: false }],
+}))

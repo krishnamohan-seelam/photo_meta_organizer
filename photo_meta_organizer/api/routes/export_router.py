@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 
 from photo_meta_organizer.api.dependencies import get_repository
-from photo_meta_organizer.api.routes.photos_router import _to_response
+from photo_meta_organizer.api.routes.photos_router import to_responses
 from photo_meta_organizer.api.schemas import ExportJsonRequest, ExportZipRequest
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
@@ -109,7 +109,9 @@ def export_json(
     else:
         records = repository.list_all()
     body = json.dumps(
-        [_to_response(m).model_dump(mode="json") for m in records], indent=2, ensure_ascii=False
+        [r.model_dump(mode="json") for r in to_responses(records, repository)],
+        indent=2,
+        ensure_ascii=False,
     )
     filename = _stamp("photo-metadata") + ".json"
     return Response(

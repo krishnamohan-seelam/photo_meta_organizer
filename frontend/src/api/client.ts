@@ -7,6 +7,7 @@ import type {
   BatchPhotoResponse,
   AppConfig,
   Collection,
+  Duplicates,
   FacetCount,
   Facets,
   GeoClustersRequest,
@@ -214,6 +215,16 @@ export function resumeJobApi(jobId: string): Promise<Job> {
 /** Give up on an interrupted job; it ends cancelled. */
 export function dismissJobApi(jobId: string): Promise<Job> {
   return request(`/jobs/${jobId}/dismiss`, 'Dismissing the job', { method: 'POST' })
+}
+
+/** Photos kept at more than one path, biggest saving first (a copy counts when it is on disk and not hidden). */
+export function listDuplicatesApi(limit: number): Promise<Duplicates> {
+  return request(`/duplicates?${new URLSearchParams({ limit: String(limit) })}`, 'Looking for duplicates')
+}
+
+/** Hide one copy from the duplicates view, or show it again. Only the library's record changes; no file is touched. */
+export function hideFileApi(path: string, hidden: boolean): Promise<void> {
+  return request('/files/hide', hidden ? 'Hiding the copy' : 'Showing the copy', jsonInit('POST', { path, hidden }))
 }
 
 /** The folders the library rescans when the app starts; `online` is false while one cannot be read. */

@@ -486,6 +486,71 @@
         "title": "DimensionsSchema",
         "type": "object"
       },
+      "DuplicateGroupSchema": {
+        "description": "One photo kept at several paths. ``reclaimable_bytes`` is what all but one copy take.",
+        "properties": {
+          "copies": {
+            "description": "Files on disk that are not hidden",
+            "title": "Copies",
+            "type": "integer"
+          },
+          "file_hash": {
+            "title": "File Hash",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoPathSchema"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "reclaimable_bytes": {
+            "title": "Reclaimable Bytes",
+            "type": "integer"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file_hash",
+          "size_bytes",
+          "reclaimable_bytes",
+          "copies",
+          "files"
+        ],
+        "title": "DuplicateGroupSchema",
+        "type": "object"
+      },
+      "DuplicatesResponse": {
+        "description": "Duplicate groups, biggest saving first, with the totals over all of them.",
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateGroupSchema"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "reclaimable_bytes": {
+            "title": "Reclaimable Bytes",
+            "type": "integer"
+          },
+          "total_groups": {
+            "title": "Total Groups",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "groups",
+          "total_groups",
+          "reclaimable_bytes"
+        ],
+        "title": "DuplicatesResponse",
+        "type": "object"
+      },
       "ExifDataSchema": {
         "description": "EXIF metadata schema for API responses.",
         "properties": {
@@ -976,6 +1041,18 @@
             ],
             "title": "Date Start"
           },
+          "duplicates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "True: only photos kept at more than one path; false: only the others",
+            "title": "Duplicates"
+          },
           "flagged": {
             "anyOf": [
               {
@@ -1237,6 +1314,25 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HideFileRequest": {
+        "description": "Hide a copy from the duplicates view, or show it again. Nothing on disk changes.",
+        "properties": {
+          "hidden": {
+            "default": true,
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "HideFileRequest",
+        "type": "object"
+      },
       "IndexFolderRequest": {
         "description": "Request schema for indexing photos from a local directory.",
         "properties": {
@@ -1388,12 +1484,22 @@
             "title": "Avg Megapixels",
             "type": "number"
           },
+          "duplicate_count": {
+            "description": "Photos kept at more than one path",
+            "title": "Duplicate Count",
+            "type": "integer"
+          },
           "flagged_count": {
             "title": "Flagged Count",
             "type": "integer"
           },
           "geotagged_count": {
             "title": "Geotagged Count",
+            "type": "integer"
+          },
+          "reclaimable_bytes": {
+            "description": "What the extra copies of them take",
+            "title": "Reclaimable Bytes",
             "type": "integer"
           },
           "total_bytes": {
@@ -1415,7 +1521,9 @@
           "geotagged_count",
           "undated_count",
           "total_bytes",
-          "avg_megapixels"
+          "avg_megapixels",
+          "duplicate_count",
+          "reclaimable_bytes"
         ],
         "title": "LibraryStatsSchema",
         "type": "object"
@@ -1598,6 +1706,14 @@
             "title": "Labels",
             "type": "array"
           },
+          "paths": {
+            "description": "Every file holding this photo, primary first (the one in file_info). More than one means a duplicate.",
+            "items": {
+              "$ref": "#/components/schemas/PhotoPathSchema"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
           "rating": {
             "anyOf": [
               {
@@ -1618,9 +1734,46 @@
           "labels",
           "rating",
           "flagged",
-          "added_at"
+          "added_at",
+          "paths"
         ],
         "title": "PhotoMetadataResponse",
+        "type": "object"
+      },
+      "PhotoPathSchema": {
+        "description": "One File of a photo: a path holding its content (ADR-003 R3).",
+        "properties": {
+          "hidden": {
+            "description": "The user hid this copy from the duplicates view",
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "missing": {
+            "description": "The last scan did not find it on disk",
+            "title": "Missing",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "size_bytes",
+          "missing",
+          "hidden"
+        ],
+        "title": "PhotoPathSchema",
         "type": "object"
       },
       "ResolveAiTagRequest": {
@@ -1819,6 +1972,18 @@
               }
             ],
             "title": "Date Start"
+          },
+          "duplicates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "True: only photos kept at more than one path; false: only the others",
+            "title": "Duplicates"
           },
           "flagged": {
             "anyOf": [
@@ -2077,6 +2242,18 @@
               }
             ],
             "title": "Date Start"
+          },
+          "duplicates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "True: only photos kept at more than one path; false: only the others",
+            "title": "Duplicates"
           },
           "flagged": {
             "anyOf": [
@@ -2685,6 +2862,63 @@
         ]
       }
     },
+    "/api/duplicates": {
+      "get": {
+        "description": "Photos kept at more than one path, the biggest saving first.\n\nA copy counts when its file is on disk and not hidden. ``reclaimable_bytes`` is what all\nbut one copy take, per group and in total (over every group, not just this page).\nHidden and missing files are listed too, so a hidden copy can be shown again.",
+        "operationId": "list_duplicates_api_duplicates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List duplicate photos",
+        "tags": [
+          "duplicates"
+        ]
+      }
+    },
     "/api/events": {
       "get": {
         "description": "Server-sent events: ``job_progress``, ``job_finished``, ``library_changed`` and\n``resync``, each with an increasing ``id``.\n\nReconnect with ``Last-Event-ID`` to be replayed what you missed (the last 200 events are\nkept). If you were away longer, or the server restarted, you get one ``resync`` event:\nreload the photos, facets and jobs instead. Job events carry the job as\n``GET /api/jobs/{id}`` shows it.",
@@ -2830,6 +3064,41 @@
         "summary": "Aggregate counts for filter UIs",
         "tags": [
           "search"
+        ]
+      }
+    },
+    "/api/files/hide": {
+      "post": {
+        "description": "Hide one copy from the duplicates view (``hidden`` true), or show it again.\n\nOnly the library's record changes: the file on disk is never touched. 404 if the path\nis not a recorded file.",
+        "operationId": "hide_file_api_files_hide_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HideFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hide a copy, or show it again",
+        "tags": [
+          "duplicates"
         ]
       }
     },

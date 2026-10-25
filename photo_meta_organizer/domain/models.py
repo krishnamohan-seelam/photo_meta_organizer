@@ -273,6 +273,12 @@ class StoredFile:
     size_bytes: int
     modified_time: datetime | None
     missing_since: datetime | None = None
+    hidden_at: datetime | None = None
+
+    @property
+    def is_copy(self) -> bool:
+        """Counts as a copy of its Asset: on disk and not hidden by the user."""
+        return self.missing_since is None and self.hidden_at is None
 
 
 @dataclass(frozen=True)

@@ -19,6 +19,7 @@ export function useLibraryFilters(): LibraryFilters {
       filterArea: s.filterArea,
       filterAiTag: s.filterAiTag,
       filterNear: s.filterNear,
+      filterDuplicates: s.filterDuplicates,
       sortBy: s.sortBy,
       sortOrder: s.sortOrder,
     }))
@@ -45,6 +46,8 @@ export function removeFilterChip(chip: FilterChip): void {
       return useUiStore.setState({ filterModel: '' })
     case 'geo':
       return useUiStore.setState({ filterHasLocation: null })
+    case 'dupes':
+      return useUiStore.setState({ filterDuplicates: null })
     case 'near':
       return useUiStore.setState({ filterNear: null })
     case 'area':

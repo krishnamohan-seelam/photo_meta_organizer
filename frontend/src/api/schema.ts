@@ -173,6 +173,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List duplicate photos
+         * @description Photos kept at more than one path, the biggest saving first.
+         *
+         *     A copy counts when its file is on disk and not hidden. ``reclaimable_bytes`` is what all
+         *     but one copy take, per group and in total (over every group, not just this page).
+         *     Hidden and missing files are listed too, so a hidden copy can be shown again.
+         */
+        get: operations["list_duplicates_api_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -253,6 +277,29 @@ export interface paths {
         get: operations["get_facets_api_facets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/files/hide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hide a copy, or show it again
+         * @description Hide one copy from the duplicates view (``hidden`` true), or show it again.
+         *
+         *     Only the library's record changes: the file on disk is never touched. 404 if the path
+         *     is not a recorded file.
+         */
+        post: operations["hide_file_api_files_hide_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1004,6 +1051,37 @@ export interface components {
             width: number;
         };
         /**
+         * DuplicateGroupSchema
+         * @description One photo kept at several paths. ``reclaimable_bytes`` is what all but one copy take.
+         */
+        DuplicateGroupSchema: {
+            /**
+             * Copies
+             * @description Files on disk that are not hidden
+             */
+            copies: number;
+            /** File Hash */
+            file_hash: string;
+            /** Files */
+            files: components["schemas"]["PhotoPathSchema"][];
+            /** Reclaimable Bytes */
+            reclaimable_bytes: number;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /**
+         * DuplicatesResponse
+         * @description Duplicate groups, biggest saving first, with the totals over all of them.
+         */
+        DuplicatesResponse: {
+            /** Groups */
+            groups: components["schemas"]["DuplicateGroupSchema"][];
+            /** Reclaimable Bytes */
+            reclaimable_bytes: number;
+            /** Total Groups */
+            total_groups: number;
+        };
+        /**
          * ExifDataSchema
          * @description EXIF metadata schema for API responses.
          */
@@ -1158,6 +1236,11 @@ export interface components {
             date_end?: string | null;
             /** Date Start */
             date_start?: string | null;
+            /**
+             * Duplicates
+             * @description True: only photos kept at more than one path; false: only the others
+             */
+            duplicates?: boolean | null;
             /** Flagged */
             flagged?: boolean | null;
             /**
@@ -1260,6 +1343,19 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * HideFileRequest
+         * @description Hide a copy from the duplicates view, or show it again. Nothing on disk changes.
+         */
+        HideFileRequest: {
+            /**
+             * Hidden
+             * @default true
+             */
+            hidden?: boolean;
+            /** Path */
+            path: string;
+        };
+        /**
          * IndexFolderRequest
          * @description Request schema for indexing photos from a local directory.
          */
@@ -1342,10 +1438,20 @@ export interface components {
         LibraryStatsSchema: {
             /** Avg Megapixels */
             avg_megapixels: number;
+            /**
+             * Duplicate Count
+             * @description Photos kept at more than one path
+             */
+            duplicate_count: number;
             /** Flagged Count */
             flagged_count: number;
             /** Geotagged Count */
             geotagged_count: number;
+            /**
+             * Reclaimable Bytes
+             * @description What the extra copies of them take
+             */
+            reclaimable_bytes: number;
             /** Total Bytes */
             total_bytes: number;
             /** Total Count */
@@ -1429,8 +1535,35 @@ export interface components {
             flagged: boolean;
             /** Labels */
             labels: string[];
+            /**
+             * Paths
+             * @description Every file holding this photo, primary first (the one in file_info). More than one means a duplicate.
+             */
+            paths: components["schemas"]["PhotoPathSchema"][];
             /** Rating */
             rating: number | null;
+        };
+        /**
+         * PhotoPathSchema
+         * @description One File of a photo: a path holding its content (ADR-003 R3).
+         */
+        PhotoPathSchema: {
+            /**
+             * Hidden
+             * @description The user hid this copy from the duplicates view
+             */
+            hidden: boolean;
+            /**
+             * Missing
+             * @description The last scan did not find it on disk
+             */
+            missing: boolean;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Size Bytes */
+            size_bytes: number;
         };
         /** ResolveAiTagRequest */
         ResolveAiTagRequest: {
@@ -1516,6 +1649,11 @@ export interface components {
             date_end?: string | null;
             /** Date Start */
             date_start?: string | null;
+            /**
+             * Duplicates
+             * @description True: only photos kept at more than one path; false: only the others
+             */
+            duplicates?: boolean | null;
             /** Flagged */
             flagged?: boolean | null;
             /**
@@ -1605,6 +1743,11 @@ export interface components {
             date_end?: string | null;
             /** Date Start */
             date_start?: string | null;
+            /**
+             * Duplicates
+             * @description True: only photos kept at more than one path; false: only the others
+             */
+            duplicates?: boolean | null;
             /** Flagged */
             flagged?: boolean | null;
             /**
@@ -1985,6 +2128,38 @@ export interface operations {
             };
         };
     };
+    list_duplicates_api_duplicates_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicatesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     stream_events_api_events_get: {
         parameters: {
             query?: never;
@@ -2098,6 +2273,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FacetsResponse"];
+                };
+            };
+        };
+    };
+    hide_file_api_files_hide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HideFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

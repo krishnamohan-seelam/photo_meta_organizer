@@ -12,7 +12,7 @@ const EMPTY_FACETS: Facets = {
   years: [],
   isos: [],
   gps_bounds: null,
-  stats: { total_count: 0, flagged_count: 0, geotagged_count: 0, undated_count: 0, total_bytes: 0, avg_megapixels: 0 },
+  stats: { total_count: 0, flagged_count: 0, geotagged_count: 0, undated_count: 0, total_bytes: 0, avg_megapixels: 0, duplicate_count: 0, reclaimable_bytes: 0 },
 }
 
 /**

@@ -22,6 +22,7 @@ import {
 } from '../../utils/photoFormat'
 import { NameDialog } from '../collections/NameDialog'
 import { AiTagsSection } from '../ai/AiTagsSection'
+import { FilesSection } from './FilesSection'
 
 /** Inspector preview: a 640 px box, the same size the gallery asks for at large rows. */
 const PREVIEW_BOX = 640
@@ -240,6 +241,8 @@ const Inspector: React.FC<{ photo: PhotoMetadata }> = ({ photo }) => {
           </button>
         </div>
       </section>
+
+      <FilesSection paths={photo.paths} />
 
       <AiTagsSection hash={photo.file_hash} name={photo.file_info.name} />
 

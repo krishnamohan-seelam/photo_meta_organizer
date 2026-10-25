@@ -18,6 +18,7 @@ export type QueryField =
   | 'near'
   | 'within'
   | 'ai'
+  | 'dupes'
 
 export type Token =
   | { kind: 'field'; field: QueryField; value: string }
@@ -56,6 +57,8 @@ export interface QueryFilters {
   /** An open AI suggestion of this label. */
   filterAiTag?: string | null
   filterNear?: NearFilter | null
+  /** true: photos kept at more than one path; false: only the others. */
+  filterDuplicates?: boolean | null
 }
 
 export const EMPTY_QUERY_FILTERS: QueryFilters = {
@@ -71,6 +74,7 @@ export const EMPTY_QUERY_FILTERS: QueryFilters = {
   filterArea: null,
   filterAiTag: null,
   filterNear: null,
+  filterDuplicates: null,
 }
 
 /** What the bar knows about the library, to resolve `make:` and `in:` values. */
@@ -92,6 +96,7 @@ export const QUERY_FIELDS: { field: QueryField; description: string; example: st
   { field: 'geo', description: 'Has GPS location', example: 'geo:yes' },
   { field: 'near', description: 'Within km of a point', example: 'near:35.68,139.69,5' },
   { field: 'within', description: 'Inside a map area (south,west,north,east)', example: 'within:35,139,36,140' },
+  { field: 'dupes', description: 'Kept at more than one path', example: 'dupes:yes' },
   { field: 'ai', description: 'Has an open AI suggestion', example: 'ai:"dog on a beach"' },
 ]
 
@@ -177,6 +182,10 @@ function fieldToken(rawField: string, value: string, raw: string): Token {
       return lower === 'yes' || lower === 'no'
         ? { kind: 'field', field: f, value: lower }
         : { kind: 'invalid', raw, reason: 'geo takes yes or no' }
+    case 'dupes':
+      return lower === 'yes' || lower === 'no'
+        ? { kind: 'field', field: f, value: lower }
+        : { kind: 'invalid', raw, reason: 'dupes takes yes or no' }
     case 'near': {
       const near = parseNear(value)
       return typeof near === 'string' ? { kind: 'invalid', raw, reason: near } : { kind: 'field', field: f, value }
@@ -289,6 +298,9 @@ export function tokensToFilters(tokens: Token[]): QueryFilters {
       case 'ai':
         f.filterAiTag = t.value
         break
+      case 'dupes':
+        f.filterDuplicates = t.value === 'yes'
+        break
     }
   }
   return f
@@ -317,6 +329,9 @@ export function filtersToTokens(f: QueryFilters): Token[] {
     field('within', `${south},${west},${north},${east}`)
   }
   if (f.filterAiTag) field('ai', f.filterAiTag)
+  if (f.filterDuplicates !== null && f.filterDuplicates !== undefined) {
+    field('dupes', f.filterDuplicates ? 'yes' : 'no')
+  }
   const term = f.searchQuery.trim()
   if (term) tokens.push({ kind: 'text', value: term })
   return tokens

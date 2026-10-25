@@ -2435,3 +2435,78 @@ dl.kv dd.hash button:hover {
   align-items: center;
   gap: 4px;
 }
+
+/* Duplicates (ticket 03) */
+.dialog-wide {
+  width: min(760px, 94vw);
+  max-height: 86vh;
+  overflow-y: auto;
+}
+.dupe-list,
+.dupe-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dupe-group {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-color, rgba(128, 128, 128, 0.25));
+}
+.dupe-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: none;
+}
+.dupe-body {
+  flex: 1;
+  min-width: 0;
+}
+.dupe-head {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.dupe-file {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.8rem;
+}
+.dupe-file-off .dupe-path {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.dupe-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lib-review {
+  display: block;
+  margin: 2px 0 6px 28px;
+  font-size: 0.75rem;
+  text-align: left;
+}
+.insp-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.78rem;
+}
+.insp-files li {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0;
+}
+.insp-file-path {
+  overflow-wrap: anywhere;
+}
+.insp-file-meta {
+  color: var(--text-muted);
+}

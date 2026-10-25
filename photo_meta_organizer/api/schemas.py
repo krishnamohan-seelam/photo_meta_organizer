@@ -74,6 +74,16 @@ class ExifDataSchema(ResponseModel):
     raw_tags: dict[str, Any] = Field(default_factory=dict)
 
 
+class PhotoPathSchema(ResponseModel):
+    """One File of a photo: a path holding its content (ADR-003 R3)."""
+
+    path: str
+    name: str
+    size_bytes: int
+    missing: bool = Field(description="The last scan did not find it on disk")
+    hidden: bool = Field(description="The user hid this copy from the duplicates view")
+
+
 class PhotoMetadataResponse(ResponseModel):
     """Full photo metadata response schema."""
 
@@ -85,6 +95,11 @@ class PhotoMetadataResponse(ResponseModel):
     rating: int | None = None
     flagged: bool = False
     added_at: datetime
+    paths: list[PhotoPathSchema] = Field(
+        default_factory=list,
+        description="Every file holding this photo, primary first (the one in file_info). "
+        "More than one means a duplicate.",
+    )
 
 
 class PaginatedPhotosResponse(ResponseModel):
@@ -127,6 +142,10 @@ class SearchRequest(BaseModel):
     collection: str | None = Field(default=None, description="Members of this collection")
     ai_tag: str | None = Field(
         default=None, description="Photos with an open AI suggestion of this label"
+    )
+    duplicates: bool | None = Field(
+        default=None,
+        description="True: only photos kept at more than one path; false: only the others",
     )
     location_lat: float | None = None
     location_lon: float | None = None
@@ -462,6 +481,8 @@ class LibraryStatsSchema(ResponseModel):
     undated_count: int
     total_bytes: int
     avg_megapixels: float
+    duplicate_count: int = Field(description="Photos kept at more than one path")
+    reclaimable_bytes: int = Field(description="What the extra copies of them take")
 
 
 class PhotoIdSchema(ResponseModel):
@@ -492,3 +513,28 @@ class ExportJsonRequest(BaseModel):
     """Photos whose metadata to export; omitted or null means the whole library (PMO-28)."""
 
     photo_hashes: list[str] | None = Field(default=None, max_length=100_000)
+
+
+class DuplicateGroupSchema(ResponseModel):
+    """One photo kept at several paths. ``reclaimable_bytes`` is what all but one copy take."""
+
+    file_hash: str
+    size_bytes: int
+    reclaimable_bytes: int
+    copies: int = Field(description="Files on disk that are not hidden")
+    files: list[PhotoPathSchema]
+
+
+class DuplicatesResponse(ResponseModel):
+    """Duplicate groups, biggest saving first, with the totals over all of them."""
+
+    groups: list[DuplicateGroupSchema]
+    total_groups: int
+    reclaimable_bytes: int
+
+
+class HideFileRequest(BaseModel):
+    """Hide a copy from the duplicates view, or show it again. Nothing on disk changes."""
+
+    path: str
+    hidden: bool = True

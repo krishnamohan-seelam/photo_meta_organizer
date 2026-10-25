@@ -24,6 +24,7 @@ Endpoints:
 """
 
 import os
+from collections.abc import Sequence
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -63,6 +64,7 @@ from photo_meta_organizer.api.schemas import (
     PatchPhotoRequest,
     PhotoIdSchema,
     PhotoMetadataResponse,
+    PhotoPathSchema,
     SearchRequest,
     SyncFolderRequest,
 )
@@ -95,7 +97,7 @@ from photo_meta_organizer.domain.curation import (
     SetRating,
     is_valid_rating,
 )
-from photo_meta_organizer.domain.models import ImageMetadata
+from photo_meta_organizer.domain.models import ImageMetadata, StoredFile
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 photos_router = APIRouter(prefix="/api/photos", tags=["photos"])
@@ -106,7 +108,28 @@ jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 sync_router = APIRouter(prefix="/api/sync", tags=["indexing"])
 
 
-def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
+def path_schema(file: StoredFile) -> PhotoPathSchema:
+    """One recorded File as the API shows it."""
+    return PhotoPathSchema(
+        path=file.path,
+        name=os.path.basename(file.path),
+        size_bytes=file.size_bytes,
+        missing=file.missing_since is not None,
+        hidden=file.hidden_at is not None,
+    )
+
+
+def to_responses(
+    items: Sequence[ImageMetadata], repository: ImageMetadataRepository
+) -> list[PhotoMetadataResponse]:
+    """Responses for ``items`` with every photo's paths, from one query for the lot."""
+    files = repository.files_of([m.file_hash for m in items])
+    return [_to_response(m, files.get(m.file_hash, [])) for m in items]
+
+
+def _to_response(
+    metadata: ImageMetadata, files: Sequence[StoredFile] = ()
+) -> PhotoMetadataResponse:
     """Convert domain ImageMetadata to PhotoMetadataResponse schema."""
     exif = metadata.exif
     location_schema = None
@@ -154,6 +177,7 @@ def _to_response(metadata: ImageMetadata) -> PhotoMetadataResponse:
         rating=metadata.rating if is_valid_rating(metadata.rating) else None,
         flagged=metadata.flagged,
         added_at=metadata.added_at,
+        paths=[path_schema(f) for f in files],
     )
 
 
@@ -178,7 +202,7 @@ def list_photos(
     use_case = SearchPhotosUseCase(repository=repository)
     result = use_case.execute(query)
     return PaginatedPhotosResponse(
-        items=[_to_response(m) for m in result.items],
+        items=to_responses(result.items, repository),
         total_count=result.total_count,
         page=result.page,
         page_size=result.page_size,
@@ -233,7 +257,7 @@ def get_photo(
             status_code=404,
             detail=f"Photo with hash '{file_hash}' not found.",
         )
-    return _to_response(metadata)
+    return to_responses([metadata], repository)[0]
 
 
 @photos_router.get(
@@ -370,7 +394,7 @@ def patch_photo(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Photo with hash '{file_hash}' not found.")
-    return _to_response(updated)
+    return to_responses([updated], repository)[0]
 
 
 @photos_router.delete(
@@ -477,7 +501,7 @@ def search_photos(
     """Advanced multi-criteria photo search with filtering, sorting, and pagination."""
     result = SearchPhotosUseCase(repository=repository).execute(_search_query(request))
     return PaginatedPhotosResponse(
-        items=[_to_response(m) for m in result.items],
+        items=to_responses(result.items, repository),
         total_count=result.total_count,
         page=result.page,
         page_size=result.page_size,
@@ -553,6 +577,7 @@ def _search_query(request: SearchRequest) -> SearchPhotosQuery:
         within=_to_box(request.within),
         collection=request.collection,
         ai_tag=request.ai_tag,
+        duplicates=request.duplicates,
         location_lat=request.location_lat,
         location_lon=request.location_lon,
         radius_km=request.radius_km,

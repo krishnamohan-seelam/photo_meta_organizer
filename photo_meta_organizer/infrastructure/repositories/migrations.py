@@ -286,6 +286,13 @@ CREATE TABLE library_state (
 """
 
 
+# Ticket 03 (ADR-003 R11): a copy can be hidden from the duplicates view. The File stays recorded
+# (so a scan does not add it back) and keeps its fingerprint; it just stops counting as a copy.
+HIDDEN_FILES_SQL = """
+ALTER TABLE files ADD COLUMN hidden_at TEXT;
+"""
+
+
 @dataclass(frozen=True)
 class Migration:
     """One schema step. ``rebuilds`` marks steps that rewrite tables and so need a backup."""
@@ -305,6 +312,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(3, "missing_files", MISSING_FILES_SQL),
     Migration(4, "jobs", JOBS_SQL),
     Migration(5, "roots", ROOTS_SQL),
+    Migration(6, "hidden_files", HIDDEN_FILES_SQL),
 )
 
 

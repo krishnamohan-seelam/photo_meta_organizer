@@ -120,6 +120,8 @@ export async function demoFacets(): Promise<Facets> {
       geotagged_count: photos.filter((p) => p.exif.location).length,
       undated_count: photos.filter((p) => !p.exif.captured_at).length,
       total_bytes: photos.reduce((sum, p) => sum + p.file_info.size_bytes, 0),
+      duplicate_count: 0,
+      reclaimable_bytes: 0,
       avg_megapixels: total ? photos.reduce((s, p) => s + (p.dimensions.width * p.dimensions.height) / 1e6, 0) / total : 0,
     },
   }

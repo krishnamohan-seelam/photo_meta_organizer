@@ -105,5 +105,7 @@ def test_facets_include_library_stats_and_isos(client):
         "undated_count": 1,
         "total_bytes": 1000,
         "avg_megapixels": 2.0,
+        "duplicate_count": 0,
+        "reclaimable_bytes": 0,
     }
     assert body["isos"] == [{"name": "100", "count": 2}]

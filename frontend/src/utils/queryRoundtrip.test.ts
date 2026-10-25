@@ -44,6 +44,7 @@ const SAMPLES: Sample[] = [
     q: 'within:35,139,36.5,140.25',
     request: { within: { south: 35, west: 139, north: 36.5, east: 140.25 } },
   },
+  { fields: ['duplicates'], q: 'dupes:yes', request: { duplicates: true } },
   { fields: ['ai_tag'], q: 'ai:"dog on a beach"', request: { ai_tag: 'dog on a beach' } },
 ]
 
