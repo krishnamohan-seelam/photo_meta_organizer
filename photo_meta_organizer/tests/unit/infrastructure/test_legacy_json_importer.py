@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+from tests.legacy_json import LegacyJsonWriter
+
 from photo_meta_organizer.domain.models import (
     ImageDimensions,
     ImageExifData,
@@ -13,12 +15,6 @@ from photo_meta_organizer.infrastructure.importers.legacy_json_importer import (
 )
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
-    TinyDBCollectionRepository,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
 )
 
 
@@ -36,7 +32,7 @@ def _photo(hash_: str, path: str, added_at: datetime, rating=None, flagged=False
 
 def test_imports_records_and_matches_count(tmp_path):
     json_path = str(tmp_path / "legacy.json")
-    source = TinyDBRepository(db_path=json_path)
+    source = LegacyJsonWriter(json_path)
     source.save(_photo("h1", "/a.jpg", datetime(2024, 1, 1)))
     source.save(_photo("h2", "/b.jpg", datetime(2024, 1, 2)))
     source.close()
@@ -57,7 +53,7 @@ def test_imports_records_and_matches_count(tmp_path):
 
 def test_never_modifies_the_source_json(tmp_path):
     json_path = str(tmp_path / "legacy.json")
-    source = TinyDBRepository(db_path=json_path)
+    source = LegacyJsonWriter(json_path)
     source.save(_photo("h1", "/a.jpg", datetime(2024, 1, 1)))
     source.close()
 
@@ -69,7 +65,7 @@ def test_never_modifies_the_source_json(tmp_path):
 
 def test_merges_duplicate_paths_keeping_newest_and_curation(tmp_path):
     json_path = str(tmp_path / "legacy.json")
-    source = TinyDBRepository(db_path=json_path)
+    source = LegacyJsonWriter(json_path)
     # Same path, two hashes (old MODIFIED bug): older curated, newer not.
     source.save(_photo("old", "/a.jpg", datetime(2024, 1, 1), rating=5, flagged=True))
     source.save(_photo("new", "/a.jpg", datetime(2024, 6, 1)))
@@ -92,11 +88,10 @@ def test_merges_duplicate_paths_keeping_newest_and_curation(tmp_path):
 
 def test_imports_collections_dropping_hashes_that_did_not_survive(tmp_path):
     json_path = str(tmp_path / "legacy.json")
-    source = TinyDBRepository(db_path=json_path)
+    source = LegacyJsonWriter(json_path)
     source.save(_photo("h1", "/a.jpg", datetime(2024, 1, 1)))
     source.save(_photo("h2", "/b.jpg", datetime(2024, 1, 1)))
-    collections = TinyDBCollectionRepository(source.db)
-    collections.save("Favorites", ["h1", "h2", "ghost-hash"], description="Best")
+    source.save_collection("Favorites", ["h1", "h2", "ghost-hash"], description="Best")
     source.close()
 
     sqlite_path = str(tmp_path / "imported.db")

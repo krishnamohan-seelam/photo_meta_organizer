@@ -22,16 +22,6 @@ from photo_meta_organizer.infrastructure.repositories.sqlite_collection_reposito
     SqliteCollectionRepository,
 )
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
-from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
-    TinyDBCollectionRepository,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import TinyDBRepository
-
-
-def _make_tinydb(tmp_path):
-    repo = TinyDBRepository(db_path=str(tmp_path / "contract.json"))
-    collections = TinyDBCollectionRepository(repo.db)
-    return repo, collections
 
 
 def _make_sqlite(tmp_path):
@@ -40,7 +30,7 @@ def _make_sqlite(tmp_path):
     return repo, collections
 
 
-BACKENDS = [("tinydb", _make_tinydb), ("sqlite", _make_sqlite)]
+BACKENDS = [("sqlite", _make_sqlite)]
 
 
 @pytest.fixture(params=BACKENDS, ids=[name for name, _ in BACKENDS])

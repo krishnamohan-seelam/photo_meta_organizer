@@ -8,6 +8,7 @@ from the CLI or API may carry tzinfo. Comparing the two used to raise
 from datetime import UTC, datetime
 
 import pytest
+from tests.legacy_json import LegacyJsonWriter
 
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
@@ -20,7 +21,7 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import TinyDBRepository
+from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 
 
 def _photo(file_hash: str, captured_at) -> ImageMetadata:
@@ -38,11 +39,11 @@ def _photo(file_hash: str, captured_at) -> ImageMetadata:
 
 
 def _search(tmp_path, items, **query):
-    """Run a search through a real (TinyDB) repository, since filtering/sorting now
+    """Run a search through a real (SQLite) repository, since filtering/sorting now
     live in the repository implementation, not in the use case (PMO-09)."""
     import uuid
 
-    repo = TinyDBRepository(str(tmp_path / f"{uuid.uuid4().hex}.json"))
+    repo = SqliteRepository(str(tmp_path / f"{uuid.uuid4().hex}.db"))
     for item in items:
         repo.save(item)
     try:
@@ -107,17 +108,16 @@ class TestSearchWithMixedDatetimes:
         assert known == (["aware", "naive"] if order == "asc" else ["naive", "aware"])
 
 
-class TestRepositoryIndexes:
-    def test_mixed_stored_datetimes_build_indexes_and_range_queries(self, tmp_path):
-        repo = TinyDBRepository(str(tmp_path / "mixed.json"))
-        repo.save(_photo("naive", datetime(2026, 1, 2, 10, 0)))
-        repo.save(_photo("aware", datetime(2026, 1, 1, 10, 0, tzinfo=UTC)))
-
-        hits = repo.find_by_date_range(date_start=datetime(2026, 1, 1, tzinfo=UTC))
+class TestMixedStoredDatetimes:
+    def test_naive_and_aware_records_are_range_searched_together(self, tmp_path):
+        items = [
+            _photo("naive", datetime(2026, 1, 2, 10, 0)),
+            _photo("aware", datetime(2026, 1, 1, 10, 0, tzinfo=UTC)),
+        ]
+        hits = _search(tmp_path, items, date_start=datetime(2026, 1, 1, tzinfo=UTC)).items
         assert {m.file_hash for m in hits} == {"naive", "aware"}
-        hits = repo.find_by_date_range(date_end=datetime(2026, 1, 1, 23, 0))
+        hits = _search(tmp_path, items, date_end=datetime(2026, 1, 1, 23, 0)).items
         assert {m.file_hash for m in hits} == {"aware"}
-        repo.close()
 
 
 class TestCliDateParsing:
@@ -135,7 +135,7 @@ class TestCliDateParsing:
         from photo_meta_organizer.main import main
 
         db = str(tmp_path / "cli.json")
-        repo = TinyDBRepository(db)
+        repo = LegacyJsonWriter(db)
         repo.save(_photo("keep", datetime(2026, 3, 1, 12, 0)))
         repo.save(_photo("drop", datetime(2025, 3, 1, 12, 0)))
         repo.close()

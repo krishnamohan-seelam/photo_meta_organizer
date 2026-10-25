@@ -14,17 +14,12 @@ from pathlib import Path
 
 from photo_meta_organizer.domain.curation import carry_over_curation
 from photo_meta_organizer.domain.models import ImageMetadata
+from photo_meta_organizer.infrastructure.importers.legacy_json_reader import LegacyJsonReader
 from photo_meta_organizer.infrastructure.repositories.sqlite_collection_repository import (
     SqliteCollectionRepository,
 )
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_collection_repository import (
-    TinyDBCollectionRepository,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,9 +70,9 @@ def import_legacy_json(json_path: str, sqlite_path: str) -> ImportResult:
     back to it.
     """
     result = ImportResult()
-    source = TinyDBRepository(db_path=json_path)
+    source = LegacyJsonReader(json_path)
     try:
-        records = source.list_all()
+        records = source.records()
         result.source_count = len(records)
         survivors, merged = _dedupe_by_path(records)
         result.duplicate_paths_merged = merged
@@ -87,10 +82,9 @@ def import_legacy_json(json_path: str, sqlite_path: str) -> ImportResult:
             target.save_many(survivors)
             result.imported_count = target.count()
 
-            source_collections = TinyDBCollectionRepository(source.db)
             target_collections = SqliteCollectionRepository(target.connection, target.lock)
             valid_hashes = {m.file_hash for m in survivors}
-            for collection in source_collections.list_all():
+            for collection in source.collections():
                 hashes = [h for h in collection.photo_hashes if h in valid_hashes]
                 target_collections.save(collection.name, hashes, collection.description)
                 result.collections_imported += 1

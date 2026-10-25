@@ -149,19 +149,17 @@ class TestPoisonedStoreIsTolerated:
         """A rating poisoned by an older TinyDB-era bug, seen only through the legacy
         JSON importer (PMO-08), must be dropped rather than aborting the whole import.
         """
+        from tests.legacy_json import LegacyJsonWriter
         from tinydb import Query
 
         from photo_meta_organizer.infrastructure.importers.legacy_json_importer import (
             import_legacy_json,
         )
-        from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-            TinyDBRepository,
-        )
 
         json_path = str(tmp_path / "legacy.json")
-        legacy = TinyDBRepository(json_path)
+        legacy = LegacyJsonWriter(json_path)
         legacy.save(_photo("h1", "one.jpg"))
-        legacy._table.update({"rating": "abc"}, Query().file_hash == "h1")
+        legacy.table.update({"rating": "abc"}, Query().file_hash == "h1")
         legacy.close()
 
         sqlite_path = str(tmp_path / "legacy.db")

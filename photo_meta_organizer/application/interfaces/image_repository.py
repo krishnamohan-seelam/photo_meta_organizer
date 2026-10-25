@@ -221,34 +221,3 @@ class ImageMetadataRepository(Protocol):
             Integer count of all records in storage.
         """
         ...
-
-    def update_metadata(self, file_hash: str, updates: dict) -> ImageMetadata | None:
-        """Update specific fields of an ImageMetadata entity (e.g. rating, flagged, labels).
-
-        Deprecated: superseded by :meth:`apply`, which takes a typed
-        :data:`~photo_meta_organizer.domain.curation.CurationCommand` instead of
-        a free-form dict. Kept only until callers finish migrating (PMO-09).
-
-        Args:
-            file_hash: SHA-256 hash of the record to update.
-            updates: Dictionary of fields to update.
-
-        Returns:
-            Updated ImageMetadata entity if found, None otherwise.
-        """
-        ...
-
-    def batch_update(self, file_hashes: list[str], updates: dict) -> int:
-        """Apply batch updates across multiple image records atomically.
-
-        Deprecated: superseded by :meth:`apply_batch`. Kept only until callers
-        finish migrating (PMO-09).
-
-        Args:
-            file_hashes: List of SHA-256 hashes.
-            updates: Dictionary of fields to update or actions.
-
-        Returns:
-            Count of successfully updated records.
-        """
-        ...

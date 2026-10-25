@@ -8,6 +8,8 @@ the one-time import. The ``dedupe`` repair command is gone.
 import sys
 from datetime import datetime
 
+from tests.legacy_json import LegacyJsonWriter
+
 from photo_meta_organizer.domain.models import (
     ImageDimensions,
     ImageExifData,
@@ -16,9 +18,6 @@ from photo_meta_organizer.domain.models import (
 )
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     SqliteRepository,
-)
-from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-    TinyDBRepository,
 )
 from photo_meta_organizer.main import main
 
@@ -44,7 +43,7 @@ def test_legacy_duplicate_paths_are_merged_on_import(tmp_path, monkeypatch):
     once, automatically, the first time any CLI command opens it via ``--db``.
     """
     json_db = str(tmp_path / "legacy.json")
-    repo = TinyDBRepository(json_db)
+    repo = LegacyJsonWriter(json_db)
     repo.save(_rec("old", "/p/a.jpg", datetime(2024, 1, 1), rating=3))
     repo.save(_rec("new", "/p/a.jpg", datetime(2024, 2, 1)))
     repo.close()

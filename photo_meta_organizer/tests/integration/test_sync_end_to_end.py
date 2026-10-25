@@ -14,6 +14,7 @@ import pytest
 from tests.conftest import FakeExtractor
 
 from photo_meta_organizer.application.use_cases import ScanLibrary, ScanOptions
+from photo_meta_organizer.domain.curation import AddTag, SetFlag, SetLabels, SetRating
 from photo_meta_organizer.domain.models import (
     ImageDimensions,
     ImageExifData,
@@ -238,10 +239,9 @@ class TestSyncReplacesModifiedRecord:
     def _curate(self, repository, photo_dir, name="photo2.jpg"):
         record = repository.get_by_path(str((photo_dir / name).resolve()))
         assert record is not None
-        repository.update_metadata(
-            record.file_hash,
-            {"rating": 5, "flagged": True, "labels": ["keeper", "trip"]},
-        )
+        repository.apply(record.file_hash, SetRating(5))
+        repository.apply(record.file_hash, SetFlag(True))
+        repository.apply(record.file_hash, SetLabels(["keeper", "trip"]))
         return record.file_hash
 
     def test_edit_that_changes_content_and_size_leaves_one_record(
@@ -278,7 +278,7 @@ class TestSyncReplacesModifiedRecord:
         use_case.execute()
         self._curate(repository, photo_dir, "photo2.jpg")
         other = repository.get_by_filehash(_sha(b"photo3_content"))
-        repository.update_metadata(other.file_hash, {"add_tags": ["from-photo3"]})
+        repository.apply(other.file_hash, AddTag("from-photo3"))
 
         (photo_dir / "photo2.jpg").write_bytes(b"photo3_content")
         use_case.execute()

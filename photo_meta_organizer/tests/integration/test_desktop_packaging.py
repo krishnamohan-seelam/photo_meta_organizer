@@ -170,17 +170,16 @@ class TestAdoptLegacyDatabase:
         legacy = tmp_path / "install"
         legacy.mkdir()
         legacy_json = legacy / "metadata.json"
+        from tests.legacy_json import LegacyJsonWriter
+
         from photo_meta_organizer.domain.models import (
             ImageDimensions,
             ImageExifData,
             ImageFileInfo,
             ImageMetadata,
         )
-        from photo_meta_organizer.infrastructure.repositories.tinydb_repository import (
-            TinyDBRepository,
-        )
 
-        old = TinyDBRepository(db_path=str(legacy_json))
+        old = LegacyJsonWriter(str(legacy_json))
         old.save(
             ImageMetadata(
                 file_hash="b" * 64,
@@ -190,7 +189,7 @@ class TestAdoptLegacyDatabase:
                 rating=2,
             )
         )
-        old._db.close()
+        old.close()
         before = legacy_json.read_bytes()
         target = tmp_path / "userdata" / "photos.db"
 
