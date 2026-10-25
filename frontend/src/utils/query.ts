@@ -1,15 +1,35 @@
+import type { BoundingBox } from '../types/metadata'
 import { UNKNOWN_DATE } from './captureDate'
 
 /**
  * The query bar's language (FR-2a.3): only fields the search API can filter on. The store stays
  * the single source of truth; these pure functions translate between it and the bar's tokens.
  */
-export type QueryField = 'make' | 'model' | 'tag' | 'in' | 'pick' | 'rating' | 'year' | 'date' | 'geo'
+export type QueryField =
+  | 'make'
+  | 'model'
+  | 'tag'
+  | 'in'
+  | 'pick'
+  | 'rating'
+  | 'year'
+  | 'date'
+  | 'geo'
+  | 'near'
+  | 'within'
+  | 'ai'
 
 export type Token =
   | { kind: 'field'; field: QueryField; value: string }
   | { kind: 'text'; value: string }
   | { kind: 'invalid'; raw: string; reason: string }
+
+/** Photos within `km` kilometres of a point (the search API's location_lat/lon + radius_km). */
+export interface NearFilter {
+  lat: number
+  lon: number
+  km: number
+}
 
 export interface DateRange {
   /** Naive local dates, `YYYY-MM-DD`; the end is inclusive. */
@@ -31,6 +51,11 @@ export interface QueryFilters {
   filterModel: string
   filterHasLocation: boolean | null
   filterDateRange: DateRange | null
+  /** A map area (south, west, north, east): "Show these in Library" on the Map view. */
+  filterArea?: BoundingBox | null
+  /** An open AI suggestion of this label. */
+  filterAiTag?: string | null
+  filterNear?: NearFilter | null
 }
 
 export const EMPTY_QUERY_FILTERS: QueryFilters = {
@@ -43,6 +68,9 @@ export const EMPTY_QUERY_FILTERS: QueryFilters = {
   filterModel: '',
   filterHasLocation: null,
   filterDateRange: null,
+  filterArea: null,
+  filterAiTag: null,
+  filterNear: null,
 }
 
 /** What the bar knows about the library, to resolve `make:` and `in:` values. */
@@ -62,6 +90,9 @@ export const QUERY_FIELDS: { field: QueryField; description: string; example: st
   { field: 'year', description: 'Capture year', example: 'year:2026' },
   { field: 'date', description: 'Capture date or range', example: 'date:2026-05-14..2026-05-21' },
   { field: 'geo', description: 'Has GPS location', example: 'geo:yes' },
+  { field: 'near', description: 'Within km of a point', example: 'near:35.68,139.69,5' },
+  { field: 'within', description: 'Inside a map area (south,west,north,east)', example: 'within:35,139,36,140' },
+  { field: 'ai', description: 'Has an open AI suggestion', example: 'ai:"dog on a beach"' },
 ]
 
 const FIELD_NAMES = new Set<string>(QUERY_FIELDS.map((f) => f.field))
@@ -82,6 +113,37 @@ export function parseDateRange(value: string): DateRange | string {
   }
   if (start > end) return 'the start date must be on or before the end date'
   return { start, end }
+}
+
+const COORDINATE = /^-?\d+(\.\d+)?$/
+
+function numbers(value: string, count: number): number[] | null {
+  const parts = value.split(',').map((p) => p.trim())
+  if (parts.length !== count || !parts.every((p) => COORDINATE.test(p))) return null
+  return parts.map(Number)
+}
+
+const validLat = (n: number) => n >= -90 && n <= 90
+const validLon = (n: number) => n >= -180 && n <= 180
+
+/** `lat,lon,km` or the reason it is not. */
+export function parseNear(value: string): NearFilter | string {
+  const n = numbers(value, 3)
+  const reason = 'near takes latitude,longitude,kilometres, e.g. near:35.68,139.69,5'
+  if (!n) return reason
+  const [lat, lon, km] = n
+  if (!validLat(lat) || !validLon(lon) || km <= 0) return reason
+  return { lat, lon, km }
+}
+
+/** `south,west,north,east` or the reason it is not. */
+export function parseWithin(value: string): BoundingBox | string {
+  const n = numbers(value, 4)
+  const reason = 'within takes south,west,north,east in degrees, e.g. within:35,139,36,140'
+  if (!n) return reason
+  const [south, west, north, east] = n
+  if (!validLat(south) || !validLat(north) || !validLon(west) || !validLon(east) || south > north) return reason
+  return { south, west, north, east }
 }
 
 /** Check one `field:value` pair; the value is kept as typed (makes and collections resolve later). */
@@ -115,6 +177,14 @@ function fieldToken(rawField: string, value: string, raw: string): Token {
       return lower === 'yes' || lower === 'no'
         ? { kind: 'field', field: f, value: lower }
         : { kind: 'invalid', raw, reason: 'geo takes yes or no' }
+    case 'near': {
+      const near = parseNear(value)
+      return typeof near === 'string' ? { kind: 'invalid', raw, reason: near } : { kind: 'field', field: f, value }
+    }
+    case 'within': {
+      const area = parseWithin(value)
+      return typeof area === 'string' ? { kind: 'invalid', raw, reason: area } : { kind: 'field', field: f, value }
+    }
     default:
       return { kind: 'field', field: f, value }
   }
@@ -206,6 +276,19 @@ export function tokensToFilters(tokens: Token[]): QueryFilters {
       case 'geo':
         f.filterHasLocation = t.value === 'yes'
         break
+      case 'near': {
+        const near = parseNear(t.value)
+        if (typeof near !== 'string') f.filterNear = near
+        break
+      }
+      case 'within': {
+        const area = parseWithin(t.value)
+        if (typeof area !== 'string') f.filterArea = area
+        break
+      }
+      case 'ai':
+        f.filterAiTag = t.value
+        break
     }
   }
   return f
@@ -228,6 +311,12 @@ export function filtersToTokens(f: QueryFilters): Token[] {
     field('year', f.filterTimeframe)
   }
   if (f.filterHasLocation !== null) field('geo', f.filterHasLocation ? 'yes' : 'no')
+  if (f.filterNear) field('near', `${f.filterNear.lat},${f.filterNear.lon},${f.filterNear.km}`)
+  if (f.filterArea) {
+    const { south, west, north, east } = f.filterArea
+    field('within', `${south},${west},${north},${east}`)
+  }
+  if (f.filterAiTag) field('ai', f.filterAiTag)
   const term = f.searchQuery.trim()
   if (term) tokens.push({ kind: 'text', value: term })
   return tokens

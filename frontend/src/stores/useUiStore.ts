@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { BoundingBox, SortField } from '../types/metadata'
 import { loadTheme, saveTheme, type Theme } from '../utils/theme'
 import { isBoolean, isNumber, loadPref, savePref } from '../utils/prefs'
-import { EMPTY_QUERY_FILTERS, type DateRange, type QueryFilters } from '../utils/query'
+import { EMPTY_QUERY_FILTERS, type DateRange, type NearFilter, type QueryFilters } from '../utils/query'
 import { DEFAULT_GAP_HOURS, GAP_PRESETS } from '../utils/chapters'
 
 export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
@@ -85,6 +85,7 @@ interface UiState {
   sortOrder: 'asc' | 'desc'
   /** Map area picked on the Map view; narrows the Library like any other filter. */
   filterArea: BoundingBox | null
+  filterNear: NearFilter | null
   toastMessage: string | null
   toastKind: ToastKind
 
@@ -160,6 +161,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   sortBy: 'captured_at',
   sortOrder: 'desc',
   filterArea: null,
+  filterNear: null,
   toastMessage: null,
   toastKind: 'success',
 
@@ -229,6 +231,9 @@ export const useUiStore = create<UiState>((set, get) => ({
       filterModel: f.filterModel,
       filterHasLocation: f.filterHasLocation,
       filterDateRange: f.filterDateRange,
+      filterArea: f.filterArea ?? null,
+      filterAiTag: f.filterAiTag ?? null,
+      filterNear: f.filterNear ?? null,
     }),
   setLibraryLayout: (libraryLayout) => {
     savePref(LAYOUT_KEY, libraryLayout)
@@ -245,7 +250,7 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   resetFilters: () => {
     get().applyQueryFilters(EMPTY_QUERY_FILTERS)
-    set({ filterArea: null, semantic: null, filterAiTag: null, semanticLimit: SEMANTIC_PAGE })
+    set({ semantic: null, semanticLimit: SEMANTIC_PAGE })
   },
 
   showToast: (toastMessage, toastKind = 'success') => {

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
 import type { Facets } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { QUERY_FIELDS } from '../../utils/query'
 import { toSearchRequest } from '../../utils/search'
 import { renderWithQuery, testQueryClient } from '../../test/render'
 import { QueryBar } from './QueryBar'
@@ -104,7 +105,7 @@ describe('QueryBar (FR-2b, AC-2b.1)', () => {
     input.focus()
     fireEvent.focus(input)
     expect(screen.getByRole('option', { name: /make:.*make:sony/ })).toBeTruthy()
-    expect(screen.getAllByRole('option').length).toBe(9)
+    expect(screen.getAllByRole('option').length).toBe(QUERY_FIELDS.length)
   })
 })
 
