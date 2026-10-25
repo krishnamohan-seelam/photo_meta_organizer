@@ -173,7 +173,8 @@ class TestJobManager:
         with pytest.raises(KeyError):
             manager.get(ids[0])
 
-    def test_shutdown_cancels_running_jobs(self, tmp_path) -> None:
+    def test_shutdown_interrupts_running_jobs(self, tmp_path) -> None:
+        """The user did not cancel it, so it can be resumed (ADR-003 R5a)."""
         manager = JobManager()
         started = threading.Event()
 
@@ -185,4 +186,4 @@ class TestJobManager:
         job = manager.submit("index", str(tmp_path), work)
         assert started.wait(5)
         manager.shutdown(timeout=5)
-        assert manager.get(job.id).status is JobStatus.CANCELLED
+        assert manager.get(job.id).status is JobStatus.INTERRUPTED

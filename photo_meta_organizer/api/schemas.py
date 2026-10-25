@@ -265,7 +265,7 @@ class JobResponse(ResponseModel):
 
     id: str
     kind: str
-    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled", "interrupted"]
     folder_path: str
     total: int | None = None
     processed: int = 0

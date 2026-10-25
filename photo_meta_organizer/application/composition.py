@@ -21,6 +21,7 @@ from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbe
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
+from photo_meta_organizer.application.interfaces.job_store import JobStore
 from photo_meta_organizer.application.interfaces.progress import ProgressSink
 from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.application.use_cases.scan_library import ScanLibrary
@@ -158,6 +159,18 @@ def build_analysis_repository(repository: ImageMetadataRepository) -> AnalysisRe
     if isinstance(repository, SqliteRepository):
         return SqliteAnalysisRepository(repository.connection, repository.lock)
     raise TypeError(f"unsupported repository type for analysis: {type(repository)!r}")
+
+
+def build_job_store(repository: ImageMetadataRepository) -> JobStore:
+    """Build the job history store sharing storage with ``repository`` (ADR-003 R5a)."""
+    from photo_meta_organizer.infrastructure.repositories.sqlite_job_store import SqliteJobStore
+    from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+        SqliteRepository,
+    )
+
+    if isinstance(repository, SqliteRepository):
+        return SqliteJobStore(repository.connection, repository.lock)
+    raise TypeError(f"unsupported repository type for jobs: {type(repository)!r}")
 
 
 def build_model_store(settings: Settings) -> "ModelStore":

@@ -9,7 +9,8 @@ from tests.conftest import wait_for_job
 from tests.fakes import FakeImageEmbedder
 
 from photo_meta_organizer.api.app import create_app
-from photo_meta_organizer.api.routes import analysis_router
+from photo_meta_organizer.application.composition import build_job_store
+from photo_meta_organizer.application.jobs import Job, JobStatus
 from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.domain.analysis import AiTag
 from photo_meta_organizer.domain.models import (
@@ -18,6 +19,7 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
+from photo_meta_organizer.infrastructure.analysis import runtime
 from photo_meta_organizer.infrastructure.analysis.model_manifest import ModelFile, ModelManifest
 from photo_meta_organizer.infrastructure.analysis.model_store import ModelStore
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
@@ -71,9 +73,10 @@ def api(tmp_path, monkeypatch):
 
     settings = Settings(db_path=db, cache_dir=tmp_path / "thumbs", model_dir=tmp_path / "models")
     app = create_app(settings=settings, model_store=store, embedder=embedder)
-    monkeypatch.setattr(analysis_router, "ai_runtime_installed", lambda: True)
+    monkeypatch.setattr(runtime, "ai_runtime_installed", lambda: True)
     a = Api()
     a.client, a.app, a.store, a.embedder, a.tmp = TestClient(app), app, store, embedder, tmp_path
+    a.settings = settings
     a.analysis = app.state.services.analysis
     a.photos = app.state.services.repository
     return a
@@ -108,7 +111,7 @@ class TestStatus:
         assert (body["analyzed_photos"], body["pending_photos"]) == (3, 0)
 
     def test_reports_a_missing_runtime(self, api, monkeypatch):
-        monkeypatch.setattr(analysis_router, "ai_runtime_installed", lambda: False)
+        monkeypatch.setattr(runtime, "ai_runtime_installed", lambda: False)
         assert api.client.get("/api/analysis/status").json()["runtime_installed"] is False
 
     def test_names_the_running_job(self, api, monkeypatch):
@@ -169,7 +172,7 @@ class TestRunAnalysis:
 
     def test_needs_the_runtime(self, api, monkeypatch):
         _install(api)
-        monkeypatch.setattr(analysis_router, "ai_runtime_installed", lambda: False)
+        monkeypatch.setattr(runtime, "ai_runtime_installed", lambda: False)
         response = api.client.post("/api/analysis/run", json={})
         assert response.status_code == 503
         assert "ai" in response.json()["detail"]
@@ -190,6 +193,35 @@ class TestRunAnalysis:
         _install(api)
         assert _analyze(api, limit=2)["counts"]["analyzed"] == 2
         assert _analyze(api, reanalyze=True)["counts"]["analyzed"] == 3
+
+    def _restart_with_interrupted(self, api, **params):
+        """A second app on the same library, after an analysis was left running."""
+        build_job_store(api.photos).save(
+            Job(
+                id="left-running",
+                kind="analyze",
+                folder_path=str(api.settings.model_dir),
+                status=JobStatus.RUNNING,
+                params=params,
+            )
+        )
+        app = create_app(settings=api.settings, model_store=api.store, embedder=api.embedder)
+        return TestClient(app)
+
+    def test_resuming_an_interrupted_analysis_takes_the_pending_photos(self, api):
+        _install(api)
+        _analyze(api, limit=2)
+        with self._restart_with_interrupted(api, limit=None) as client:
+            assert client.get("/api/jobs/left-running").json()["status"] == "interrupted"
+            resumed = wait_for_job(client, client.post("/api/jobs/left-running/resume").json())
+        assert resumed["status"] == "succeeded" and resumed["counts"]["analyzed"] == 1
+
+    def test_resuming_an_interrupted_reanalysis_redoes_the_whole_library(self, api):
+        _install(api)
+        _analyze(api)
+        with self._restart_with_interrupted(api, reanalyze=True) as client:
+            resumed = wait_for_job(client, client.post("/api/jobs/left-running/resume").json())
+        assert resumed["status"] == "succeeded" and resumed["counts"]["analyzed"] == 3
 
     def test_files_that_fail_are_reported(self, api):
         _install(api)
@@ -301,7 +333,7 @@ class TestSemanticSearch:
         assert self._search(api, text="tiger").status_code == 409
 
     def test_needs_the_runtime(self, api, monkeypatch):
-        monkeypatch.setattr(analysis_router, "ai_runtime_installed", lambda: False)
+        monkeypatch.setattr(runtime, "ai_runtime_installed", lambda: False)
         assert self._search(api, text="tiger").status_code == 503
 
 

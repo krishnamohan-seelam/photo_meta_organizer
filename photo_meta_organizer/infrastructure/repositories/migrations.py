@@ -247,6 +247,29 @@ JOIN files f ON f.id = (
 );
 """
 
+# Ticket 07 (ADR-003 R5a): background jobs outlive the process. Times are naive local
+# ISO strings like the rest of the schema; counts, errors and params are JSON.
+JOBS_SQL = """
+CREATE TABLE jobs (
+    id               TEXT PRIMARY KEY,
+    kind             TEXT NOT NULL,
+    folder           TEXT NOT NULL,
+    status           TEXT NOT NULL,
+    total            INTEGER,
+    processed        INTEGER NOT NULL DEFAULT 0,
+    failed           INTEGER NOT NULL DEFAULT 0,
+    counts           TEXT NOT NULL DEFAULT '{}',
+    errors           TEXT NOT NULL DEFAULT '[]',
+    message          TEXT NOT NULL DEFAULT '',
+    params           TEXT NOT NULL DEFAULT '{}',
+    cancel_requested INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT NOT NULL,
+    started_at       TEXT,
+    finished_at      TEXT
+);
+CREATE INDEX idx_jobs_created_at ON jobs(created_at);
+"""
+
 
 @dataclass(frozen=True)
 class Migration:
@@ -265,6 +288,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline", BASELINE_SQL),
     Migration(2, "split_assets", SPLIT_ASSETS_SQL, rebuilds=True),
     Migration(3, "missing_files", MISSING_FILES_SQL),
+    Migration(4, "jobs", JOBS_SQL),
 )
 
 

@@ -17,6 +17,7 @@ so they cannot run at once. A suggestion becomes a label only when accepted.
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from photo_meta_organizer.api.dependencies import Services, get_services
+from photo_meta_organizer.api.job_factory import require_model, require_runtime, work_for
 from photo_meta_organizer.api.routes.photos_router import (
     _search_query,
     _submit,
@@ -36,11 +37,6 @@ from photo_meta_organizer.api.schemas import (
     SemanticSearchRequest,
     SemanticSearchResponse,
 )
-from photo_meta_organizer.application.job_work import analyze_work
-from photo_meta_organizer.application.jobs import JobContext, JobOutcome, Work
-from photo_meta_organizer.application.use_cases.analyze_photos_use_case import (
-    AnalyzePhotosUseCase,
-)
 from photo_meta_organizer.application.use_cases.resolve_ai_tags_use_case import (
     ResolveAiTagsUseCase,
 )
@@ -49,59 +45,18 @@ from photo_meta_organizer.application.use_cases.semantic_search_use_case import 
     SemanticSearchUseCase,
 )
 from photo_meta_organizer.domain.analysis import AiTagStatus
-from photo_meta_organizer.infrastructure.analysis.model_store import (
-    DownloadCancelled,
-    ModelStore,
-    ModelUnavailableError,
-)
-from photo_meta_organizer.infrastructure.analysis.runtime import ai_runtime_installed
+from photo_meta_organizer.infrastructure.analysis import runtime
+from photo_meta_organizer.infrastructure.analysis.model_store import ModelUnavailableError
 
 analysis_router = APIRouter(prefix="/api", tags=["ai"])
 ai_tags_router = APIRouter(prefix="/api/ai-tags", tags=["ai"])
 
 _AI_JOB_KINDS = ("model-download", "analyze")
-_RUNTIME_HINT = (
-    "The AI features need the optional 'ai' extra (onnxruntime and tokenizers): "
-    "`uv sync --extra ai`, or `pip install photo-meta-organizer[ai]`."
-)
 
 
 def _job_folder(services: Services) -> str:
     """One shared pseudo-folder, so a download and an analysis exclude each other."""
     return str(services.settings.models_dir)
-
-
-def _require_runtime() -> None:
-    if not ai_runtime_installed():
-        raise HTTPException(status_code=503, detail=_RUNTIME_HINT)
-
-
-def _require_model(services: Services) -> None:
-    if not services.model_store.is_installed():
-        raise HTTPException(
-            status_code=409,
-            detail="The AI model is not installed yet. Download it first "
-            "(POST /api/analysis/model/download).",
-        )
-
-
-def _download_work(store: ModelStore) -> Work:
-    def work(ctx: JobContext) -> JobOutcome:
-        def on_progress(done: int, total: int) -> None:
-            ctx.report_progress(total=total, processed=done, failed=0)
-
-        try:
-            store.download(progress=on_progress, should_cancel=ctx.cancel_requested)
-        except DownloadCancelled:
-            return JobOutcome(
-                message="Download cancelled; nothing partial was kept.", cancelled=True
-            )
-        return JobOutcome(
-            message=f"Installed the model ({store.manifest.total_bytes / 1e6:.0f} MB).",
-            counts={"bytes": store.manifest.total_bytes},
-        )
-
-    return work
 
 
 @analysis_router.get(
@@ -119,7 +74,7 @@ def analysis_status(services: Services = Depends(get_services)) -> AnalysisStatu
         None,
     )
     return AnalysisStatusResponse(
-        runtime_installed=ai_runtime_installed(),
+        runtime_installed=runtime.ai_runtime_installed(),
         model_installed=store.is_installed(),
         model_id=store.manifest.model_id,
         model_source=store.manifest.source,
@@ -147,11 +102,9 @@ def download_model(
     The body must say ``{"accept": true}``: the UI sends it only after telling the user what is
     fetched (size, source, licence). Only the model is downloaded; no photo data is sent.
     """
-    if services.model_store.is_installed():
-        raise HTTPException(status_code=409, detail="The model is already installed.")
-    return _submit(
-        services.jobs, "model-download", _job_folder(services), _download_work(services.model_store)
-    )
+    folder = _job_folder(services)
+    work = work_for("model-download", folder, {}, services)
+    return _submit(services.jobs, "model-download", folder, work, {})
 
 
 @analysis_router.post(
@@ -169,17 +122,11 @@ def run_analysis(
     Refused with 503 without the ``ai`` extra and 409 without the model or while another AI job
     runs. Suggestions never change the user's labels until accepted.
     """
-    _require_runtime()
-    _require_model(services)
-    use_case = AnalyzePhotosUseCase(
-        services.analysis,
-        services.embedder,
-        services.tagger if (request.tags or request.retag) else None,
+    folder = _job_folder(services)
+    params = request.model_dump()
+    return _submit(
+        services.jobs, "analyze", folder, work_for("analyze", folder, params, services), params
     )
-    work = analyze_work(
-        use_case, reanalyze=request.reanalyze, limit=request.limit, retag=request.retag
-    )
-    return _submit(services.jobs, "analyze", _job_folder(services), work)
 
 
 @analysis_router.post(
@@ -195,8 +142,8 @@ def semantic_search(
     The usual search filters apply and decide who competes. Returns the ``k`` best matches,
     best first. 409 if nothing (or that photo) has been analysed yet.
     """
-    _require_runtime()
-    _require_model(services)
+    require_runtime()
+    require_model(services)
     use_case = SemanticSearchUseCase(services.analysis, services.embedder, services.repository)
     query = _search_query(request)
     try:

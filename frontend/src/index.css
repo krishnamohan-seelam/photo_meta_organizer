@@ -445,6 +445,17 @@ kbd.k {
   color: var(--text-primary);
   background: var(--bg-card-hover);
 }
+.job-pill.interrupted .job-pill-dot {
+  background: var(--accent-warning);
+}
+.job-pill-action {
+  color: var(--accent-primary);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.job-pill-action:hover {
+  text-decoration: underline;
+}
 
 /* ---------- Query bar (§5.2): tokens + autocomplete, replaces the search field */
 .query-bar {

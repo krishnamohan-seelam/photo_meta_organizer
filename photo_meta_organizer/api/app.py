@@ -113,13 +113,16 @@ def create_app(
     }
     settings = dataclasses.replace(base, **{k: v for k, v in overrides.items() if v is not None})
 
-    job_manager = JobManager()
+    # Built below, once the library is open: the job history lives in it (ADR-003 R5a).
+    job_manager: JobManager | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
-        # Stop background jobs cleanly so none is killed mid-write at exit.
-        job_manager.shutdown()
+        # Stop background jobs cleanly so none is killed mid-write at exit; they are
+        # stored as interrupted and offered for resuming next time.
+        if job_manager is not None:
+            job_manager.shutdown()
 
     app = FastAPI(
         lifespan=lifespan,
@@ -157,6 +160,7 @@ def create_app(
     if db != ":memory:":
         settings.db_path.parent.mkdir(parents=True, exist_ok=True)
     repository = build_repository(db)
+    job_manager = JobManager(store=composition.build_job_store(repository))
     store = model_store or composition.build_model_store(settings)
     ai_embedder = embedder or composition.build_embedder(store)
     app.state.services = Services(

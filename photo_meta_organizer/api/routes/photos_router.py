@@ -19,20 +19,26 @@ Endpoints:
     GET   /api/jobs                   - Recent background jobs, newest first
     GET   /api/jobs/{job_id}          - One job's progress and result
     POST  /api/jobs/{job_id}/cancel   - Ask a running job to stop
+    POST  /api/jobs/{job_id}/resume   - Run an interrupted job again
+    POST  /api/jobs/{job_id}/dismiss  - Give up on an interrupted job
 """
 
 import os
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
 from photo_meta_organizer.api.dependencies import (
+    Services,
     get_collection_repository,
     get_job_manager,
     get_place_namer,
     get_repository,
+    get_services,
     get_thumbnail_service,
 )
+from photo_meta_organizer.api.job_factory import work_for
 from photo_meta_organizer.api.schemas import (
     BatchPhotoRequest,
     BatchPhotoResponse,
@@ -60,7 +66,6 @@ from photo_meta_organizer.api.schemas import (
     SearchRequest,
     SyncFolderRequest,
 )
-from photo_meta_organizer.application.composition import build_scan
 from photo_meta_organizer.application.geo import cell_degrees_for_zoom, place_scope_for_zoom
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
@@ -70,9 +75,13 @@ from photo_meta_organizer.application.interfaces.image_repository import (
 )
 from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
 from photo_meta_organizer.application.interfaces.search_types import BoundingBox
-from photo_meta_organizer.application.job_work import scan_work
-from photo_meta_organizer.application.jobs import Job, JobConflictError, JobManager, Work
-from photo_meta_organizer.application.use_cases.scan_library import ScanOptions
+from photo_meta_organizer.application.jobs import (
+    Job,
+    JobConflictError,
+    JobManager,
+    JobStateError,
+    Work,
+)
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,
@@ -576,6 +585,10 @@ def _job_response(job: Job) -> JobResponse:
     )
 
 
+def _job_not_found(job_id: str) -> HTTPException:
+    return HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+
+
 def _existing_directory(folder_path: str) -> str:
     """Absolute path of ``folder_path``, or 400 if it is not an existing directory."""
     absolute = os.path.abspath(folder_path)
@@ -587,9 +600,12 @@ def _existing_directory(folder_path: str) -> str:
     return absolute
 
 
-def _submit(jobs: JobManager, kind: str, folder_path: str, work: Work) -> JobResponse:
+def _submit(
+    jobs: JobManager, kind: str, folder_path: str, work: Work, params: dict[str, Any]
+) -> JobResponse:
+    """Start a job, storing ``params`` so it can be resumed (409 if its folder is busy)."""
     try:
-        return _job_response(jobs.submit(kind, folder_path, work))
+        return _job_response(jobs.submit(kind, folder_path, work, params=params))
     except JobConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -601,9 +617,7 @@ def _submit(jobs: JobManager, kind: str, folder_path: str, work: Work) -> JobRes
     summary="Start indexing a local photo directory",
 )
 def index_directory(
-    request: IndexFolderRequest,
-    repository: ImageMetadataRepository = Depends(get_repository),
-    jobs: JobManager = Depends(get_job_manager),
+    request: IndexFolderRequest, services: Services = Depends(get_services)
 ) -> JobResponse:
     """Start a background index job and return it at once (202).
 
@@ -616,9 +630,9 @@ def index_directory(
     """
     folder_path = _existing_directory(request.folder_path)
     # An index is a scan that never removes anything (ADR-003 R4).
-    options = ScanOptions(workers=request.num_workers)
-    work = scan_work(build_scan(folder_path, repository), folder_path, options, kind="index")
-    return _submit(jobs, "index", folder_path, work)
+    params: dict[str, Any] = {"workers": request.num_workers}
+    work = work_for("index", folder_path, params, services)
+    return _submit(services.jobs, "index", folder_path, work, params)
 
 
 @sync_router.post(
@@ -628,9 +642,7 @@ def index_directory(
     summary="Start an incremental sync of a local photo directory",
 )
 def sync_directory(
-    request: SyncFolderRequest,
-    repository: ImageMetadataRepository = Depends(get_repository),
-    jobs: JobManager = Depends(get_job_manager),
+    request: SyncFolderRequest, services: Services = Depends(get_services)
 ) -> JobResponse:
     """Re-scan a folder and apply only what changed (NEW / MODIFIED / DELETED).
 
@@ -641,21 +653,22 @@ def sync_directory(
     considered, so photos indexed from other folders are never affected.
     """
     folder_path = _existing_directory(request.folder_path)
-    options = ScanOptions(
-        remove_missing=request.cleanup_deleted,
-        reprocess_modified=request.reprocess_modified,
-        index_new=request.index_new,
-        dry_run=request.dry_run,
-        rehash=request.rehash,
-        reextract=request.reextract,
-    )
-    work = scan_work(build_scan(folder_path, repository), folder_path, options, kind="sync")
-    return _submit(jobs, "sync", folder_path, work)
+    params: dict[str, Any] = {
+        "remove_missing": request.cleanup_deleted,
+        "reprocess_modified": request.reprocess_modified,
+        "index_new": request.index_new,
+        "dry_run": request.dry_run,
+        "rehash": request.rehash,
+        "reextract": request.reextract,
+    }
+    work = work_for("sync", folder_path, params, services)
+    return _submit(services.jobs, "sync", folder_path, work, params)
 
 
 @jobs_router.get("", response_model=list[JobResponse], summary="List recent jobs")
 def list_jobs(jobs: JobManager = Depends(get_job_manager)) -> list[JobResponse]:
-    """Recent background jobs, newest first (kept in memory; a restart forgets them)."""
+    """Recent background jobs, newest first. They are stored in the library, so they
+    survive a restart; one that was running then is listed as ``interrupted``."""
     return [_job_response(j) for j in jobs.list()]
 
 
@@ -665,7 +678,7 @@ def get_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobResp
     try:
         return _job_response(jobs.get(job_id))
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.") from None
+        raise _job_not_found(job_id) from None
 
 
 @jobs_router.post(
@@ -679,4 +692,41 @@ def cancel_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobR
     try:
         return _job_response(jobs.cancel(job_id))
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.") from None
+        raise _job_not_found(job_id) from None
+
+
+@jobs_router.post(
+    "/{job_id}/resume", response_model=JobResponse, status_code=202, summary="Resume a job"
+)
+def resume_job(job_id: str, services: Services = Depends(get_services)) -> JobResponse:
+    """Run an interrupted job again with the options it was started with (202).
+
+    Cheap because the work is idempotent: a scan skips files it already has unchanged,
+    an analysis takes only the photos still pending (all of them again for a
+    ``reanalyze``). 404 for an unknown job, 400 if a scan's folder no longer exists, 409
+    if the job is not interrupted or another job holds its folder.
+    """
+    try:
+        job = services.jobs.get(job_id)
+        if job.kind in ("index", "sync"):
+            _existing_directory(job.folder_path)
+        work = work_for(job.kind, job.folder_path, job.params, services)
+        return _job_response(services.jobs.resume(job_id, work))
+    except KeyError:
+        raise _job_not_found(job_id) from None
+    except (JobStateError, JobConflictError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@jobs_router.post("/{job_id}/dismiss", response_model=JobResponse, summary="Dismiss a job")
+def dismiss_job(job_id: str, jobs: JobManager = Depends(get_job_manager)) -> JobResponse:
+    """Give up on an interrupted job: it ends ``cancelled`` and is not offered again.
+
+    404 for an unknown job, 409 if it is not interrupted.
+    """
+    try:
+        return _job_response(jobs.dismiss(job_id))
+    except KeyError:
+        raise _job_not_found(job_id) from None
+    except JobStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

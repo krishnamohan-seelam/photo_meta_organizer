@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   cancelJobApi,
+  dismissJobApi,
   errorMessage,
   isJobFinished,
   listJobsApi,
+  resumeJobApi,
   startIndexJobApi,
   startSyncJobApi,
 } from '../api/client'
@@ -42,10 +44,26 @@ export function useJobs() {
     refetchInterval: (query) => (query.state.data?.some((j) => !isJobFinished(j)) ? POLL_MS : false),
   })
   const jobs = data ?? []
-  return { jobs, activeJob: jobs.find((j) => !isJobFinished(j)) ?? null }
+  return {
+    jobs,
+    activeJob: jobs.find((j) => !isJobFinished(j)) ?? null,
+    // Stopped by the app ending (ADR-003 R5a); it waits for the user to resume or dismiss it.
+    interruptedJob: jobs.find((j) => j.status === 'interrupted') ?? null,
+  }
 }
 
-/** Start and cancel jobs. Failures to start (e.g. a 409 because the folder is busy) become error toasts. */
+/** A mutation on one job: its server record replaces the cached one; a failure is an error toast. */
+function useJobMutation(call: (jobId: string) => Promise<Job>, verb: string) {
+  const qc = useQueryClient()
+  const showToast = useUiStore((s) => s.showToast)
+  return useMutation({
+    mutationFn: call,
+    onSuccess: (job) => qc.setQueryData<Job[]>(jobsKey, (jobs) => upsert(jobs, job)),
+    onError: (err) => showToast(`${verb} failed: ${errorMessage(err)}`, 'error'),
+  })
+}
+
+/** Start, cancel, resume and dismiss jobs. Failures to start (e.g. a 409 because the folder is busy) become error toasts. */
 export function useJobActions() {
   const qc = useQueryClient()
   const showToast = useUiStore((s) => s.showToast)
@@ -58,19 +76,22 @@ export function useJobActions() {
       showToast(`${kind === 'index' ? 'Indexing' : 'Sync'} could not start: ${errorMessage(err)}`, 'error'),
   })
 
-  const cancel = useMutation({
-    mutationFn: cancelJobApi,
-    onSuccess: (job) => qc.setQueryData<Job[]>(jobsKey, (jobs) => upsert(jobs, job)),
-    onError: (err) => showToast(`Cancel failed: ${errorMessage(err)}`, 'error'),
-  })
+  const cancel = useJobMutation(cancelJobApi, 'Cancel')
+  const resume = useJobMutation(resumeJobApi, 'Resume')
+  const dismiss = useJobMutation(dismissJobApi, 'Dismiss')
 
   const startJob = useCallback((input: StartJobInput) => start.mutateAsync(input), [start])
   const cancelJob = useCallback((jobId: string) => cancel.mutate(jobId), [cancel])
-  return { startJob, isStarting: start.isPending, cancelJob }
+  const resumeJob = useCallback((jobId: string) => resume.mutate(jobId), [resume])
+  const dismissJob = useCallback((jobId: string) => dismiss.mutate(jobId), [dismiss])
+  return { startJob, isStarting: start.isPending, cancelJob, resumeJob, dismissJob }
 }
 
 function finishedNotice(job: Job): { text: string; kind: 'success' | 'error' } {
   const what = ({ sync: 'Sync', analyze: 'Analysis', 'model-download': 'Model download' } as Record<string, string>)[job.kind] ?? 'Indexing'
+  if (job.status === 'interrupted') {
+    return { text: `${what} was interrupted. Resume it from the top bar.`, kind: 'error' }
+  }
   if (job.status === 'failed') return { text: `${what} failed: ${job.message}`, kind: 'error' }
   if (job.failed_count > 0) {
     const first = job.errors[0] ? ` First: ${job.errors[0]}` : ''

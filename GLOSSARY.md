@@ -53,3 +53,9 @@ Looking through a root for files, and recording new and changed ones. Replaces "
 
 **Root**:
 A folder the library scans.
+
+**Job**:
+A long piece of work (a scan, an analysis, a model download) that runs in the background. Its progress and result are stored in the library, so the history survives a restart.
+
+**Interrupted job**:
+A Job that was running when the app stopped. It is never restarted on its own: the user resumes it (the work continues, skipping what is done) or dismisses it.

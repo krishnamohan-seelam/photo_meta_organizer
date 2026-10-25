@@ -16,14 +16,36 @@ function jobLabel(job: Job): string {
   return `${verb} ${job.processed.toLocaleString()} / ${job.total.toLocaleString()}`
 }
 
+const NOUNS: Record<string, string> = { sync: 'Sync', analyze: 'Analysis', 'model-download': 'AI model download' }
+
 /**
  * Job status in the top bar (FR-1b.6). Idle: "Library up to date". Running: what, how far,
- * failures so far and Cancel; clicking it shows the job's folder and counts.
+ * failures so far and Cancel; clicking it shows the job's folder and counts. A job the app
+ * stopped (ADR-003 R5a) shows "Interrupted" with Resume and Dismiss; it is never resumed
+ * on its own.
  */
 export const JobStatusPill: React.FC = () => {
-  const { activeJob } = useJobs()
-  const { cancelJob } = useJobActions()
+  const { activeJob, interruptedJob } = useJobs()
+  const { cancelJob, resumeJob, dismissJob } = useJobActions()
   const showToast = useUiStore((s) => s.showToast)
+
+  if (!activeJob && interruptedJob) {
+    const job = interruptedJob
+    const what = NOUNS[job.kind] ?? 'Indexing'
+    const where = job.kind === 'index' || job.kind === 'sync' ? ` of ${job.folder_path}` : ''
+    return (
+      <div className="job-pill interrupted" role="status">
+        <span className="job-pill-dot" aria-hidden="true" />
+        <span className="job-pill-label" title={job.message}>{`Interrupted: ${what}${where}`}</span>
+        <button type="button" className="btn-reset job-pill-action" onClick={() => resumeJob(job.id)}>
+          Resume
+        </button>
+        <button type="button" className="btn-reset job-pill-action" onClick={() => dismissJob(job.id)}>
+          Dismiss
+        </button>
+      </div>
+    )
+  }
 
   if (!activeJob) {
     return (

@@ -1323,7 +1323,8 @@
               "running",
               "succeeded",
               "failed",
-              "cancelled"
+              "cancelled",
+              "interrupted"
             ],
             "title": "Status",
             "type": "string"
@@ -2767,7 +2768,7 @@
     },
     "/api/jobs": {
       "get": {
-        "description": "Recent background jobs, newest first (kept in memory; a restart forgets them).",
+        "description": "Recent background jobs, newest first. They are stored in the library, so they\nsurvive a restart; one that was running then is listed as ``interrupted``.",
         "operationId": "list_jobs_api_jobs_get",
         "responses": {
           "200": {
@@ -2872,6 +2873,92 @@
           }
         },
         "summary": "Cancel a job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/dismiss": {
+      "post": {
+        "description": "Give up on an interrupted job: it ends ``cancelled`` and is not offered again.\n\n404 for an unknown job, 409 if it is not interrupted.",
+        "operationId": "dismiss_job_api_jobs__job_id__dismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss a job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/resume": {
+      "post": {
+        "description": "Run an interrupted job again with the options it was started with (202).\n\nCheap because the work is idempotent: a scan skips files it already has unchanged,\nan analysis takes only the photos still pending (all of them again for a\n``reanalyze``). 404 for an unknown job, 400 if a scan's folder no longer exists, 409\nif the job is not interrupted or another job holds its folder.",
+        "operationId": "resume_job_api_jobs__job_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume a job",
         "tags": [
           "jobs"
         ]

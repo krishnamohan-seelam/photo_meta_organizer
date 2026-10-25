@@ -289,7 +289,8 @@ export interface paths {
         };
         /**
          * List recent jobs
-         * @description Recent background jobs, newest first (kept in memory; a restart forgets them).
+         * @description Recent background jobs, newest first. They are stored in the library, so they
+         *     survive a restart; one that was running then is listed as ``interrupted``.
          */
         get: operations["list_jobs_api_jobs_get"];
         put?: never;
@@ -336,6 +337,53 @@ export interface paths {
          *     Cancelling a job that already finished is a no-op that returns it unchanged.
          */
         post: operations["cancel_job_api_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a job
+         * @description Give up on an interrupted job: it ends ``cancelled`` and is not offered again.
+         *
+         *     404 for an unknown job, 409 if it is not interrupted.
+         */
+        post: operations["dismiss_job_api_jobs__job_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a job
+         * @description Run an interrupted job again with the options it was started with (202).
+         *
+         *     Cheap because the work is idempotent: a scan skips files it already has unchanged,
+         *     an analysis takes only the photos still pending (all of them again for a
+         *     ``reanalyze``). 404 for an unknown job, 400 if a scan's folder no longer exists, 409
+         *     if the job is not interrupted or another job holds its folder.
+         */
+        post: operations["resume_job_api_jobs__job_id__resume_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1166,7 +1214,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
             /** Total */
             total: number | null;
         };
@@ -1979,6 +2027,68 @@ export interface operations {
         };
     };
     cancel_job_api_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_job_api_jobs__job_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_job_api_jobs__job_id__resume_post: {
         parameters: {
             query?: never;
             header?: never;

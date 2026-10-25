@@ -74,6 +74,7 @@ from photo_meta_organizer.application.interfaces.image_retriever import (
     ImageRetriever,
     RemoteFileHandle,
 )
+from photo_meta_organizer.application.interfaces.job_store import JobStore
 from photo_meta_organizer.application.interfaces.search_types import (
     BoundingBox,
     FacetCount,
@@ -97,6 +98,7 @@ __all__ = [
     "ImageMetadataExtractor",
     "ImageMetadataRepository",
     "ImageRetriever",
+    "JobStore",
     "Page",
     "PendingPhoto",
     "RemoteFileHandle",

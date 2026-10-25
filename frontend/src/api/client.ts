@@ -167,8 +167,9 @@ export function getPreviewUrl(fileHash: string): string {
   return `${BASE_URL}/photos/${fileHash}/preview`
 }
 
+/** Not queued or running. An interrupted job is finished too: it waits for Resume or Dismiss. */
 export function isJobFinished(job: Job): boolean {
-  return job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled'
+  return job.status !== 'queued' && job.status !== 'running'
 }
 
 /** Start indexing a folder in the background. A 409 means a job is already running on it. */
@@ -188,7 +189,7 @@ export function startSyncJobApi(folderPath: string, options: SyncOptions = {}): 
   return request('/sync', 'Syncing the folder', jsonInit('POST', { folder_path: folderPath, ...options } satisfies SyncFolderRequest))
 }
 
-/** Recent jobs, newest first (the server keeps them in memory only). */
+/** Recent jobs, newest first. Stored in the library, so they survive a restart (one running then is `interrupted`). */
 export function listJobsApi(): Promise<Job[]> {
   return request('/jobs', 'Loading jobs')
 }
@@ -199,6 +200,16 @@ export function getJobApi(jobId: string): Promise<Job> {
 
 export function cancelJobApi(jobId: string): Promise<Job> {
   return request(`/jobs/${jobId}/cancel`, 'Cancelling the job', { method: 'POST' })
+}
+
+/** Run an interrupted job again with its original options. 409 if its folder is busy. */
+export function resumeJobApi(jobId: string): Promise<Job> {
+  return request(`/jobs/${jobId}/resume`, 'Resuming the job', { method: 'POST' })
+}
+
+/** Give up on an interrupted job; it ends cancelled. */
+export function dismissJobApi(jobId: string): Promise<Job> {
+  return request(`/jobs/${jobId}/dismiss`, 'Dismissing the job', { method: 'POST' })
 }
 
 /** AI analysis (Phase 5). Status codes: 503 no `ai` extra, 409 no model / nothing analysed yet. */
