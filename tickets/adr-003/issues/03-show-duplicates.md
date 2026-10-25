@@ -11,3 +11,5 @@
 - [x] A duplicates facet counts Assets with more than one file, and a filter shows them
 - [x] A duplicates view groups them, shows reclaimable space, and lets the user hide copies; it never deletes files on disk
 - [x] Contract tests (pytest and Vitest) pass
+
+**Review fixes (2026-10-25):** the duplicates list keeps groups whose extra copies are all hidden (one copy, nothing to reclaim; `total_listed` pages them) so "Show again" works for a two-copy group; saving a path with different content clears its `hidden_at`.

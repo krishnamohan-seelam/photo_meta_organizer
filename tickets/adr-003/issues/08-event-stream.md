@@ -12,3 +12,5 @@
 - [x] Works with the pmo_token cookie; no auth change
 
 **Known limits:** `library_changed` carries a reason, not the affected hashes (the ADR allowed either); the client reloads the whole photo cache. Mutation hooks still invalidate on their own, so an edit may reload twice.
+
+**Review fix (2026-10-25):** event ids on the wire are `<run>.<n>` (`EventBus.run_id`), so a `Last-Event-ID` from before a server restart gets a `resync` even when its number falls inside the new buffer.

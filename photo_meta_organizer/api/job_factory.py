@@ -15,6 +15,7 @@ from photo_meta_organizer.api.dependencies import Services
 from photo_meta_organizer.application.composition import build_scan
 from photo_meta_organizer.application.job_work import ScanJobKind, analyze_work, scan_work
 from photo_meta_organizer.application.jobs import JobContext, JobOutcome, Work
+from photo_meta_organizer.application.roots import WorkFactory
 from photo_meta_organizer.application.use_cases.analyze_photos_use_case import (
     AnalyzePhotosUseCase,
 )
@@ -92,3 +93,8 @@ def download_work(store: ModelStore) -> Work:
         )
 
     return work
+
+
+def scan_work_factory(services: Services) -> WorkFactory:
+    """How a scan job's work is built for ``services``: what a root scan runs with."""
+    return lambda folder, params: work_for("sync", folder, params, services)

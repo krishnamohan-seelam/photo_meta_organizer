@@ -546,7 +546,7 @@
         "type": "object"
       },
       "DuplicatesResponse": {
-        "description": "Duplicate groups, biggest saving first, with the totals over all of them.",
+        "description": "Duplicate groups, biggest saving first, with the totals over all of them.\n\nA group whose extra copies are all hidden stays listed, so they can be shown again.",
         "properties": {
           "groups": {
             "items": {
@@ -560,14 +560,21 @@
             "type": "integer"
           },
           "total_groups": {
+            "description": "Photos with more than one copy",
             "title": "Total Groups",
+            "type": "integer"
+          },
+          "total_listed": {
+            "description": "Groups in the list, including those resolved by hiding copies",
+            "title": "Total Listed",
             "type": "integer"
           }
         },
         "required": [
           "groups",
           "total_groups",
-          "reclaimable_bytes"
+          "reclaimable_bytes",
+          "total_listed"
         ],
         "title": "DuplicatesResponse",
         "type": "object"
@@ -3177,7 +3184,7 @@
     },
     "/api/duplicates": {
       "get": {
-        "description": "Photos kept at more than one path, the biggest saving first.\n\nA copy counts when its file is on disk and not hidden. ``reclaimable_bytes`` is what all\nbut one copy take, per group and in total (over every group, not just this page).\nHidden and missing files are listed too, so a hidden copy can be shown again.",
+        "description": "Photos kept at more than one path, the biggest saving first.\n\nA copy counts when its file is on disk and not hidden. ``reclaimable_bytes`` is what all\nbut one copy take, per group and in total (over every group, not just this page). A group\nwhose extra copies are all hidden is still listed, with one copy and nothing to reclaim,\nand its hidden files can be shown again.",
         "operationId": "list_duplicates_api_duplicates_get",
         "parameters": [
           {
@@ -3234,7 +3241,7 @@
     },
     "/api/events": {
       "get": {
-        "description": "Server-sent events: ``job_progress``, ``job_finished``, ``library_changed`` and\n``resync``, each with an increasing ``id``.\n\nReconnect with ``Last-Event-ID`` to be replayed what you missed (the last 200 events are\nkept). If you were away longer, or the server restarted, you get one ``resync`` event:\nreload the photos, facets and jobs instead. Job events carry the job as\n``GET /api/jobs/{id}`` shows it.",
+        "description": "Server-sent events: ``job_progress``, ``job_finished``, ``library_changed`` and\n``resync``, each with an increasing ``id`` of the form ``<run>.<n>``.\n\nReconnect with ``Last-Event-ID`` to be replayed what you missed (the last 200 events are\nkept). If you were away longer, or the server restarted (the ``<run>`` part changed), you\nget one ``resync`` event: reload the photos, facets and jobs instead. Job events carry the\njob as ``GET /api/jobs/{id}`` shows it.",
         "operationId": "stream_events_api_events_get",
         "parameters": [
           {

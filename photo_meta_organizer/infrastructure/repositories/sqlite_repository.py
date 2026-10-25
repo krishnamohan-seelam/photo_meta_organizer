@@ -183,7 +183,9 @@ class SqliteRepository:
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET asset_hash=excluded.asset_hash,
                 name=excluded.name, size_bytes=excluded.size_bytes, mtime=excluded.mtime,
-                last_seen=excluded.last_seen, missing_since=NULL
+                last_seen=excluded.last_seen, missing_since=NULL,
+                hidden_at=CASE WHEN files.asset_hash = excluded.asset_hash
+                               THEN files.hidden_at END
             """,
             (
                 file_hash,
@@ -337,10 +339,13 @@ class SqliteRepository:
     def duplicate_groups(self, limit: int, offset: int = 0) -> DuplicatePage:
         with self.lock:
             totals = self.connection.execute(
-                "SELECT COUNT(*), COALESCE(SUM(saving), 0) FROM " f"({_DUPLICATE_SAVINGS})"
+                f"SELECT COUNT(*), COALESCE(SUM(saving), 0) FROM ({_DUPLICATE_SAVINGS})"
+            ).fetchone()
+            listed = self.connection.execute(
+                f"SELECT COUNT(*) FROM ({_DUPLICATE_LISTING})"
             ).fetchone()
             rows = self.connection.execute(
-                f"SELECT asset_hash, size_bytes FROM ({_DUPLICATE_SAVINGS}) "
+                f"SELECT asset_hash, size_bytes FROM ({_DUPLICATE_LISTING}) "
                 "ORDER BY saving DESC, asset_hash LIMIT ? OFFSET ?",
                 (limit, offset),
             ).fetchall()
@@ -349,7 +354,12 @@ class SqliteRepository:
             DuplicateGroup(r["asset_hash"], r["size_bytes"], files.get(r["asset_hash"], []))
             for r in rows
         ]
-        return DuplicatePage(groups, total_groups=totals[0], reclaimable_bytes=totals[1])
+        return DuplicatePage(
+            groups,
+            total_groups=totals[0],
+            reclaimable_bytes=totals[1],
+            total_listed=listed[0],
+        )
 
     def set_file_hidden(self, path: str, hidden: bool) -> bool:
         stamp = utc_now_naive().isoformat() if hidden else None
@@ -826,6 +836,16 @@ _FILE_COLUMNS = "path, asset_hash, size_bytes, mtime, missing_since, hidden_at"
 _DUPLICATE_HASHES = (
     "SELECT asset_hash FROM files WHERE hidden_at IS NULL AND missing_since IS NULL "
     "GROUP BY asset_hash HAVING COUNT(*) > 1"
+)
+# What the duplicates list shows: Assets with more than one File on disk, hidden ones included,
+# so a hidden copy can always be shown again. A group the user has resolved by hiding is still
+# listed (with one copy and nothing to reclaim); it just no longer counts as a duplicate.
+_DUPLICATE_LISTING = (
+    "SELECT f.asset_hash AS asset_hash, a.size_bytes AS size_bytes, "
+    "a.size_bytes * MAX(SUM(f.hidden_at IS NULL) - 1, 0) AS saving FROM files f "
+    "JOIN assets a ON a.file_hash = f.asset_hash "
+    "WHERE f.missing_since IS NULL "
+    "GROUP BY f.asset_hash HAVING COUNT(*) > 1"
 )
 _DUPLICATE_SAVINGS = (
     "SELECT f.asset_hash AS asset_hash, a.size_bytes AS size_bytes, "

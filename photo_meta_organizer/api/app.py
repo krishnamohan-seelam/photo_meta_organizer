@@ -36,6 +36,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from photo_meta_organizer import __version__
 from photo_meta_organizer.api.auth import TokenCookieMiddleware, is_authenticated
 from photo_meta_organizer.api.dependencies import Services
+from photo_meta_organizer.api.job_factory import scan_work_factory
 from photo_meta_organizer.api.routes.analysis_router import ai_tags_router, analysis_router
 from photo_meta_organizer.api.routes.config_router import config_router
 from photo_meta_organizer.api.routes.duplicates_router import duplicates_router, files_router
@@ -53,7 +54,7 @@ from photo_meta_organizer.api.routes.photos_router import (
     search_router,
     sync_router,
 )
-from photo_meta_organizer.api.routes.roots_router import roots_router, scan_roots
+from photo_meta_organizer.api.routes.roots_router import roots_router
 from photo_meta_organizer.application import composition
 from photo_meta_organizer.application.composition import (
     build_collection_repository,
@@ -62,6 +63,7 @@ from photo_meta_organizer.application.composition import (
 from photo_meta_organizer.application.events import LIBRARY_CHANGED, EventBus
 from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.jobs import JobManager
+from photo_meta_organizer.application.roots import scan_roots
 from photo_meta_organizer.application.settings import (  # noqa: F401 (re-exported)
     DEFAULT_ALLOWED_HOSTS,
     DEFAULT_CORS_ORIGINS,
@@ -129,7 +131,8 @@ def create_app(
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # The one automatic piece of work: rescan the library's roots (ADR-003 R5a, R11).
         if settings.scan_on_start:
-            scan_roots(_app.state.services)
+            services = _app.state.services
+            scan_roots(services.roots, services.jobs, scan_work_factory(services))
         yield
         # Stop background jobs cleanly so none is killed mid-write at exit; they are
         # stored as interrupted and offered for resuming next time.

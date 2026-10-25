@@ -30,8 +30,9 @@ def list_duplicates(
     """Photos kept at more than one path, the biggest saving first.
 
     A copy counts when its file is on disk and not hidden. ``reclaimable_bytes`` is what all
-    but one copy take, per group and in total (over every group, not just this page).
-    Hidden and missing files are listed too, so a hidden copy can be shown again.
+    but one copy take, per group and in total (over every group, not just this page). A group
+    whose extra copies are all hidden is still listed, with one copy and nothing to reclaim,
+    and its hidden files can be shown again.
     """
     page = repository.duplicate_groups(limit, offset)
     return DuplicatesResponse(
@@ -46,6 +47,7 @@ def list_duplicates(
             for g in page.groups
         ],
         total_groups=page.total_groups,
+        total_listed=page.total_listed,
         reclaimable_bytes=page.reclaimable_bytes,
     )
 

@@ -25,6 +25,11 @@ def app(tmp_path):
     return create_app(db_path=tmp_path / "events.db", cache_dir=tmp_path / "thumbs")
 
 
+def _after(app, number: int) -> str:
+    """A ``Last-Event-ID`` from this run of the server."""
+    return app.state.services.events.wire_id(number)
+
+
 def _events(client: TestClient, last_event_id: str | None = None) -> list[dict]:
     """Read the whole (closed) stream as ``[{id, event, data}]``."""
     headers = {"Last-Event-ID": last_event_id} if last_event_id is not None else {}
@@ -38,7 +43,7 @@ def _events(client: TestClient, last_event_id: str | None = None) -> list[dict]:
         if "event" in fields:
             events.append(
                 {
-                    "id": int(fields["id"]),
+                    "id": int(fields["id"].split(".")[1]),
                     "event": fields["event"],
                     "data": json.loads(fields["data"]),
                 }
@@ -53,7 +58,7 @@ def test_a_finished_job_is_announced_with_the_job_and_a_library_change(app, tmp_
         job = client.post("/api/index", json={"folder_path": str(folder)}).json()
         wait_for_job(client, job)
         app.state.services.events.close()
-        events = _events(client, "0")
+        events = _events(client, _after(app, 0))
     kinds = [e["event"] for e in events]
     assert kinds[0] == "job_progress" and "job_finished" in kinds and kinds[-1] == "library_changed"
     finished = next(e for e in events if e["event"] == "job_finished")
@@ -68,7 +73,7 @@ def test_reconnecting_replays_only_what_was_missed(app) -> None:
         bus.publish("library_changed", {"reason": "edit"})
     bus.close()
     with TestClient(app) as client:
-        assert [e["id"] for e in _events(client, "1")] == [2, 3]
+        assert [e["id"] for e in _events(client, _after(app, 1))] == [2, 3]
 
 
 def test_a_gap_older_than_the_buffer_is_a_resync(app) -> None:
@@ -77,15 +82,28 @@ def test_a_gap_older_than_the_buffer_is_a_resync(app) -> None:
         bus.publish("job_progress", {})
     bus.close()
     with TestClient(app) as client:
-        events = _events(client, "10")
+        events = _events(client, _after(app, 10))
     assert [e["event"] for e in events] == ["resync"] and events[0]["id"] == 250
 
 
-def test_an_id_from_a_previous_run_is_a_resync(app) -> None:
-    app.state.services.events.close()
+def test_an_id_from_a_previous_run_is_a_resync_even_when_its_number_still_fits(app) -> None:
+    """After a restart the new run may already be past the old number: it must not replay."""
+    bus = app.state.services.events
+    for _ in range(10):
+        bus.publish("job_progress", {})
+    bus.close()
     with TestClient(app) as client:
-        events = _events(client, "99")
+        events = _events(client, "0ldrun0.5")
     assert [e["event"] for e in events] == ["resync"]
+    assert events[0]["id"] == 10
+
+
+def test_an_id_without_a_run_is_a_fresh_connection(app) -> None:
+    bus = app.state.services.events
+    bus.publish("job_progress", {})
+    bus.close()
+    with TestClient(app) as client:
+        assert _events(client, "garbage") == []
 
 
 def test_editing_a_photo_announces_a_library_change_and_a_search_does_not(app) -> None:
@@ -107,7 +125,7 @@ def test_editing_a_photo_announces_a_library_change_and_a_search_does_not(app) -
         assert client.patch("/api/photos/h1", json={"rating": 3}).status_code == 200
         assert bus.last_id == 1
         bus.close()
-        [event] = _events(client, "0")
+        [event] = _events(client, _after(app, 0))
     assert event["event"] == "library_changed" and event["data"] == {"reason": "edit"}
 
 

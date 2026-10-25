@@ -11,3 +11,5 @@
 - [x] An existing library with no roots is offered the folders found in its files as a checkbox list; nothing is watched silently; skipping leaves watching off and manual 'Scan folder' works
 
 **Known limits:** the CLI never scans roots (only the API/desktop backend does, per the ADR) and has no command to list them; a root's scan on start is one job per root, run side by side; the watcher itself is ticket 10; the offline re-check timer and device-change hint (also ticket 10) are not built, so an unplugged root is picked up at the next start.
+
+**Review fix (2026-10-25):** `scan_roots`, `start_scan` and `SCAN_PARAMS` moved from the router to `application/roots.py` (the work factory is injected; `job_factory.scan_work_factory` supplies it); unit tests cover offline, failing and already-scanned roots.

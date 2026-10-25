@@ -60,7 +60,7 @@ const DialogBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           {data?.groups.map((g) => <GroupRow key={g.file_hash} group={g} />)}
         </ul>
 
-        {data && data.groups.length < data.total_groups && (
+        {data && data.groups.length < data.total_listed && (
           <div className="dialog-actions">
             <button type="button" className="btn btn-secondary" onClick={() => setLimit(limit + PAGE)}>
               Show more

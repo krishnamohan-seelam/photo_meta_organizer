@@ -173,8 +173,14 @@ class DuplicateGroup:
 
 @dataclass(frozen=True)
 class DuplicatePage:
-    """A page of duplicate groups, biggest saving first, with the totals over all of them."""
+    """A page of duplicate groups, biggest saving first, with the totals over all of them.
+
+    ``total_groups`` and ``reclaimable_bytes`` count real duplicates (more than one copy). The
+    list also holds groups the user has resolved by hiding copies, so ``total_listed`` is what
+    paging runs to.
+    """
 
     groups: list[DuplicateGroup]
     total_groups: int = 0
     reclaimable_bytes: int = 0
+    total_listed: int = 0

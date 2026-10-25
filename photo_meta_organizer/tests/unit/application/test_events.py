@@ -58,3 +58,12 @@ def test_closing_releases_a_waiting_reader() -> None:
     bus.close()
     reader.join(5)
     assert not reader.is_alive() and got == [[]] and bus.closed
+
+
+def test_wire_ids_carry_the_run_and_only_this_runs_ids_are_trusted() -> None:
+    bus, other = EventBus(), EventBus()
+    assert bus.run_id != other.run_id
+    assert bus.parse_wire_id(bus.wire_id(7)) == (7, False)
+    assert bus.parse_wire_id(other.wire_id(7)) == (None, True)
+    assert bus.parse_wire_id(None) == (None, False)
+    assert bus.parse_wire_id("7") == (None, False)

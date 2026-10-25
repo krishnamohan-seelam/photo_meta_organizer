@@ -18,6 +18,7 @@ const file = (path: string, over: Partial<Duplicates['groups'][number]['files'][
 
 const data: Duplicates = {
   total_groups: 2,
+  total_listed: 2,
   reclaimable_bytes: 6_000_000,
   groups: [
     {

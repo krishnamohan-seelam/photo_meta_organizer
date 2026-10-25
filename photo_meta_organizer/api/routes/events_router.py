@@ -51,22 +51,24 @@ def job_event_handler(bus: EventBus) -> Callable[[str, Job], None]:
     return publish
 
 
-def _frame(event: Event) -> str:
-    return f"id: {event.id}\nevent: {event.type}\ndata: {json.dumps(event.data)}\n\n"
+def _frame(bus: EventBus, event: Event) -> str:
+    return f"id: {bus.wire_id(event.id)}\nevent: {event.type}\ndata: {json.dumps(event.data)}\n\n"
 
 
-async def _stream(bus: EventBus, cursor: int | None) -> AsyncIterator[str]:
+async def _stream(bus: EventBus, cursor: int | None, stale: bool) -> AsyncIterator[str]:
     yield f"retry: {RETRY_MS}\n\n"
     if cursor is None:
         cursor = bus.last_id  # a new connection hears what happens from now on
+        if stale:  # it remembers another run of the server, so what it holds is out of date
+            yield _frame(bus, Event(cursor, RESYNC))
     while True:
         events = await asyncio.to_thread(bus.read_after, cursor, KEEPALIVE_SECONDS)
-        if events is None:  # missed more than the buffer holds, or an id from another run
+        if events is None:  # missed more than the buffer holds
             cursor = bus.last_id
-            yield _frame(Event(cursor, RESYNC))
+            yield _frame(bus, Event(cursor, RESYNC))
         elif events:
             for event in events:
-                yield _frame(event)
+                yield _frame(bus, event)
             cursor = events[-1].id
         elif bus.closed:  # the server is stopping and everything has been sent
             return
@@ -85,16 +87,16 @@ async def stream_events(
     last_event_id: Annotated[str | None, Header()] = None,
 ) -> StreamingResponse:
     """Server-sent events: ``job_progress``, ``job_finished``, ``library_changed`` and
-    ``resync``, each with an increasing ``id``.
+    ``resync``, each with an increasing ``id`` of the form ``<run>.<n>``.
 
     Reconnect with ``Last-Event-ID`` to be replayed what you missed (the last 200 events are
-    kept). If you were away longer, or the server restarted, you get one ``resync`` event:
-    reload the photos, facets and jobs instead. Job events carry the job as
-    ``GET /api/jobs/{id}`` shows it.
+    kept). If you were away longer, or the server restarted (the ``<run>`` part changed), you
+    get one ``resync`` event: reload the photos, facets and jobs instead. Job events carry the
+    job as ``GET /api/jobs/{id}`` shows it.
     """
-    cursor = int(last_event_id) if last_event_id and last_event_id.isdigit() else None
+    cursor, stale = bus.parse_wire_id(last_event_id)
     return StreamingResponse(
-        _stream(bus, cursor),
+        _stream(bus, cursor, stale),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

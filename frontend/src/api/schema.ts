@@ -269,8 +269,9 @@ export interface paths {
          * @description Photos kept at more than one path, the biggest saving first.
          *
          *     A copy counts when its file is on disk and not hidden. ``reclaimable_bytes`` is what all
-         *     but one copy take, per group and in total (over every group, not just this page).
-         *     Hidden and missing files are listed too, so a hidden copy can be shown again.
+         *     but one copy take, per group and in total (over every group, not just this page). A group
+         *     whose extra copies are all hidden is still listed, with one copy and nothing to reclaim,
+         *     and its hidden files can be shown again.
          */
         get: operations["list_duplicates_api_duplicates_get"];
         put?: never;
@@ -291,12 +292,12 @@ export interface paths {
         /**
          * Stream job progress and library changes
          * @description Server-sent events: ``job_progress``, ``job_finished``, ``library_changed`` and
-         *     ``resync``, each with an increasing ``id``.
+         *     ``resync``, each with an increasing ``id`` of the form ``<run>.<n>``.
          *
          *     Reconnect with ``Last-Event-ID`` to be replayed what you missed (the last 200 events are
-         *     kept). If you were away longer, or the server restarted, you get one ``resync`` event:
-         *     reload the photos, facets and jobs instead. Job events carry the job as
-         *     ``GET /api/jobs/{id}`` shows it.
+         *     kept). If you were away longer, or the server restarted (the ``<run>`` part changed), you
+         *     get one ``resync`` event: reload the photos, facets and jobs instead. Job events carry the
+         *     job as ``GET /api/jobs/{id}`` shows it.
          */
         get: operations["stream_events_api_events_get"];
         put?: never;
@@ -1166,14 +1167,24 @@ export interface components {
         /**
          * DuplicatesResponse
          * @description Duplicate groups, biggest saving first, with the totals over all of them.
+         *
+         *     A group whose extra copies are all hidden stays listed, so they can be shown again.
          */
         DuplicatesResponse: {
             /** Groups */
             groups: components["schemas"]["DuplicateGroupSchema"][];
             /** Reclaimable Bytes */
             reclaimable_bytes: number;
-            /** Total Groups */
+            /**
+             * Total Groups
+             * @description Photos with more than one copy
+             */
             total_groups: number;
+            /**
+             * Total Listed
+             * @description Groups in the list, including those resolved by hiding copies
+             */
+            total_listed: number;
         };
         /**
          * ExifDataSchema

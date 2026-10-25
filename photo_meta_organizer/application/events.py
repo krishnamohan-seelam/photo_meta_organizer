@@ -4,11 +4,13 @@ Job threads and request handlers publish what changed; the SSE endpoint hands it
 browser, so the UI no longer polls. Every event has an id that only grows. The bus keeps the
 last ``capacity`` events so a client that dropped its connection can reconnect with
 ``Last-Event-ID`` and be replayed what it missed. If it was away for longer than the buffer
-reaches (or the server restarted and the id is from another run), ``read_after`` says so and
-the client reloads instead of guessing.
+reaches, ``read_after`` says so and the client reloads instead of guessing. Ids on the wire carry
+the bus's ``run_id`` (``<run>.<n>``), so an id from before a server restart is recognised as
+another run's even when its number happens to fall inside the new buffer.
 """
 
 import threading
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -33,6 +35,7 @@ class EventBus:
         self._buffer: deque[Event] = deque(maxlen=capacity)
         self._last_id = 0
         self._closed = False
+        self.run_id = uuid.uuid4().hex[:8]
         self._changed = threading.Condition()
 
     @property
@@ -63,6 +66,21 @@ class EventBus:
             if last_id > self._last_id or self._missed(last_id):
                 return None
             return [e for e in self._buffer if e.id > last_id]
+
+    def wire_id(self, event_id: int) -> str:
+        """The id as sent to clients: the number, tagged with this run of the bus."""
+        return f"{self.run_id}.{event_id}"
+
+    def parse_wire_id(self, text: str | None) -> tuple[int | None, bool]:
+        """Read a client's ``Last-Event-ID`` as ``(event id, stale)``.
+
+        ``stale`` is true for an id that belongs to another run of the server: the client must
+        resync, whatever the number says. A missing or malformed id is a fresh connection.
+        """
+        run, _, number = (text or "").partition(".")
+        if not number.isdigit():
+            return None, False
+        return (int(number), False) if run == self.run_id else (None, True)
 
     def close(self) -> None:
         """Release every waiting reader (the server is stopping)."""

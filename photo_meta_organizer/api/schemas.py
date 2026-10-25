@@ -526,11 +526,16 @@ class DuplicateGroupSchema(ResponseModel):
 
 
 class DuplicatesResponse(ResponseModel):
-    """Duplicate groups, biggest saving first, with the totals over all of them."""
+    """Duplicate groups, biggest saving first, with the totals over all of them.
+
+    A group whose extra copies are all hidden stays listed, so they can be shown again."""
 
     groups: list[DuplicateGroupSchema]
-    total_groups: int
+    total_groups: int = Field(description="Photos with more than one copy")
     reclaimable_bytes: int
+    total_listed: int = Field(
+        description="Groups in the list, including those resolved by hiding copies"
+    )
 
 
 class HideFileRequest(BaseModel):
