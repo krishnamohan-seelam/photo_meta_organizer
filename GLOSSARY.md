@@ -52,7 +52,7 @@ _Avoid_: AI tag (as if it were a label)
 Looking through a root for files, and recording new and changed ones. Replaces "index" and "sync".
 
 **Root**:
-A folder the library scans.
+A folder the library scans, and remembers. The API and the desktop app rescan every readable root when they start. A root that cannot be read (an unplugged drive) is offline: shown as such and skipped, never an error. Removing a root stops the rescans and keeps its photos.
 
 **Job**:
 A long piece of work (a scan, an analysis, a model download) that runs in the background. Its progress and result are stored in the library, so the history survives a restart.

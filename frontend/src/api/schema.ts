@@ -572,6 +572,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the library's roots
+         * @description The folders scanned when the app starts, oldest first, with whether each can be read.
+         */
+        get: operations["list_roots_api_roots_get"];
+        put?: never;
+        /**
+         * Add a root and scan it
+         * @description Remember a folder and, unless ``scan`` is false, start scanning it (201).
+         *
+         *     Adding a known root again is harmless. 400 if the path is not a folder. ``job_id`` is
+         *     null when no scan started (``scan`` false, or another job holds the folder).
+         */
+        post: operations["add_root_api_roots_post"];
+        /**
+         * Stop watching a root
+         * @description Forget a root. Its photos stay in the library; they are just no longer rescanned.
+         */
+        delete: operations["remove_root_api_roots_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/roots/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Folders to offer as roots
+         * @description For a library that has photos but no roots: the folders its files lie in, to be
+         *     offered as a checkbox list. Nothing is added until ``POST /api/roots``. Empty once there
+         *     is a root or the user skipped the offer.
+         */
+        get: operations["root_suggestions_api_roots_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/roots/suggestions/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Skip the suggested roots
+         * @description The user skipped the offer: watching stays off and it is not offered again.
+         *     Scanning a folder by hand still works.
+         */
+        post: operations["dismiss_suggestions_api_roots_suggestions_dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search": {
         parameters: {
             query?: never;
@@ -686,6 +760,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AddRootRequest
+         * @description Remember a folder as a root; by default scan it now.
+         */
+        AddRootRequest: {
+            /**
+             * Folder Path
+             * @description Absolute path to a folder of photos
+             */
+            folder_path: string;
+            /**
+             * Scan
+             * @description Start a scan of the folder right away
+             * @default true
+             */
+            scan?: boolean;
+        };
         /** AiTagBatchRequest */
         AiTagBatchRequest: {
             /**
@@ -1351,6 +1442,51 @@ export interface components {
             action: "accept" | "reject" | "reset";
             /** Label */
             label: string;
+        };
+        /**
+         * RootResponse
+         * @description A folder the library scans on its own (ADR-003 R11). ``online`` is false while the
+         *     folder cannot be read (an unplugged drive): it is skipped, not reported as an error.
+         *     ``job_id`` names the scan this request started, if it did.
+         */
+        RootResponse: {
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Job Id */
+            job_id: string | null;
+            /** Online */
+            online: boolean;
+            /** Path */
+            path: string;
+        };
+        /**
+         * RootSuggestion
+         * @description A folder that holds recorded photos, offered as a root.
+         */
+        RootSuggestion: {
+            /** File Count */
+            file_count: number;
+            /** Online */
+            online: boolean;
+            /** Path */
+            path: string;
+        };
+        /**
+         * RootSuggestionsResponse
+         * @description Folders to offer when the library has photos but no roots. Empty once the user has
+         *     added a root or skipped the offer (``dismissed``).
+         */
+        RootSuggestionsResponse: {
+            /**
+             * Dismissed
+             * @default false
+             */
+            dismissed: boolean;
+            /** Suggestions */
+            suggestions: components["schemas"]["RootSuggestion"][];
         };
         /**
          * SearchRequest
@@ -2505,6 +2641,127 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_roots_api_roots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootResponse"][];
+                };
+            };
+        };
+    };
+    add_root_api_roots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_root_api_roots_delete: {
+        parameters: {
+            query: {
+                /** @description The root's path, as listed */
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    root_suggestions_api_roots_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootSuggestionsResponse"];
+                };
+            };
+        };
+    };
+    dismiss_suggestions_api_roots_suggestions_dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

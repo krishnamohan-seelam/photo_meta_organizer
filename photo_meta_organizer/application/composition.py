@@ -23,6 +23,7 @@ from photo_meta_organizer.application.interfaces.image_repository import (
 )
 from photo_meta_organizer.application.interfaces.job_store import JobStore
 from photo_meta_organizer.application.interfaces.progress import ProgressSink
+from photo_meta_organizer.application.interfaces.root_store import RootStore
 from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.application.use_cases.scan_library import ScanLibrary
 from photo_meta_organizer.application.zero_shot_tagger import ZeroShotTagger
@@ -171,6 +172,18 @@ def build_job_store(repository: ImageMetadataRepository) -> JobStore:
     if isinstance(repository, SqliteRepository):
         return SqliteJobStore(repository.connection, repository.lock)
     raise TypeError(f"unsupported repository type for jobs: {type(repository)!r}")
+
+
+def build_root_store(repository: ImageMetadataRepository) -> RootStore:
+    """Build the store of scanned folders sharing storage with ``repository`` (ticket 09)."""
+    from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
+        SqliteRepository,
+    )
+    from photo_meta_organizer.infrastructure.repositories.sqlite_root_store import SqliteRootStore
+
+    if isinstance(repository, SqliteRepository):
+        return SqliteRootStore(repository.connection, repository.lock)
+    raise TypeError(f"unsupported repository type for roots: {type(repository)!r}")
 
 
 def build_model_store(settings: Settings) -> "ModelStore":

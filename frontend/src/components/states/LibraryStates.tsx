@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, FolderPlus, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 
 const centred: React.CSSProperties = {
   flex: 1,
@@ -37,26 +37,6 @@ export const ErrorState: React.FC<ErrorStateProps> = ({ message, onRetry, retryi
     <button className="btn btn-primary" onClick={onRetry} disabled={retrying}>
       <RefreshCw size={14} />
       <span>{retrying ? 'Retrying…' : 'Retry'}</span>
-    </button>
-  </div>
-)
-
-interface EmptyLibraryStateProps {
-  onScan: () => void
-  scanning: boolean
-}
-
-/** The backend answered and the library has no photos yet. */
-export const EmptyLibraryState: React.FC<EmptyLibraryStateProps> = ({ onScan, scanning }) => (
-  <div style={centred}>
-    <FolderPlus size={36} color="var(--accent-primary)" />
-    <h3 style={{ color: 'var(--text-primary)' }}>Your library is empty</h3>
-    <p style={{ fontSize: '0.85rem', maxWidth: '420px' }}>
-      Scan a folder to read the EXIF data of its photos and add them to the index.
-    </p>
-    <button className="btn btn-primary" onClick={onScan} disabled={scanning}>
-      <FolderPlus size={14} />
-      <span>{scanning ? 'Scanning…' : 'Scan folder'}</span>
     </button>
   </div>
 )

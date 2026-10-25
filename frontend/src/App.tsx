@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { errorMessage } from './api/client'
 import { isDemoMode, usePhotoSearch } from './hooks/usePhotos'
 import { useFacetsQuery } from './hooks/useFacets'
-import { useJobCompletionNotices, useJobs } from './hooks/useJobs'
+import { useJobCompletionNotices } from './hooks/useJobs'
 import { useEventStream } from './hooks/useEventStream'
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys'
 import { useUiStore } from './stores/useUiStore'
@@ -21,7 +21,10 @@ import { TimelineView } from './components/timeline/TimelineView'
 import { KanbanBoardView } from './components/kanban/KanbanBoardView'
 import { DashboardView } from './components/dashboard/DashboardView'
 import { LightboxModal } from './components/lightbox/LightboxModal'
-import { EmptyLibraryState, ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
+import { ErrorState, LoadingState, StaleBanner } from './components/states/LibraryStates'
+import { FirstRunState } from './components/states/FirstRunState'
+import { FoldersDialog } from './components/jobs/FoldersDialog'
+import { RootSuggestionsDialog } from './components/jobs/RootSuggestionsDialog'
 import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
 
 // Leaflet and the country outlines are only needed on the Map view.
@@ -35,8 +38,6 @@ export const App: React.FC = () => {
   // Whole-library totals tell an empty library apart from a filter that matches nothing.
   const facets = useFacetsQuery()
   const libraryIsEmpty = facets.data?.stats.total_count === 0 && !isDemoMode()
-  const { activeJob } = useJobs()
-  const setJobDialog = useUiStore((s) => s.setJobDialog)
   useEventStream()
   useJobCompletionNotices()
   useGlobalHotkeys()
@@ -74,7 +75,7 @@ export const App: React.FC = () => {
           ) : !data ? (
             <ErrorState message={errorMessage(error)} onRetry={() => refetch()} retrying={isFetching} />
           ) : libraryIsEmpty ? (
-            <EmptyLibraryState onScan={() => setJobDialog('index')} scanning={activeJob !== null} />
+            <FirstRunState />
           ) : (
             <>
               {activeView === 'studio' && (
@@ -107,6 +108,8 @@ export const App: React.FC = () => {
       <ShortcutsOverlay />
       <FolderJobDialog />
       <AiSetupDialog />
+      <FoldersDialog />
+      <RootSuggestionsDialog />
       <LightboxModal />
 
       {toastMessage && (

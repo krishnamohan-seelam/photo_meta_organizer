@@ -1,4 +1,5 @@
 import type {
+  AddRootRequest,
   AiTag,
   AiTagBatchResponse,
   AnalysisStatus,
@@ -16,6 +17,8 @@ import type {
   PatchPhotoRequest,
   PhotoId,
   PhotoMetadata,
+  Root,
+  RootSuggestions,
   SearchRequest,
   SemanticSearchRequest,
   SemanticSearchResponse,
@@ -75,6 +78,7 @@ async function request<T>(path: string, action: string, init?: RequestInit): Pro
     throw new ApiError('Cannot reach the backend. Is it running?', null)
   }
   if (!res.ok) throw await errorFromResponse(res, action)
+  if (res.status === 204) return undefined as T // no body
   return res.json() as Promise<T>
 }
 
@@ -210,6 +214,31 @@ export function resumeJobApi(jobId: string): Promise<Job> {
 /** Give up on an interrupted job; it ends cancelled. */
 export function dismissJobApi(jobId: string): Promise<Job> {
   return request(`/jobs/${jobId}/dismiss`, 'Dismissing the job', { method: 'POST' })
+}
+
+/** The folders the library rescans when the app starts; `online` is false while one cannot be read. */
+export function listRootsApi(): Promise<Root[]> {
+  return request('/roots', 'Loading folders')
+}
+
+/** Remember a folder and, unless `scan` is false, scan it now (`job_id` names the scan). */
+export function addRootApi(folderPath: string, scan: boolean = true): Promise<Root> {
+  return request('/roots', 'Adding the folder', jsonInit('POST', { folder_path: folderPath, scan } satisfies AddRootRequest))
+}
+
+/** Stop rescanning a folder. Its photos stay in the library. */
+export function removeRootApi(path: string): Promise<void> {
+  return request(`/roots?${new URLSearchParams({ path })}`, 'Removing the folder', { method: 'DELETE' })
+}
+
+/** Folders found in an existing library's files, to offer as roots. Empty once there is a root or the offer was skipped. */
+export function fetchRootSuggestionsApi(): Promise<RootSuggestions> {
+  return request('/roots/suggestions', 'Looking for your photo folders')
+}
+
+/** Skip the suggested folders for good; watching stays off. */
+export function dismissRootSuggestionsApi(): Promise<void> {
+  return request('/roots/suggestions/dismiss', 'Skipping the suggestions', { method: 'POST' })
 }
 
 /** AI analysis (Phase 5). Status codes: 503 no `ai` extra, 409 no model / nothing analysed yet. */

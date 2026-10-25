@@ -35,6 +35,9 @@ export type Collection = Schemas['CollectionResponse']
 export type Job = Schemas['JobResponse']
 export type JobStatus = Job['status']
 export type IndexFolderRequest = Schemas['IndexFolderRequest']
+export type AddRootRequest = Schemas['AddRootRequest']
+export type Root = Schemas['RootResponse']
+export type RootSuggestions = Schemas['RootSuggestionsResponse']
 export type SyncFolderRequest = Schemas['SyncFolderRequest']
 
 /** A map area; `west > east` means it crosses the date line. */

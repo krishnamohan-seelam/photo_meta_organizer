@@ -7,6 +7,7 @@ import {
   Columns3,
   Download,
   EyeOff,
+  FolderCog,
   FolderInput,
   Keyboard,
   LayoutGrid,
@@ -58,7 +59,7 @@ export const CommandPalette: React.FC = () => {
 }
 
 const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen } = useUiStore(
+  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen, setFoldersDialogOpen } = useUiStore(
     useShallow((s) => ({
       toggleTheme: s.toggleTheme,
       toggleLightsOut: s.toggleLightsOut,
@@ -68,6 +69,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       setJobDialog: s.setJobDialog,
       setShortcutsOpen: s.setShortcutsOpen,
       setAiDialogOpen: s.setAiDialogOpen,
+      setFoldersDialogOpen: s.setFoldersDialogOpen,
     }))
   )
   const { cameras, tags } = useFacets()
@@ -93,6 +95,7 @@ const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     ...views,
     { id: 'scan', title: 'Import (scan a folder)…', icon: <FolderInput size={15} />, action: () => setJobDialog('index') },
     { id: 'sync', title: 'Sync a folder…', icon: <RefreshCw size={15} />, action: () => setJobDialog('sync') },
+    { id: 'folders', title: 'Watched folders…', icon: <FolderCog size={15} />, action: () => setFoldersDialogOpen(true) },
     { id: 'ai', title: 'Search by meaning: set up and analyze…', icon: <Sparkles size={15} />, action: () => setAiDialogOpen(true) },
     { id: 'theme', title: 'Toggle light/dark theme', icon: <SunMoon size={15} />, action: () => toggleTheme() },
     { id: 'dim', title: 'Toggle Lights Out', icon: <EyeOff size={15} />, hotkey: 'L', action: () => toggleLightsOut() },

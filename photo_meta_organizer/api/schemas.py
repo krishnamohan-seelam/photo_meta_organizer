@@ -279,6 +279,40 @@ class JobResponse(ResponseModel):
     finished_at: datetime | None = None
 
 
+class AddRootRequest(BaseModel):
+    """Remember a folder as a root; by default scan it now."""
+
+    folder_path: str = Field(description="Absolute path to a folder of photos")
+    scan: bool = Field(default=True, description="Start a scan of the folder right away")
+
+
+class RootResponse(ResponseModel):
+    """A folder the library scans on its own (ADR-003 R11). ``online`` is false while the
+    folder cannot be read (an unplugged drive): it is skipped, not reported as an error.
+    ``job_id`` names the scan this request started, if it did."""
+
+    path: str
+    added_at: datetime
+    online: bool
+    job_id: str | None = None
+
+
+class RootSuggestion(ResponseModel):
+    """A folder that holds recorded photos, offered as a root."""
+
+    path: str
+    file_count: int
+    online: bool
+
+
+class RootSuggestionsResponse(ResponseModel):
+    """Folders to offer when the library has photos but no roots. Empty once the user has
+    added a root or skipped the offer (``dismissed``)."""
+
+    suggestions: list[RootSuggestion] = Field(default_factory=list)
+    dismissed: bool = False
+
+
 class FacetCountSchema(ResponseModel):
     """One value of a facet and how many records carry it."""
 

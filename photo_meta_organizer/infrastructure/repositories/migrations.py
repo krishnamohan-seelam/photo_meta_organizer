@@ -271,6 +271,21 @@ CREATE INDEX idx_jobs_created_at ON jobs(created_at);
 """
 
 
+# Ticket 09 (ADR-003 R11): the library remembers the folders it scans. ``library_state`` is a
+# small key/value table for one-off answers such as "the user skipped the suggested roots".
+ROOTS_SQL = """
+CREATE TABLE roots (
+    id       INTEGER PRIMARY KEY,
+    path     TEXT NOT NULL UNIQUE,
+    added_at TEXT NOT NULL
+);
+CREATE TABLE library_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
+
 @dataclass(frozen=True)
 class Migration:
     """One schema step. ``rebuilds`` marks steps that rewrite tables and so need a backup."""
@@ -289,6 +304,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(2, "split_assets", SPLIT_ASSETS_SQL, rebuilds=True),
     Migration(3, "missing_files", MISSING_FILES_SQL),
     Migration(4, "jobs", JOBS_SQL),
+    Migration(5, "roots", ROOTS_SQL),
 )
 
 

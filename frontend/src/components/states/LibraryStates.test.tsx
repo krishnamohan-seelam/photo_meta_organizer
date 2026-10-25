@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { EmptyLibraryState, ErrorState, LoadingState, StaleBanner } from './LibraryStates'
+import { ErrorState, LoadingState, StaleBanner } from './LibraryStates'
 
 describe('library states (PMO-14)', () => {
   it('loading is announced politely', () => {
@@ -19,13 +19,6 @@ describe('library states (PMO-14)', () => {
   it('Retry is disabled while retrying', () => {
     render(<ErrorState message="x" onRetry={() => {}} retrying />)
     expect(screen.getByRole('button', { name: /Retrying/ })).toHaveProperty('disabled', true)
-  })
-
-  it('the empty library offers a scan', () => {
-    const onScan = vi.fn()
-    render(<EmptyLibraryState onScan={onScan} scanning={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Scan folder' }))
-    expect(onScan).toHaveBeenCalledOnce()
   })
 
   it('a failed refresh with cached photos is a banner, not an error page', () => {

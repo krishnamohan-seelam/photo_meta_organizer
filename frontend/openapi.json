@@ -1,6 +1,27 @@
 {
   "components": {
     "schemas": {
+      "AddRootRequest": {
+        "description": "Remember a folder as a root; by default scan it now.",
+        "properties": {
+          "folder_path": {
+            "description": "Absolute path to a folder of photos",
+            "title": "Folder Path",
+            "type": "string"
+          },
+          "scan": {
+            "default": true,
+            "description": "Start a scan of the folder right away",
+            "title": "Scan",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folder_path"
+        ],
+        "title": "AddRootRequest",
+        "type": "object"
+      },
       "AiTagBatchRequest": {
         "properties": {
           "action": {
@@ -1625,6 +1646,90 @@
           "action"
         ],
         "title": "ResolveAiTagRequest",
+        "type": "object"
+      },
+      "RootResponse": {
+        "description": "A folder the library scans on its own (ADR-003 R11). ``online`` is false while the\nfolder cannot be read (an unplugged drive): it is skipped, not reported as an error.\n``job_id`` names the scan this request started, if it did.",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "online": {
+            "title": "Online",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "added_at",
+          "online",
+          "job_id"
+        ],
+        "title": "RootResponse",
+        "type": "object"
+      },
+      "RootSuggestion": {
+        "description": "A folder that holds recorded photos, offered as a root.",
+        "properties": {
+          "file_count": {
+            "title": "File Count",
+            "type": "integer"
+          },
+          "online": {
+            "title": "Online",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "file_count",
+          "online"
+        ],
+        "title": "RootSuggestion",
+        "type": "object"
+      },
+      "RootSuggestionsResponse": {
+        "description": "Folders to offer when the library has photos but no roots. Empty once the user has\nadded a root or skipped the offer (``dismissed``).",
+        "properties": {
+          "dismissed": {
+            "default": false,
+            "title": "Dismissed",
+            "type": "boolean"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/RootSuggestion"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "suggestions",
+          "dismissed"
+        ],
+        "title": "RootSuggestionsResponse",
         "type": "object"
       },
       "SearchRequest": {
@@ -3522,6 +3627,145 @@
         "summary": "Stream WebP thumbnail",
         "tags": [
           "photos"
+        ]
+      }
+    },
+    "/api/roots": {
+      "delete": {
+        "description": "Forget a root. Its photos stay in the library; they are just no longer rescanned.",
+        "operationId": "remove_root_api_roots_delete",
+        "parameters": [
+          {
+            "description": "The root's path, as listed",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "The root's path, as listed",
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop watching a root",
+        "tags": [
+          "roots"
+        ]
+      },
+      "get": {
+        "description": "The folders scanned when the app starts, oldest first, with whether each can be read.",
+        "operationId": "list_roots_api_roots_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RootResponse"
+                  },
+                  "title": "Response List Roots Api Roots Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List the library's roots",
+        "tags": [
+          "roots"
+        ]
+      },
+      "post": {
+        "description": "Remember a folder and, unless ``scan`` is false, start scanning it (201).\n\nAdding a known root again is harmless. 400 if the path is not a folder. ``job_id`` is\nnull when no scan started (``scan`` false, or another job holds the folder).",
+        "operationId": "add_root_api_roots_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a root and scan it",
+        "tags": [
+          "roots"
+        ]
+      }
+    },
+    "/api/roots/suggestions": {
+      "get": {
+        "description": "For a library that has photos but no roots: the folders its files lie in, to be\noffered as a checkbox list. Nothing is added until ``POST /api/roots``. Empty once there\nis a root or the user skipped the offer.",
+        "operationId": "root_suggestions_api_roots_suggestions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootSuggestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Folders to offer as roots",
+        "tags": [
+          "roots"
+        ]
+      }
+    },
+    "/api/roots/suggestions/dismiss": {
+      "post": {
+        "description": "The user skipped the offer: watching stays off and it is not offered again.\nScanning a folder by hand still works.",
+        "operationId": "dismiss_suggestions_api_roots_suggestions_dismiss_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Skip the suggested roots",
+        "tags": [
+          "roots"
         ]
       }
     },

@@ -19,7 +19,8 @@ Environment variables:
     PMO_MAP_TILES_URL  opt-in online map tiles, a template with {z}/{x}/{y}. Unset: the Map
                        view draws the bundled world outline and contacts no one.
     PMO_MAP_TILES_ATTRIBUTION  credit line shown on the map for that tile server
-    PMO_API_TOKEN      per-launch token the desktop shell sets; when present the API
+    PMO_SCAN_ON_START  0/false/no: do not rescan the stored roots when the API starts
+    PMO_API_TOKEN     per-launch token the desktop shell sets; when present the API
                        requires it as a cookie (api/auth.py). Never logged or repr'd.
 
 With nothing set, everything lives in the OS per-user folders, split by kind (see
@@ -123,6 +124,7 @@ class Settings:
     api_token: str | None = field(default=None, repr=False)
     map_tiles_url: str | None = None
     map_tiles_attribution: str | None = None
+    scan_on_start: bool = True  # the API/desktop backend rescans the library's roots at start
 
     @property
     def thumbnail_dir(self) -> Path:
@@ -151,6 +153,7 @@ class Settings:
         api_token: str | None = None,
         map_tiles_url: str | None = None,
         map_tiles_attribution: str | None = None,
+        scan_on_start: bool | None = None,
     ) -> "Settings":
         """Build settings from explicit values, then ``env`` (default ``os.environ``).
 
@@ -194,5 +197,10 @@ class Settings:
             map_tiles_url=_tiles_url(map_tiles_url or env.get("PMO_MAP_TILES_URL")),
             map_tiles_attribution=(
                 map_tiles_attribution or env.get("PMO_MAP_TILES_ATTRIBUTION", "").strip() or None
+            ),
+            scan_on_start=(
+                scan_on_start
+                if scan_on_start is not None
+                else env.get("PMO_SCAN_ON_START", "1").strip().lower() not in ("0", "false", "no")
             ),
         )

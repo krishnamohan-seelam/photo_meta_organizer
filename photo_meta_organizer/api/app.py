@@ -52,6 +52,7 @@ from photo_meta_organizer.api.routes.photos_router import (
     search_router,
     sync_router,
 )
+from photo_meta_organizer.api.routes.roots_router import roots_router, scan_roots
 from photo_meta_organizer.application import composition
 from photo_meta_organizer.application.composition import (
     build_collection_repository,
@@ -125,6 +126,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # The one automatic piece of work: rescan the library's roots (ADR-003 R5a, R11).
+        if settings.scan_on_start:
+            scan_roots(_app.state.services)
         yield
         # Stop background jobs cleanly so none is killed mid-write at exit; they are
         # stored as interrupted and offered for resuming next time.
@@ -187,6 +191,7 @@ def create_app(
         collections=build_collection_repository(repository),
         jobs=job_manager,
         events=bus,
+        roots=composition.build_root_store(repository),
         thumbnails=ThumbnailService(
             str(settings.thumbnail_dir),
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
@@ -206,6 +211,7 @@ def create_app(
     app.include_router(sync_router)
     app.include_router(jobs_router)
     app.include_router(events_router)
+    app.include_router(roots_router)
     app.include_router(export_router)
     app.include_router(config_router)
     app.include_router(analysis_router)

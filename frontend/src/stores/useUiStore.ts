@@ -56,6 +56,7 @@ interface UiState {
   jobDialog: JobDialogKind | null
   /** The AI setup dialog (model download, analysis). */
   aiDialogOpen: boolean
+  foldersDialogOpen: boolean
   semantic: SemanticQuery | null
   /** How many matches the search by meaning asks for; "Show more" raises it. */
   semanticLimit: number
@@ -99,6 +100,7 @@ interface UiState {
   setCommandPaletteOpen: (open: boolean) => void
   setJobDialog: (kind: JobDialogKind | null) => void
   setAiDialogOpen: (open: boolean) => void
+  setFoldersDialogOpen: (open: boolean) => void
   setSemantic: (query: SemanticQuery | null) => void
   showMoreSemantic: () => void
   setAiTagFilter: (label: string | null) => void
@@ -138,6 +140,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   commandPaletteOpen: false,
   jobDialog: null,
   aiDialogOpen: false,
+  foldersDialogOpen: false,
   semantic: null,
   semanticLimit: SEMANTIC_PAGE,
   filterAiTag: null,
@@ -190,6 +193,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
   setJobDialog: (jobDialog) => set({ jobDialog }),
   setAiDialogOpen: (aiDialogOpen) => set({ aiDialogOpen }),
+  setFoldersDialogOpen: (foldersDialogOpen) => set({ foldersDialogOpen }),
   setSemantic: (semantic) => set({ semantic, semanticLimit: SEMANTIC_PAGE }),
   showMoreSemantic: () => set((s) => ({ semanticLimit: Math.min(SEMANTIC_MAX, s.semanticLimit + SEMANTIC_PAGE) })),
   setAiTagFilter: (filterAiTag) => set({ filterAiTag }),
