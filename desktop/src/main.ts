@@ -234,12 +234,25 @@ function loadLastSearch(): string {
   }
 }
 
+let saveTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Remember the page's query string, at most once a second (typing replaces the URL per key).
+ * `demo=1` is a one-off way to look around and is never carried into the next launch.
+ */
 function saveLastSearch(url: string): void {
-  try {
-    fs.writeFileSync(lastViewPath(), JSON.stringify({ search: new URL(url).search }));
-  } catch (err) {
-    console.warn('[Desktop Main] Could not remember the last view:', err);
-  }
+  const params = new URL(url).searchParams;
+  params.delete('demo');
+  const search = params.toString() ? `?${params}` : '';
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try {
+      fs.writeFileSync(lastViewPath(), JSON.stringify({ search }));
+    } catch (err) {
+      console.warn('[Desktop Main] Could not remember the last view:', err);
+    }
+  }, 1000);
 }
 
 /**

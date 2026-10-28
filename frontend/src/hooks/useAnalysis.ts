@@ -67,12 +67,13 @@ export function useAnalysisActions() {
 
 /**
  * The photos that look most like `hash`, ignoring the Library's filters (the inspector's Similar
- * strip): page 1 of a ranked search. Disabled until something is analysed.
+ * strip): the best few of a ranked search, which the server does not keep as a snapshot.
+ * Disabled until something is analysed.
  */
 export function useSimilarPhotos(hash: string, count: number, enabled: boolean) {
   return useQuery({
     queryKey: [...analysisKey, 'similar', hash, count],
-    queryFn: () => runSearch({ rank: { like_hash: hash }, page: 1, page_size: count }),
+    queryFn: () => runSearch({ rank: { like_hash: hash, limit: count }, page: 1, page_size: count }),
     enabled: enabled && !isDemoMode(),
     retry: false,
   })

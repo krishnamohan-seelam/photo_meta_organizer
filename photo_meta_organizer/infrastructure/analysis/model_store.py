@@ -15,6 +15,9 @@ from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
+from photo_meta_organizer.application.interfaces.image_embedder import (
+    EmbedderUnavailableError,
+)
 from photo_meta_organizer.infrastructure.analysis.model_manifest import ModelFile, ModelManifest
 
 logger = logging.getLogger(__name__)
@@ -23,7 +26,7 @@ _CHUNK = 1024 * 1024
 _ALLOWED_SCHEMES = ("https", "file")  # file: only for tests that serve from a temp directory
 
 
-class ModelUnavailableError(RuntimeError):
+class ModelUnavailableError(EmbedderUnavailableError):
     """The model is not installed, or could not be downloaded or verified."""
 
 

@@ -10,6 +10,10 @@ from collections.abc import Sequence
 from typing import BinaryIO, Protocol, runtime_checkable
 
 
+class EmbedderUnavailableError(RuntimeError):
+    """The model cannot be used: not installed, or its files could not be loaded."""
+
+
 @runtime_checkable
 class ImageEmbedder(Protocol):
     @property

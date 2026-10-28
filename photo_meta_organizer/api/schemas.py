@@ -138,6 +138,9 @@ class RankSchema(BaseModel):
         default=False,
         description="Every analysed photo that passes the filters, not only the close matches",
     )
+    limit: int | None = Field(
+        default=None, ge=1, le=500, description="Keep only this many of the best matches"
+    )
 
     @model_validator(mode="after")
     def _exactly_one_query(self) -> "RankSchema":

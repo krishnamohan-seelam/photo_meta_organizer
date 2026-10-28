@@ -49,25 +49,30 @@ export function usePhotoSearch() {
   const queryKey = [...photosKey, 'search', request]
   const query = useInfiniteQuery({
     queryKey,
-    queryFn: async ({ pageParam }) => {
-      // A ranked search pages through the server's snapshot: later pages send page 1's token.
-      const first = pageParam > 1 ? qc.getQueryData<InfiniteData<PaginatedPhotosResponse>>(queryKey)?.pages[0] : undefined
-      const token = first?.rank_token
+    queryFn: async ({ pageParam: { page, token } }) => {
       try {
-        return await runSearch({ ...request, page: pageParam, page_size: PAGE_SIZE, ...(token && { rank_token: token }) })
+        return await runSearch({ ...request, page, page_size: PAGE_SIZE, ...(token && { rank_token: token }) })
       } catch (err) {
         // The snapshot expired: run the search again from page 1.
         if (token && err instanceof ApiError && err.status === 410) void qc.resetQueries({ queryKey, exact: true })
         throw err
       }
     },
-    initialPageParam: 1,
-    getNextPageParam: (last) => (last.page < last.total_pages ? last.page + 1 : undefined),
+    // A ranked search pages through the server's snapshot: each later page carries the token of the
+    // page before it, so a refetch (after an edit) takes the new page 1's token, never a stale one.
+    initialPageParam: { page: 1, token: null } as SearchPageParam,
+    getNextPageParam: (last): SearchPageParam | undefined =>
+      last.page < last.total_pages ? { page: last.page + 1, token: last.rank_token } : undefined,
     placeholderData: keepPreviousData,
   })
   const photos = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? NO_PHOTOS, [query.data])
   const totalCount = query.data?.pages[0]?.total_count ?? 0
   return { ...query, photos, totalCount, request }
+}
+
+interface SearchPageParam {
+  page: number
+  token: string | null
 }
 
 /** Any cached shape a photo query holds. */

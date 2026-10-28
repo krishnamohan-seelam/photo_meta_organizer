@@ -139,8 +139,15 @@ const ChapterSection: React.FC<{ chapter: Chapter; indexOf: Map<string, number>;
 /** The Timeline as a photo book (FR-3): trip-like chapters with a mosaic, over the loaded pages. */
 export const TimelineView: React.FC = () => {
   const { photos, totalCount, hasNextPage, isFetchingNextPage, fetchNextPage } = usePhotoSearch()
-  const { filterTimeframe, setTimeframeFilter, sortBy, setSort } = useViewStore(
-    useShallow((s) => ({ filterTimeframe: s.filterTimeframe, setTimeframeFilter: s.setTimeframeFilter, sortBy: s.sortBy, setSort: s.setSort }))
+  const { filterTimeframe, setTimeframeFilter, sortBy, setSort, ranked, setSemantic } = useViewStore(
+    useShallow((s) => ({
+      filterTimeframe: s.filterTimeframe,
+      setTimeframeFilter: s.setTimeframeFilter,
+      sortBy: s.sortBy,
+      setSort: s.setSort,
+      ranked: s.semantic !== null,
+      setSemantic: s.setSemantic,
+    }))
   )
   const { chapterGapHours, setChapterGapHours } = useUiStore(
     useShallow((s) => ({
@@ -149,7 +156,8 @@ export const TimelineView: React.FC = () => {
     }))
   )
   const { years } = useFacets()
-  const byDate = sortBy === 'captured_at'
+  // A search by meaning orders photos by similarity, so they cannot form date chapters.
+  const byDate = sortBy === 'captured_at' && !ranked
 
   // Regrouping is local: changing the gap never refetches (FR-3.10).
   const chapters = useMemo(
@@ -186,9 +194,13 @@ export const TimelineView: React.FC = () => {
 
       {!byDate && (
         <div className="timeline-notice" role="status">
-          Chapters follow capture date.
-          <button type="button" className="btn btn-sm btn-secondary" onClick={() => setSort('captured_at', 'desc')}>
-            Sort by date
+          {ranked ? 'Ranked by meaning, best first: chapters need capture-date order.' : 'Chapters follow capture date.'}
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary"
+            onClick={() => (ranked ? setSemantic(null) : setSort('captured_at', 'desc'))}
+          >
+            {ranked ? 'Clear search by meaning' : 'Sort by date'}
           </button>
         </div>
       )}

@@ -1960,6 +1960,20 @@
             ],
             "title": "Like Hash"
           },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Keep only this many of the best matches",
+            "title": "Limit"
+          },
           "text": {
             "anyOf": [
               {

@@ -9,12 +9,14 @@ list as a snapshot and loads photos a page at a time (ADR-003 R9).
 """
 
 import logging
+from collections.abc import Sequence
 
 from photo_meta_organizer.application.interfaces.analysis_repository import AnalysisRepository
 from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.interfaces.image_repository import ImageMetadataRepository
 from photo_meta_organizer.application.interfaces.search_types import SearchQuery
-from photo_meta_organizer.application.ranking import RankedHit
+from photo_meta_organizer.application.ranking import RankedHit, cut_off
+from photo_meta_organizer.domain.analysis import ScoredPhoto
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +36,30 @@ class SemanticSearchUseCase:
         self._embedder = embedder
         self._repository = repository
 
-    def analysed_count(self) -> int:
-        """How many photos the current model has analysed (the most a ranking can return)."""
-        return self._analysis.count_embeddings(self._embedder.model_id)
+    def rank(
+        self,
+        *,
+        text: str | None = None,
+        like_hash: str | None = None,
+        query: SearchQuery | None = None,
+        top_n: int,
+        margin: float,
+        everything: bool = False,
+        limit: int | None = None,
+    ) -> list[RankedHit]:
+        """The photos passing ``query`` ranked by ``text`` (or like ``like_hash``), best first.
+
+        Cut to the top ``top_n`` within ``margin`` of the best score, or every analysed photo
+        with ``everything``; ``limit`` then keeps only the best few (a "similar photos" strip).
+        Raises as :meth:`by_text` and :meth:`similar_to` do.
+        """
+        k = self._analysis.count_embeddings(self._embedder.model_id) if everything else top_n
+        if like_hash is not None:
+            hits = self.similar_to(like_hash, query=query, k=k)
+        else:
+            hits = self.by_text(text or "", query=query, k=k)
+        kept = cut_off(hits, top_n=top_n, margin=margin, everything=everything)
+        return kept[:limit] if limit is not None else kept
 
     def by_text(
         self, text: str, *, query: SearchQuery | None = None, k: int = 50
@@ -71,5 +94,5 @@ class SemanticSearchUseCase:
         return _hits(nearest)
 
 
-def _hits(scored: list) -> list[RankedHit]:
+def _hits(scored: Sequence[ScoredPhoto]) -> list[RankedHit]:
     return [RankedHit(file_hash=item.file_hash, score=item.score) for item in scored]

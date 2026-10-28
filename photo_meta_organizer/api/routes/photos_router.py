@@ -23,6 +23,7 @@ Endpoints:
     POST  /api/jobs/{job_id}/dismiss  - Give up on an interrupted job
 """
 
+import math
 import os
 from collections.abc import Sequence
 from typing import Any
@@ -74,6 +75,7 @@ from photo_meta_organizer.application.geo import cell_degrees_for_zoom, place_sc
 from photo_meta_organizer.application.interfaces.collection_repository import (
     CollectionRepository,
 )
+from photo_meta_organizer.application.interfaces.image_embedder import EmbedderUnavailableError
 from photo_meta_organizer.application.interfaces.image_repository import (
     ImageMetadataRepository,
 )
@@ -86,7 +88,7 @@ from photo_meta_organizer.application.jobs import (
     JobStateError,
     Work,
 )
-from photo_meta_organizer.application.ranking import RankedHit, cut_off
+from photo_meta_organizer.application.ranking import RankedHit
 from photo_meta_organizer.application.trash import UNDO_SECONDS
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
@@ -106,7 +108,6 @@ from photo_meta_organizer.domain.curation import (
     is_valid_rating,
 )
 from photo_meta_organizer.domain.models import ImageMetadata, StoredFile
-from photo_meta_organizer.infrastructure.analysis.model_store import ModelUnavailableError
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 photos_router = APIRouter(prefix="/api/photos", tags=["photos"])
@@ -552,49 +553,67 @@ def search_photos(
         total_count=len(hits),
         page=request.page,
         page_size=request.page_size,
-        total_pages=max(1, -(-len(hits) // request.page_size)),
+        total_pages=_page_count(len(hits), request.page_size),
         scores=[score for _, score in kept],
         rank_token=token,
     )
 
 
-def _ranking(request: SearchRequest, services: Services) -> tuple[str, list[RankedHit]]:
-    """The ranked list ``request`` names: its snapshot, or a new ranking kept as one."""
+def _page_count(total: int, page_size: int) -> int:
+    return max(1, math.ceil(total / page_size))
+
+
+def _ranking_key(request: SearchRequest) -> str:
+    """What a ranking depends on: the filters and the rank, not the page asked for."""
+    return request.model_dump_json(exclude={"page", "page_size", "rank_token"})
+
+
+def _ranking(request: SearchRequest, services: Services) -> tuple[str | None, list[RankedHit]]:
+    """The ranked list ``request`` names: its snapshot, or a new ranking.
+
+    A ranking that fits on the page asked for is not kept (there is no later page to serve), so
+    small lookups such as the inspector's similar photos do not push out the Library's.
+    """
+    key = _ranking_key(request)
     if request.rank_token is not None:
-        hits = services.rankings.get(request.rank_token)
+        hits = services.rankings.get(request.rank_token, key)
         if hits is None:
             raise HTTPException(
                 status_code=410, detail="This search has expired. Search again from page 1."
             )
         return request.rank_token, hits
+    hits = _rank(request, services)
+    if request.page == 1 and len(hits) <= request.page_size:
+        return None, hits
+    return services.rankings.put(key, hits), hits
+
+
+def _rank(request: SearchRequest, services: Services) -> list[RankedHit]:
     rank = request.rank
-    assert rank is not None
+    if rank is None:
+        raise ValueError("not a ranked search")
     require_runtime()
     require_model(services)
-    use_case = SemanticSearchUseCase(services.analysis, services.embedder, services.repository)
-    query = _search_query(request)
     settings = services.settings
-    k = use_case.analysed_count() if rank.everything else settings.semantic_top_n
+    use_case = SemanticSearchUseCase(services.analysis, services.embedder, services.repository)
     try:
-        if rank.like_hash is not None:
-            hits = use_case.similar_to(rank.like_hash, query=query, k=k)
-        else:
-            hits = use_case.by_text(rank.text or "", query=query, k=k)
+        return use_case.rank(
+            text=rank.text,
+            like_hash=rank.like_hash,
+            query=_search_query(request),
+            top_n=settings.semantic_top_n,
+            margin=settings.semantic_margin,
+            everything=rank.everything,
+            limit=rank.limit,
+        )
     except KeyError:
         raise HTTPException(
             status_code=404, detail=f"Photo '{rank.like_hash}' not found."
         ) from None
     except AnalysisNotReadyError as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
-    except ModelUnavailableError as err:
+    except EmbedderUnavailableError as err:
         raise HTTPException(status_code=503, detail=str(err)) from err
-    kept = cut_off(
-        hits,
-        top_n=settings.semantic_top_n,
-        margin=settings.semantic_margin,
-        everything=rank.everything,
-    )
-    return services.rankings.put(kept), kept
 
 
 @search_router.post(
@@ -617,7 +636,12 @@ def search_photo_ids(
     sizes = {m.file_hash: m.file_info.size_bytes for m in result.items}
     if request.rank is None:
         return [PhotoIdSchema(file_hash=h, size_bytes=size) for h, size in sizes.items()]
-    _, hits = _ranking(request, services)
+    # Ranked afresh (or from the token) without keeping a new snapshot.
+    hits = (
+        _ranking(request, services)[1]
+        if request.rank_token is not None
+        else _rank(request, services)
+    )
     return [
         PhotoIdSchema(file_hash=h.file_hash, size_bytes=sizes[h.file_hash])
         for h in hits

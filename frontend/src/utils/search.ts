@@ -3,7 +3,7 @@ import { UNKNOWN_DATE } from './captureDate'
 import type { QueryFilters } from './query'
 import type { SemanticQuery } from './urlState'
 
-/** The filter and sort state the UI keeps (useUiStore). Sort and paging are view state, not query tokens. */
+/** The filter, sort and search-by-meaning state the URL holds (useViewStore). Sort and paging are not query tokens. */
 export interface LibraryFilters extends QueryFilters {
   sortBy: SortField
   sortOrder: 'asc' | 'desc'

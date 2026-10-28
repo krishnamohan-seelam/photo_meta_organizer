@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { errorMessage } from './api/client'
-import { isDemoMode, usePhotoSearch } from './hooks/usePhotos'
+import { isDemoMode, useInspectedPhoto, usePhotoSearch } from './hooks/usePhotos'
 import { useFacetsQuery } from './hooks/useFacets'
 import { useJobCompletionNotices } from './hooks/useJobs'
 import { useEventStream } from './hooks/useEventStream'
@@ -57,6 +57,13 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!inspectedHash && photos.length > 0) setInspectedHash(photos[0].file_hash)
   }, [inspectedHash, photos, setInspectedHash])
+
+  // A link can name a photo removed since. The inspector says so; with it closed, a toast does.
+  const { missing } = useInspectedPhoto()
+  const inspectorOpen = useUiStore((s) => s.inspectorOpen)
+  useEffect(() => {
+    if (missing && !inspectorOpen) useUiStore.getState().showToast('That photo is no longer in the library')
+  }, [missing, inspectorOpen])
 
   return (
     <div className={`app-shell${lightsOut ? ' lights-out' : ''}`}>

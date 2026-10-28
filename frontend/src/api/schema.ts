@@ -1876,6 +1876,11 @@ export interface components {
             everything?: boolean;
             /** Like Hash */
             like_hash?: string | null;
+            /**
+             * Limit
+             * @description Keep only this many of the best matches
+             */
+            limit?: number | null;
             /** Text */
             text?: string | null;
         };

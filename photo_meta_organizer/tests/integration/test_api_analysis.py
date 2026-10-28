@@ -288,7 +288,8 @@ class TestRankedSearch:
         assert body["items"][0]["file_hash"] == "h-tiger"
         assert body["scores"][0] == pytest.approx(1.0, abs=1e-4)
         assert body["scores"] == sorted(body["scores"], reverse=True)
-        assert body["total_count"] == 3 and body["rank_token"]
+        assert body["total_count"] == 3
+        assert body["rank_token"] is None  # one page: nothing to page through
 
     def test_the_usual_filters_apply(self, api):
         body = self._search(api, {"text": "tiger"}, camera_makes=["Canon"]).json()
@@ -321,6 +322,27 @@ class TestRankedSearch:
         seen = [p["file_hash"] for p in first["items"] + second["items"]]
         assert sorted(seen) == ["h-beach", "h-city", "h-tiger"]
 
+    def test_a_token_from_another_search_is_410(self, api):
+        first = self._search(api, {"text": "tiger", "everything": True}, page_size=1).json()
+        other = self._search(
+            api,
+            {"text": "tiger", "everything": True},
+            camera_makes=["Sony"],
+            page=2,
+            page_size=1,
+            rank_token=first["rank_token"],
+        )
+        assert other.status_code == 410
+
+    def test_a_ranking_that_fits_on_its_page_keeps_no_snapshot(self, api):
+        body = self._search(api, {"like_hash": "h-tiger", "limit": 1}, page_size=6).json()
+        assert len(body["items"]) == 1 and body["rank_token"] is None
+        assert len(api.app.state.services.rankings._snapshots) == 0
+
+    def test_select_all_keeps_no_snapshot(self, api):
+        api.client.post("/api/search/ids", json={"rank": {"text": "tiger", "everything": True}})
+        assert len(api.app.state.services.rankings._snapshots) == 0
+
     def test_an_expired_token_is_410(self, api):
         response = self._search(api, {"text": "tiger"}, page=2, rank_token="gone")
         assert response.status_code == 410
@@ -335,7 +357,7 @@ class TestRankedSearch:
         first = self._search(api, {"text": "tiger", "everything": True}, page_size=1).json()
         api.client.delete("/api/photos/h-tiger")
         again = self._search(
-            api, {"text": "tiger"}, page_size=1, rank_token=first["rank_token"]
+            api, {"text": "tiger", "everything": True}, page_size=1, rank_token=first["rank_token"]
         ).json()
         assert again["items"] == [] and again["scores"] == []
 

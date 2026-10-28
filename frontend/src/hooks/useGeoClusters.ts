@@ -11,11 +11,12 @@ const OFFLINE_CONFIG: AppConfig = { map_tiles_url: null, map_tiles_attribution: 
 
 /**
  * The Library's filters as a search request, without the map area: the Map view has its own
- * viewport, and filtering by the area it is showing would make panning impossible.
+ * viewport, and filtering by the area it is showing would make panning impossible. A search by
+ * meaning is left out too: the map clusters every photo that passes the filters (ticket 15).
  */
 export function useMapFilterRequest(): SearchRequest {
   const filters = useLibraryFilters()
-  return useMemo(() => toSearchRequest({ ...filters, filterArea: null }), [filters])
+  return useMemo(() => toSearchRequest({ ...filters, filterArea: null, semantic: null }), [filters])
 }
 
 /**

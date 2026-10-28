@@ -1,7 +1,8 @@
 """Search by meaning as a ranking of the filtered set (ADR-003 R9, ticket 15).
 
 A ranked search scores the photos that pass the filters once, keeps the list under a token and
-serves later pages as slices of it, so paging is cheap and stable. CLIP cosine scores are not
+serves later pages as slices of it, so paging is cheap and stable. A snapshot belongs to the
+search that made it (its key) and lives while it is being paged. CLIP cosine scores are not
 comparable across queries, so the cut-off is relative: the top N, or the scores within a margin
 of the best, whichever is fewer.
 """
@@ -37,12 +38,14 @@ def cut_off(
 
 @dataclass
 class _Snapshot:
+    key: str
     hits: list[RankedHit]
-    created: float
+    used: float
 
 
 class RankSnapshots:
-    """Ranked lists by token, each kept for ``ttl_seconds``; at most ``max_snapshots`` (LRU)."""
+    """Ranked lists by token, each kept ``ttl_seconds`` after its last use; at most
+    ``max_snapshots`` (least recently used dropped first)."""
 
     def __init__(
         self,
@@ -59,22 +62,26 @@ class RankSnapshots:
         self._lock = threading.Lock()
         self._snapshots: OrderedDict[str, _Snapshot] = OrderedDict()
 
-    def put(self, hits: Sequence[RankedHit]) -> str:
+    def put(self, key: str, hits: Sequence[RankedHit]) -> str:
+        """Keep ``hits`` for the search ``key`` names; returns the token for its later pages."""
         token = secrets.token_urlsafe(12)
         with self._lock:
-            self._snapshots[token] = _Snapshot(list(hits), self._clock())
+            self._snapshots[token] = _Snapshot(key, list(hits), self._clock())
             while len(self._snapshots) > self._max:
                 self._snapshots.popitem(last=False)
         return token
 
-    def get(self, token: str) -> list[RankedHit] | None:
-        """The ranked list, or ``None`` once it has expired or been dropped."""
+    def get(self, token: str, key: str) -> list[RankedHit] | None:
+        """The ranked list, or ``None`` once it has expired, been dropped or belongs to
+        another search than ``key``."""
         with self._lock:
             snapshot = self._snapshots.get(token)
-            if snapshot is None:
+            if snapshot is None or snapshot.key != key:
                 return None
-            if self._clock() - snapshot.created > self._ttl:
+            now = self._clock()
+            if now - snapshot.used > self._ttl:
                 del self._snapshots[token]
                 return None
+            snapshot.used = now
             self._snapshots.move_to_end(token)
             return snapshot.hits

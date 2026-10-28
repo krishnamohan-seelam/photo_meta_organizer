@@ -117,7 +117,7 @@ export const api = createClient<paths>({
     const body = hasBody ? await request.text() : undefined
     const headers: Record<string, string> = {}
     request.headers.forEach((value, key) => (headers[key] = value))
-    return globalThis.fetch(`${url.pathname}${url.search}`, { method: request.method, headers, ...(body ? { body } : {}) })
+    return globalThis.fetch(`${url.pathname}${url.search}`, { method: request.method, headers, signal: request.signal, ...(body ? { body } : {}) })
   },
 })
 api.use(errorMiddleware)
