@@ -1,6 +1,7 @@
 """Phase 5 HTTP surface: status, consent-gated model download, analysis jobs, semantic search,
 AI-tag review. Everything runs on fakes (no network, no real model)."""
 
+import dataclasses
 import hashlib
 
 import pytest
@@ -263,62 +264,103 @@ class TestRunAnalysis:
             wait_for_job(api.client, first)
 
 
-class TestSemanticSearch:
+class TestRankedSearch:
+    """A search by meaning is a ranking mode of POST /api/search (ADR-003 R9, ticket 15)."""
+
     @pytest.fixture(autouse=True)
     def analysed(self, api):
         _install(api)
         _analyze(api)
 
-    def _search(self, api, **body):
-        return api.client.post("/api/search/semantic", json=body)
+    def _search(self, api, rank, **body):
+        return api.client.post("/api/search", json={"rank": rank, **body})
 
-    def test_text_finds_the_photo_it_describes(self, api):
-        response = self._search(api, text="tiger", k=3)
+    def _settings(self, api, **changes):
+        services = api.app.state.services
+        api.app.state.services = dataclasses.replace(
+            services, settings=dataclasses.replace(services.settings, **changes)
+        )
+
+    def test_text_ranks_the_photo_it_describes_first(self, api):
+        response = self._search(api, {"text": "tiger", "everything": True})
         assert response.status_code == 200
         body = response.json()
-        assert body["model_id"] == "api-embedder"
-        assert body["items"][0]["photo"]["file_hash"] == "h-tiger"
-        assert body["items"][0]["score"] == pytest.approx(1.0, abs=1e-4)
-        scores = [i["score"] for i in body["items"]]
-        assert scores == sorted(scores, reverse=True)
+        assert body["items"][0]["file_hash"] == "h-tiger"
+        assert body["scores"][0] == pytest.approx(1.0, abs=1e-4)
+        assert body["scores"] == sorted(body["scores"], reverse=True)
+        assert body["total_count"] == 3 and body["rank_token"]
 
     def test_the_usual_filters_apply(self, api):
-        body = self._search(api, text="tiger", camera_makes=["Canon"]).json()
-        assert [i["photo"]["file_hash"] for i in body["items"]] == ["h-beach"]
+        body = self._search(api, {"text": "tiger"}, camera_makes=["Canon"]).json()
+        assert [p["file_hash"] for p in body["items"]] == ["h-beach"]
 
     def test_similar_to_a_photo_leaves_it_out(self, api):
-        body = self._search(api, like_hash="h-tiger").json()
-        hashes = [i["photo"]["file_hash"] for i in body["items"]]
+        body = self._search(api, {"like_hash": "h-tiger", "everything": True}).json()
+        hashes = [p["file_hash"] for p in body["items"]]
         assert "h-tiger" not in hashes and len(hashes) == 2
 
-    def test_k_limits_the_hits(self, api):
-        assert len(self._search(api, text="tiger", k=1).json()["items"]) == 1
+    def test_the_cut_off_keeps_the_top_n_within_the_margin(self, api):
+        self._settings(api, semantic_top_n=10, semantic_margin=0.0)
+        assert [p["file_hash"] for p in self._search(api, {"text": "tiger"}).json()["items"]] == [
+            "h-tiger"
+        ]
+        self._settings(api, semantic_top_n=2, semantic_margin=5.0)
+        assert self._search(api, {"text": "tiger"}).json()["total_count"] == 2
+
+    def test_later_pages_are_slices_of_the_snapshot(self, api):
+        first = self._search(api, {"text": "tiger", "everything": True}, page_size=2).json()
+        assert first["total_pages"] == 2 and len(first["items"]) == 2
+        api.analysis.clear_embeddings()  # the snapshot is served without ranking again
+        second = self._search(
+            api,
+            {"text": "tiger", "everything": True},
+            page=2,
+            page_size=2,
+            rank_token=first["rank_token"],
+        ).json()
+        seen = [p["file_hash"] for p in first["items"] + second["items"]]
+        assert sorted(seen) == ["h-beach", "h-city", "h-tiger"]
+
+    def test_an_expired_token_is_410(self, api):
+        response = self._search(api, {"text": "tiger"}, page=2, rank_token="gone")
+        assert response.status_code == 410
+
+    def test_select_all_returns_the_ranked_list(self, api):
+        ids = api.client.post(
+            "/api/search/ids", json={"rank": {"text": "tiger", "everything": True}}
+        ).json()
+        assert [i["file_hash"] for i in ids][0] == "h-tiger" and len(ids) == 3
+
+    def test_a_photo_removed_meanwhile_is_left_out_of_its_page(self, api):
+        first = self._search(api, {"text": "tiger", "everything": True}, page_size=1).json()
+        api.client.delete("/api/photos/h-tiger")
+        again = self._search(
+            api, {"text": "tiger"}, page_size=1, rank_token=first["rank_token"]
+        ).json()
+        assert again["items"] == [] and again["scores"] == []
 
     @pytest.mark.parametrize(
-        "body",
+        "rank",
         [
             {},  # neither text nor like_hash
             {"text": "a", "like_hash": "h-tiger"},  # both
             {"text": "   "},
-            {"text": "x", "k": 0},
-            {"text": "x", "k": 1000},
         ],
     )
-    def test_bad_requests_are_422(self, api, body):
-        assert self._search(api, **body).status_code == 422
+    def test_bad_requests_are_422(self, api, rank):
+        assert self._search(api, rank).status_code == 422
 
     def test_an_unknown_photo_is_404(self, api):
-        assert self._search(api, like_hash="nope").status_code == 404
+        assert self._search(api, {"like_hash": "nope"}).status_code == 404
 
     def test_nothing_analysed_is_409_not_an_empty_list(self, api):
         api.analysis.clear_embeddings()
-        response = self._search(api, text="tiger")
+        response = self._search(api, {"text": "tiger"})
         assert response.status_code == 409
         assert "analy" in response.json()["detail"].lower()
 
     def test_a_photo_without_an_embedding_is_409(self, api):
         api.analysis.clear_embeddings()
-        api.analysis.save_embeddings([])  # nothing
         _analyze(api, limit=1)
         analysed = {
             p
@@ -326,15 +368,19 @@ class TestSemanticSearch:
             if api.analysis.get_embedding(p, "api-embedder")
         }
         missing = ({"h-tiger", "h-beach", "h-city"} - analysed).pop()
-        assert self._search(api, like_hash=missing).status_code == 409
+        assert self._search(api, {"like_hash": missing}).status_code == 409
 
     def test_needs_the_model(self, api):
         api.store.path("model.onnx").unlink()
-        assert self._search(api, text="tiger").status_code == 409
+        assert self._search(api, {"text": "tiger"}).status_code == 409
 
     def test_needs_the_runtime(self, api, monkeypatch):
         monkeypatch.setattr(runtime, "ai_runtime_installed", lambda: False)
-        assert self._search(api, text="tiger").status_code == 503
+        assert self._search(api, {"text": "tiger"}).status_code == 503
+
+    def test_without_rank_the_search_is_unchanged(self, api):
+        body = api.client.post("/api/search", json={}).json()
+        assert body["scores"] is None and body["rank_token"] is None
 
 
 class TestAiTags:
@@ -452,7 +498,6 @@ def test_the_token_protects_the_new_routes(tmp_path):
     for method, path in (
         ("get", "/api/analysis/status"),
         ("post", "/api/analysis/run"),
-        ("post", "/api/search/semantic"),
         ("get", "/api/ai-tags"),
     ):
         assert getattr(client, method)(path).status_code == 401, path

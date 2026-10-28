@@ -26,7 +26,7 @@ const photos = [
 function renderTimeline() {
   const qc = testQueryClient()
   const request = toSearchRequest({ ...useViewStore.getState() })
-  const page: PaginatedPhotosResponse = { items: photos, total_count: photos.length, page: 1, page_size: 200, total_pages: 1 }
+  const page: PaginatedPhotosResponse = { items: photos, total_count: photos.length, page: 1, page_size: 200, total_pages: 1, scores: null, rank_token: null }
   qc.setQueryData(['photos', 'search', request], { pages: [page], pageParams: [1] })
   qc.setQueryData(['facets'], { cameras: [], tags: [], years: [{ name: '2026', count: 4 }], isos: [], gps_bounds: null, stats: { total_count: 4, flagged_count: 0, geotagged_count: 0, undated_count: 0, total_bytes: 0, avg_megapixels: 0 } })
   return renderWithQuery(<TimelineView />, qc)

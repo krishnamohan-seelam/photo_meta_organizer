@@ -78,3 +78,20 @@ describe('toSearchRequest (PMO-27)', () => {
     })
   })
 })
+
+describe('toSearchRequest: search by meaning (ADR-003 R9)', () => {
+  it('ranks by text or by a photo, keeping the filters', () => {
+    expect(toSearchRequest({ ...base, filterRating: 4, semantic: { kind: 'text', text: 'beach' } })).toMatchObject({
+      rating: 4,
+      rank: { text: 'beach', everything: false },
+    })
+    expect(toSearchRequest({ ...base, semantic: { kind: 'like', hash: 'h1', name: 'a.jpg', everything: true } }).rank).toEqual({
+      like_hash: 'h1',
+      everything: true,
+    })
+  })
+
+  it('sends no rank without a search by meaning', () => {
+    expect(toSearchRequest(base).rank).toBeUndefined()
+  })
+})

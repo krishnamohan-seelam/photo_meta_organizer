@@ -3,7 +3,6 @@
     GET   /api/analysis/status           - Is the runtime/model there, how far along is analysis
     POST  /api/analysis/model/download   - Download the model (needs explicit consent), as a job
     POST  /api/analysis/run              - Analyze the library (embeddings + tags), as a job
-    POST  /api/search/semantic           - Find photos by meaning, or "like this one"
     GET   /api/photos/{hash}/ai-tags     - A photo's suggested tags
     POST  /api/photos/{hash}/ai-tags     - Accept / reject / reopen one suggestion
     GET   /api/ai-tags                   - How many photos carry each suggested label
@@ -19,11 +18,9 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from photo_meta_organizer.api.dependencies import Services, get_services
-from photo_meta_organizer.api.job_factory import require_model, require_runtime, work_for
+from photo_meta_organizer.api.job_factory import work_for
 from photo_meta_organizer.api.routes.photos_router import (
-    _search_query,
     _submit,
-    to_responses,
 )
 from photo_meta_organizer.api.schemas import (
     AcceptAboveRequest,
@@ -42,20 +39,12 @@ from photo_meta_organizer.api.schemas import (
     ReviewItemSchema,
     ReviewItemsResponse,
     ReviewLabelSchema,
-    SemanticHitSchema,
-    SemanticSearchRequest,
-    SemanticSearchResponse,
 )
 from photo_meta_organizer.application.use_cases.resolve_ai_tags_use_case import (
     ResolveAiTagsUseCase,
 )
-from photo_meta_organizer.application.use_cases.semantic_search_use_case import (
-    AnalysisNotReadyError,
-    SemanticSearchUseCase,
-)
 from photo_meta_organizer.domain.analysis import AiTagStatus
 from photo_meta_organizer.infrastructure.analysis import runtime
-from photo_meta_organizer.infrastructure.analysis.model_store import ModelUnavailableError
 
 analysis_router = APIRouter(prefix="/api", tags=["ai"])
 ai_tags_router = APIRouter(prefix="/api/ai-tags", tags=["ai"])
@@ -175,45 +164,6 @@ def run_analysis(
     params = request.model_dump()
     return _submit(
         services.jobs, "analyze", folder, work_for("analyze", folder, params, services), params
-    )
-
-
-@analysis_router.post(
-    "/search/semantic",
-    response_model=SemanticSearchResponse,
-    summary="Find photos by meaning, or like another photo",
-)
-def semantic_search(
-    request: SemanticSearchRequest, services: Services = Depends(get_services)
-) -> SemanticSearchResponse:
-    """Rank analysed photos by similarity to ``text`` (or to the photo ``like_hash``).
-
-    The usual search filters apply and decide who competes. Returns the ``k`` best matches,
-    best first. 409 if nothing (or that photo) has been analysed yet.
-    """
-    require_runtime()
-    require_model(services)
-    use_case = SemanticSearchUseCase(services.analysis, services.embedder, services.repository)
-    query = _search_query(request)
-    try:
-        if request.like_hash is not None:
-            hits = use_case.similar_to(request.like_hash, query=query, k=request.k)
-        else:
-            hits = use_case.by_text(request.text or "", query=query, k=request.k)
-    except KeyError:
-        raise HTTPException(
-            status_code=404, detail=f"Photo '{request.like_hash}' not found."
-        ) from None
-    except AnalysisNotReadyError as err:
-        raise HTTPException(status_code=409, detail=str(err)) from err
-    except ModelUnavailableError as err:
-        raise HTTPException(status_code=503, detail=str(err)) from err
-    photos = to_responses([h.photo for h in hits], services.repository)
-    return SemanticSearchResponse(
-        items=[
-            SemanticHitSchema(photo=p, score=h.score) for p, h in zip(photos, hits, strict=True)
-        ],
-        model_id=services.embedder.model_id,
     )
 
 

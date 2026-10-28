@@ -39,7 +39,7 @@ from photo_meta_organizer.api.dependencies import (
     get_services,
     get_thumbnail_service,
 )
-from photo_meta_organizer.api.job_factory import work_for
+from photo_meta_organizer.api.job_factory import require_model, require_runtime, work_for
 from photo_meta_organizer.api.schemas import (
     BatchPhotoRequest,
     BatchPhotoResponse,
@@ -86,10 +86,15 @@ from photo_meta_organizer.application.jobs import (
     JobStateError,
     Work,
 )
+from photo_meta_organizer.application.ranking import RankedHit, cut_off
 from photo_meta_organizer.application.trash import UNDO_SECONDS
 from photo_meta_organizer.application.use_cases.search_photos_use_case import (
     SearchPhotosQuery,
     SearchPhotosUseCase,
+)
+from photo_meta_organizer.application.use_cases.semantic_search_use_case import (
+    AnalysisNotReadyError,
+    SemanticSearchUseCase,
 )
 from photo_meta_organizer.domain.curation import (
     AddTag,
@@ -101,6 +106,7 @@ from photo_meta_organizer.domain.curation import (
     is_valid_rating,
 )
 from photo_meta_organizer.domain.models import ImageMetadata, StoredFile
+from photo_meta_organizer.infrastructure.analysis.model_store import ModelUnavailableError
 from photo_meta_organizer.infrastructure.thumbnail_service import ThumbnailService
 
 photos_router = APIRouter(prefix="/api/photos", tags=["photos"])
@@ -518,17 +524,77 @@ def get_facets(
 )
 def search_photos(
     request: SearchRequest,
-    repository: ImageMetadataRepository = Depends(get_repository),
+    services: Services = Depends(get_services),
 ) -> PaginatedPhotosResponse:
-    """Advanced multi-criteria photo search with filtering, sorting, and pagination."""
-    result = SearchPhotosUseCase(repository=repository).execute(_search_query(request))
+    """Advanced multi-criteria photo search with filtering, sorting, and pagination.
+
+    With ``rank``, the photos that pass the filters are ranked by meaning instead of sorted:
+    page 1 returns a ``rank_token`` and each item's score, later pages send the token back
+    (410 once it has expired: search again from page 1).
+    """
+    repository = services.repository
+    if request.rank is None:
+        result = SearchPhotosUseCase(repository=repository).execute(_search_query(request))
+        return PaginatedPhotosResponse(
+            items=to_responses(result.items, repository),
+            total_count=result.total_count,
+            page=result.page,
+            page_size=result.page_size,
+            total_pages=result.total_pages,
+        )
+    token, hits = _ranking(request, services)
+    start = (request.page - 1) * request.page_size
+    page_hits = hits[start : start + request.page_size]
+    found = [(repository.get_by_filehash(h.file_hash), h.score) for h in page_hits]
+    kept = [(photo, score) for photo, score in found if photo is not None]  # removed meanwhile
     return PaginatedPhotosResponse(
-        items=to_responses(result.items, repository),
-        total_count=result.total_count,
-        page=result.page,
-        page_size=result.page_size,
-        total_pages=result.total_pages,
+        items=to_responses([photo for photo, _ in kept], repository),
+        total_count=len(hits),
+        page=request.page,
+        page_size=request.page_size,
+        total_pages=max(1, -(-len(hits) // request.page_size)),
+        scores=[score for _, score in kept],
+        rank_token=token,
     )
+
+
+def _ranking(request: SearchRequest, services: Services) -> tuple[str, list[RankedHit]]:
+    """The ranked list ``request`` names: its snapshot, or a new ranking kept as one."""
+    if request.rank_token is not None:
+        hits = services.rankings.get(request.rank_token)
+        if hits is None:
+            raise HTTPException(
+                status_code=410, detail="This search has expired. Search again from page 1."
+            )
+        return request.rank_token, hits
+    rank = request.rank
+    assert rank is not None
+    require_runtime()
+    require_model(services)
+    use_case = SemanticSearchUseCase(services.analysis, services.embedder, services.repository)
+    query = _search_query(request)
+    settings = services.settings
+    k = use_case.analysed_count() if rank.everything else settings.semantic_top_n
+    try:
+        if rank.like_hash is not None:
+            hits = use_case.similar_to(rank.like_hash, query=query, k=k)
+        else:
+            hits = use_case.by_text(rank.text or "", query=query, k=k)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Photo '{rank.like_hash}' not found."
+        ) from None
+    except AnalysisNotReadyError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+    except ModelUnavailableError as err:
+        raise HTTPException(status_code=503, detail=str(err)) from err
+    kept = cut_off(
+        hits,
+        top_n=settings.semantic_top_n,
+        margin=settings.semantic_margin,
+        everything=rank.everything,
+    )
+    return services.rankings.put(kept), kept
 
 
 @search_router.post(
@@ -538,15 +604,24 @@ def search_photos(
 )
 def search_photo_ids(
     request: SearchRequest,
-    repository: ImageMetadataRepository = Depends(get_repository),
+    services: Services = Depends(get_services),
 ) -> list[PhotoIdSchema]:
-    """All matches of the search, ignoring paging: "select all" across every page (PMO-27)."""
+    """All matches of the search, ignoring paging: "select all" across every page (PMO-27).
+
+    A ranked search returns its ranked list, best first.
+    """
+    repository = services.repository
     query = _search_query(request)
     query.page, query.page_size = 1, max(1, repository.count())
     result = SearchPhotosUseCase(repository=repository).execute(query)
+    sizes = {m.file_hash: m.file_info.size_bytes for m in result.items}
+    if request.rank is None:
+        return [PhotoIdSchema(file_hash=h, size_bytes=size) for h, size in sizes.items()]
+    _, hits = _ranking(request, services)
     return [
-        PhotoIdSchema(file_hash=m.file_hash, size_bytes=m.file_info.size_bytes)
-        for m in result.items
+        PhotoIdSchema(file_hash=h.file_hash, size_bytes=sizes[h.file_hash])
+        for h in hits
+        if h.file_hash in sizes
     ]
 
 

@@ -80,6 +80,8 @@ export async function demoSearch(r: SearchRequest): Promise<PaginatedPhotosRespo
     page,
     page_size: size,
     total_pages: Math.max(1, Math.ceil(all.length / size)),
+    scores: null,
+    rank_token: null,
   }
 }
 

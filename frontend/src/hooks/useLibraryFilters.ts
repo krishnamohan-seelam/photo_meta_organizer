@@ -22,6 +22,7 @@ export function useLibraryFilters(): LibraryFilters {
       filterDuplicates: s.filterDuplicates,
       sortBy: s.sortBy,
       sortOrder: s.sortOrder,
+      semantic: s.semantic,
     }))
   )
 }

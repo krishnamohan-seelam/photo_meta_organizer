@@ -22,6 +22,8 @@ Environment variables:
     PMO_SCAN_ON_START  0/false/no: do not rescan the stored roots when the API starts
     PMO_KEEP_ANALYSED_MAX  photos waiting above which "keep analysed" asks first (default 2000)
     PMO_WATCH_FOLDERS  0/false/no: do not watch the stored roots for new and changed photos
+    PMO_SEMANTIC_TOP_N  a search by meaning keeps at most this many matches (default 500) ...
+    PMO_SEMANTIC_MARGIN ... and only those within this cosine margin of the best (default 0.08)
     PMO_API_TOKEN     per-launch token the desktop shell sets; when present the API
                        requires it as a cookie (api/auth.py). Never logged or repr'd.
 
@@ -47,6 +49,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from photo_meta_organizer.application.ranking import DEFAULT_MARGIN, DEFAULT_TOP_N
 
 APP_NAME = "PhotoMetaOrganizer"
 
@@ -92,6 +96,11 @@ def _env_int(env: Mapping[str, str], name: str) -> int | None:
     return int(value) if value else None
 
 
+def _env_float(env: Mapping[str, str], name: str, default: float) -> float:
+    value = env.get(name, "").strip()
+    return float(value) if value else default
+
+
 def _tiles_url(value: str | None) -> str | None:
     """An http(s) tile template, or ``None``; anything else is a configuration error."""
     url = (value or "").strip()
@@ -132,6 +141,8 @@ class Settings:
     watch_folders: bool = False
     keep_analysed_max: int = 2000  # more photos waiting than this: ask before analysing
     ac_power_only: bool = False  # background analysis waits for AC power (the desktop app)
+    semantic_top_n: int = DEFAULT_TOP_N  # a search by meaning keeps at most this many matches
+    semantic_margin: float = DEFAULT_MARGIN  # ... within this cosine margin of the best
 
     @property
     def thumbnail_dir(self) -> Path:
@@ -208,6 +219,8 @@ class Settings:
                 map_tiles_attribution or env.get("PMO_MAP_TILES_ATTRIBUTION", "").strip() or None
             ),
             keep_analysed_max=_env_int(env, "PMO_KEEP_ANALYSED_MAX") or 2000,
+            semantic_top_n=_env_int(env, "PMO_SEMANTIC_TOP_N") or DEFAULT_TOP_N,
+            semantic_margin=_env_float(env, "PMO_SEMANTIC_MARGIN", DEFAULT_MARGIN),
             ac_power_only=ac_power_only,
             watch_folders=(
                 watch_folders

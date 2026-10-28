@@ -937,6 +937,10 @@ export interface paths {
         /**
          * Advanced photo search
          * @description Advanced multi-criteria photo search with filtering, sorting, and pagination.
+         *
+         *     With ``rank``, the photos that pass the filters are ranked by meaning instead of sorted:
+         *     page 1 returns a ``rank_token`` and each item's score, later pages send the token back
+         *     (410 once it has expired: search again from page 1).
          */
         post: operations["search_photos_api_search_post"];
         delete?: never;
@@ -957,31 +961,10 @@ export interface paths {
         /**
          * Every photo matching a search (hash and size only)
          * @description All matches of the search, ignoring paging: "select all" across every page (PMO-27).
+         *
+         *     A ranked search returns its ranked list, best first.
          */
         post: operations["search_photo_ids_api_search_ids_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search/semantic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Find photos by meaning, or like another photo
-         * @description Rank analysed photos by similarity to ``text`` (or to the photo ``like_hash``).
-         *
-         *     The usual search filters apply and decide who competes. Returns the ``k`` best matches,
-         *     best first. 409 if nothing (or that photo) has been analysed yet.
-         */
-        post: operations["semantic_search_api_search_semantic_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1538,6 +1521,13 @@ export interface components {
             page_size?: number;
             /** Radius Km */
             radius_km?: number | null;
+            /** @description Rank by similarity instead of sorting (sort_by and sort_order are ignored) */
+            rank?: components["schemas"]["RankSchema"] | null;
+            /**
+             * Rank Token
+             * @description The rank_token of page 1, for the later pages of a ranking
+             */
+            rank_token?: string | null;
             /** Rating */
             rating?: number | null;
             /** Search Term */
@@ -1780,6 +1770,16 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+            /**
+             * Rank Token
+             * @description A ranked search: send it back with later pages; 410 once it has expired
+             */
+            rank_token: string | null;
+            /**
+             * Scores
+             * @description A ranked search: each item's similarity (cosine, -1 to 1), in item order
+             */
+            scores: number[] | null;
             /** Total Count */
             total_count: number;
             /** Total Pages */
@@ -1862,6 +1862,22 @@ export interface components {
             path: string;
             /** Size Bytes */
             size_bytes: number;
+        };
+        /**
+         * RankSchema
+         * @description Rank the filtered photos by meaning: free text, or "like this photo" (exactly one).
+         */
+        RankSchema: {
+            /**
+             * Everything
+             * @description Every analysed photo that passes the filters, not only the close matches
+             * @default false
+             */
+            everything?: boolean;
+            /** Like Hash */
+            like_hash?: string | null;
+            /** Text */
+            text?: string | null;
         };
         /**
          * RemovedFileSchema
@@ -2078,6 +2094,13 @@ export interface components {
             page_size?: number;
             /** Radius Km */
             radius_km?: number | null;
+            /** @description Rank by similarity instead of sorting (sort_by and sort_order are ignored) */
+            rank?: components["schemas"]["RankSchema"] | null;
+            /**
+             * Rank Token
+             * @description The rank_token of page 1, for the later pages of a ranking
+             */
+            rank_token?: string | null;
             /** Rating */
             rating?: number | null;
             /** Search Term */
@@ -2098,116 +2121,6 @@ export interface components {
             tags?: string[] | null;
             /** @description Only photos inside this map area */
             within?: components["schemas"]["BoundingBoxSchema"] | null;
-        };
-        /** SemanticHitSchema */
-        SemanticHitSchema: {
-            photo: components["schemas"]["PhotoMetadataResponse"];
-            /**
-             * Score
-             * @description Cosine similarity, -1 to 1; higher is closer
-             */
-            score: number;
-        };
-        /**
-         * SemanticSearchRequest
-         * @description Search by meaning: free text, or "photos like this one", plus the usual filters.
-         *
-         *     Exactly one of ``text`` and ``like_hash``. Sorting and paging fields are ignored: the
-         *     result is the ``k`` best matches, best first.
-         */
-        SemanticSearchRequest: {
-            /**
-             * Ai Tag
-             * @description Photos with an open AI suggestion of this label
-             */
-            ai_tag?: string | null;
-            /** Camera Make */
-            camera_make?: string | null;
-            /**
-             * Camera Makes
-             * @description Any of these makes, matched exactly (camera checkboxes)
-             */
-            camera_makes?: string[] | null;
-            /** Camera Model */
-            camera_model?: string | null;
-            /**
-             * Collection
-             * @description Members of this collection
-             */
-            collection?: string | null;
-            /** Date End */
-            date_end?: string | null;
-            /** Date Start */
-            date_start?: string | null;
-            /**
-             * Duplicates
-             * @description True: only photos kept at more than one path; false: only the others
-             */
-            duplicates?: boolean | null;
-            /** Flagged */
-            flagged?: boolean | null;
-            /**
-             * Has Capture Date
-             * @description false: only photos with an unknown capture date
-             */
-            has_capture_date?: boolean | null;
-            /**
-             * Has Location
-             * @description Only (un)geotagged photos
-             */
-            has_location?: boolean | null;
-            /**
-             * K
-             * @default 50
-             */
-            k?: number;
-            /** Like Hash */
-            like_hash?: string | null;
-            /** Location Lat */
-            location_lat?: number | null;
-            /** Location Lon */
-            location_lon?: number | null;
-            /**
-             * Page
-             * @default 1
-             */
-            page?: number;
-            /**
-             * Page Size
-             * @default 50
-             */
-            page_size?: number;
-            /** Radius Km */
-            radius_km?: number | null;
-            /** Rating */
-            rating?: number | null;
-            /** Search Term */
-            search_term?: string | null;
-            /**
-             * Sort By
-             * @default captured_at
-             * @enum {string}
-             */
-            sort_by?: "captured_at" | "size_bytes" | "camera_model" | "file_name";
-            /**
-             * Sort Order
-             * @default asc
-             * @enum {string}
-             */
-            sort_order?: "asc" | "desc";
-            /** Tags */
-            tags?: string[] | null;
-            /** Text */
-            text?: string | null;
-            /** @description Only photos inside this map area */
-            within?: components["schemas"]["BoundingBoxSchema"] | null;
-        };
-        /** SemanticSearchResponse */
-        SemanticSearchResponse: {
-            /** Items */
-            items: components["schemas"]["SemanticHitSchema"][];
-            /** Model Id */
-            model_id: string;
         };
         /**
          * SyncFolderRequest
@@ -3727,39 +3640,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PhotoIdSchema"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    semantic_search_api_search_semantic_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SemanticSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SemanticSearchResponse"];
                 };
             };
             /** @description Validation Error */

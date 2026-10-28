@@ -15,10 +15,6 @@ import {
 
 export type { SemanticQuery, ViewMode }
 
-/** A search by meaning shows this many matches, and "Show more" adds this many up to the API's cap. */
-export const SEMANTIC_PAGE = 60
-export const SEMANTIC_MAX = 200
-
 /**
  * The state the URL holds (ADR-003 R8): view, filters, sort, search by meaning and the inspected
  * photo. `startUrlSync` writes every change to the address bar and reads it back on Back/Forward,
@@ -29,8 +25,6 @@ interface ViewState extends QueryFilters {
   /** Which photo the inspector shows. The record itself comes from the photos query, so it is never stale. */
   inspectedHash: string | null
   semantic: SemanticQuery | null
-  /** How many matches the search by meaning asks for; "Show more" raises it. Not in the URL. */
-  semanticLimit: number
   /** Server-side sort of the library (PMO-27). */
   sortBy: SortField
   sortOrder: 'asc' | 'desc'
@@ -38,7 +32,6 @@ interface ViewState extends QueryFilters {
   setActiveView: (view: ViewMode) => void
   setInspectedHash: (hash: string | null) => void
   setSemantic: (query: SemanticQuery | null) => void
-  showMoreSemantic: () => void
   setAiTagFilter: (label: string | null) => void
   setSearchQuery: (q: string) => void
   toggleCameraFilter: (camera: string) => void
@@ -77,13 +70,11 @@ export const useViewStore = create<ViewState>((set, get) => ({
   activeView: 'studio',
   inspectedHash: null,
   semantic: null,
-  semanticLimit: SEMANTIC_PAGE,
   ...DEFAULT_SORT,
 
   setActiveView: (activeView) => set({ activeView }),
   setInspectedHash: (inspectedHash) => set({ inspectedHash }),
-  setSemantic: (semantic) => set({ semantic, semanticLimit: SEMANTIC_PAGE }),
-  showMoreSemantic: () => set((s) => ({ semanticLimit: Math.min(SEMANTIC_MAX, s.semanticLimit + SEMANTIC_PAGE) })),
+  setSemantic: (semantic) => set({ semantic }),
   setAiTagFilter: (filterAiTag) => set({ filterAiTag }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   toggleCameraFilter: (camera) =>
@@ -106,7 +97,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   setFilterArea: (filterArea) => set({ filterArea }),
   resetFilters: () => {
     get().applyQueryFilters(EMPTY_QUERY_FILTERS)
-    set({ semantic: null, semanticLimit: SEMANTIC_PAGE })
+    set({ semantic: null })
   },
 }))
 
@@ -123,8 +114,6 @@ export function urlStateOf(s: ViewState): UrlState {
 }
 
 function applyUrlState(u: UrlState): void {
-  const current = useViewStore.getState()
-  const sameSemantic = JSON.stringify(current.semantic) === JSON.stringify(u.semantic)
   useViewStore.setState({
     ...filtersState(u.filters),
     activeView: u.activeView,
@@ -132,7 +121,6 @@ function applyUrlState(u: UrlState): void {
     sortOrder: u.sortOrder,
     semantic: u.semantic,
     inspectedHash: u.inspectedHash,
-    ...(!sameSemantic && { semanticLimit: SEMANTIC_PAGE }),
   })
 }
 

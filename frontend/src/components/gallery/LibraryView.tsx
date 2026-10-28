@@ -9,7 +9,7 @@ import { useFacets } from '../../hooks/useFacets'
 import { removeFilterChip, useLibraryFilters } from '../../hooks/useLibraryFilters'
 import { useSelectAllMatches } from '../../hooks/useSelectAllMatches'
 import { filterChips, galleryTitle } from '../../utils/filterChips'
-import { SemanticResults } from '../ai/SemanticResults'
+import { SemanticBanner } from '../ai/SemanticBanner'
 import { PhotoGallery } from './PhotoGallery'
 import { PhotoTable } from './PhotoTable'
 
@@ -24,7 +24,9 @@ const SORTS: { value: string; label: string; field: SortField; order: 'asc' | 'd
 
 /** Title, counts, active-filter chips, sort, layout and size (FR-1c.9, FR-2c.1). */
 const GalleryToolbar: React.FC = () => {
-  const { sortBy, sortOrder, setSort } = useViewStore(useShallow((s) => ({ sortBy: s.sortBy, sortOrder: s.sortOrder, setSort: s.setSort })))
+  const { sortBy, sortOrder, setSort, ranked } = useViewStore(
+    useShallow((s) => ({ sortBy: s.sortBy, sortOrder: s.sortOrder, setSort: s.setSort, ranked: s.semantic !== null }))
+  )
   const { gridItemSize, setGridItemSize, libraryLayout, setLibraryLayout } = useUiStore(
     useShallow((s) => ({
       gridItemSize: s.gridItemSize,
@@ -61,7 +63,8 @@ const GalleryToolbar: React.FC = () => {
         </div>
       )}
       <span className="toolbar-spacer" />
-      {libraryLayout === 'grid' && (
+      {/* A search by meaning ranks the photos, so there is no sort to choose. */}
+      {libraryLayout === 'grid' && !ranked && (
         <div className="seg" role="group" aria-label="Sort">
           {SORTS.map((s) => (
             <button key={s.value} type="button" className="btn-reset" aria-pressed={sortValue === s.value} onClick={() => setSort(s.field, s.order)}>
@@ -102,7 +105,8 @@ export const LibraryView: React.FC = () => {
   return (
     <main className="gallery-pane" aria-label="Library">
       <GalleryToolbar />
-      {semantic ? <SemanticResults /> : layout === 'grid' ? <PhotoGallery /> : <PhotoTable />}
+      {semantic && <SemanticBanner />}
+      {layout === 'grid' ? <PhotoGallery /> : <PhotoTable />}
     </main>
   )
 }

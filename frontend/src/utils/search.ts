@@ -1,11 +1,14 @@
 import type { SearchRequest, SortField } from '../types/metadata'
 import { UNKNOWN_DATE } from './captureDate'
 import type { QueryFilters } from './query'
+import type { SemanticQuery } from './urlState'
 
 /** The filter and sort state the UI keeps (useUiStore). Sort and paging are view state, not query tokens. */
 export interface LibraryFilters extends QueryFilters {
   sortBy: SortField
   sortOrder: 'asc' | 'desc'
+  /** A search by meaning ranks the filtered photos instead of sorting them (ADR-003 R9). */
+  semantic?: SemanticQuery | null
 }
 
 /**
@@ -41,6 +44,12 @@ export function toSearchRequest(f: LibraryFilters): SearchRequest {
   } else if (f.filterTimeframe !== 'all') {
     request.date_start = `${f.filterTimeframe}-01-01T00:00:00`
     request.date_end = `${f.filterTimeframe}-12-31T23:59:59.999999`
+  }
+  if (f.semantic) {
+    request.rank = {
+      ...(f.semantic.kind === 'text' ? { text: f.semantic.text } : { like_hash: f.semantic.hash }),
+      everything: Boolean(f.semantic.everything),
+    }
   }
   return request
 }

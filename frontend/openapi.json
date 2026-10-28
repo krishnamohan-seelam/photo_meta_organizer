@@ -1189,6 +1189,29 @@
             ],
             "title": "Radius Km"
           },
+          "rank": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RankSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rank by similarity instead of sorting (sort_by and sort_order are ignored)"
+          },
+          "rank_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rank_token of page 1, for the later pages of a ranking",
+            "title": "Rank Token"
+          },
           "rating": {
             "anyOf": [
               {
@@ -1674,6 +1697,33 @@
             "title": "Page Size",
             "type": "integer"
           },
+          "rank_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A ranked search: send it back with later pages; 410 once it has expired",
+            "title": "Rank Token"
+          },
+          "scores": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A ranked search: each item's similarity (cosine, -1 to 1), in item order",
+            "title": "Scores"
+          },
           "total_count": {
             "title": "Total Count",
             "type": "integer"
@@ -1688,7 +1738,9 @@
           "total_count",
           "page",
           "page_size",
-          "total_pages"
+          "total_pages",
+          "scores",
+          "rank_token"
         ],
         "title": "PaginatedPhotosResponse",
         "type": "object"
@@ -1886,6 +1938,42 @@
           "hidden"
         ],
         "title": "PhotoPathSchema",
+        "type": "object"
+      },
+      "RankSchema": {
+        "description": "Rank the filtered photos by meaning: free text, or \"like this photo\" (exactly one).",
+        "properties": {
+          "everything": {
+            "default": false,
+            "description": "Every analysed photo that passes the filters, not only the close matches",
+            "title": "Everything",
+            "type": "boolean"
+          },
+          "like_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Like Hash"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "RankSchema",
         "type": "object"
       },
       "RemovedFileSchema": {
@@ -2370,6 +2458,29 @@
             ],
             "title": "Radius Km"
           },
+          "rank": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RankSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rank by similarity instead of sorting (sort_by and sort_order are ignored)"
+          },
+          "rank_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rank_token of page 1, for the later pages of a ranking",
+            "title": "Rank Token"
+          },
           "rating": {
             "anyOf": [
               {
@@ -2439,327 +2550,6 @@
           }
         },
         "title": "SearchRequest",
-        "type": "object"
-      },
-      "SemanticHitSchema": {
-        "properties": {
-          "photo": {
-            "$ref": "#/components/schemas/PhotoMetadataResponse"
-          },
-          "score": {
-            "description": "Cosine similarity, -1 to 1; higher is closer",
-            "title": "Score",
-            "type": "number"
-          }
-        },
-        "required": [
-          "photo",
-          "score"
-        ],
-        "title": "SemanticHitSchema",
-        "type": "object"
-      },
-      "SemanticSearchRequest": {
-        "description": "Search by meaning: free text, or \"photos like this one\", plus the usual filters.\n\nExactly one of ``text`` and ``like_hash``. Sorting and paging fields are ignored: the\nresult is the ``k`` best matches, best first.",
-        "properties": {
-          "ai_tag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Photos with an open AI suggestion of this label",
-            "title": "Ai Tag"
-          },
-          "camera_make": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Camera Make"
-          },
-          "camera_makes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Any of these makes, matched exactly (camera checkboxes)",
-            "title": "Camera Makes"
-          },
-          "camera_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Camera Model"
-          },
-          "collection": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Members of this collection",
-            "title": "Collection"
-          },
-          "date_end": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Date End"
-          },
-          "date_start": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Date Start"
-          },
-          "duplicates": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "True: only photos kept at more than one path; false: only the others",
-            "title": "Duplicates"
-          },
-          "flagged": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flagged"
-          },
-          "has_capture_date": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "false: only photos with an unknown capture date",
-            "title": "Has Capture Date"
-          },
-          "has_location": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Only (un)geotagged photos",
-            "title": "Has Location"
-          },
-          "k": {
-            "default": 50,
-            "maximum": 200.0,
-            "minimum": 1.0,
-            "title": "K",
-            "type": "integer"
-          },
-          "like_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Like Hash"
-          },
-          "location_lat": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Location Lat"
-          },
-          "location_lon": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Location Lon"
-          },
-          "page": {
-            "default": 1,
-            "minimum": 1.0,
-            "title": "Page",
-            "type": "integer"
-          },
-          "page_size": {
-            "default": 50,
-            "maximum": 500.0,
-            "minimum": 1.0,
-            "title": "Page Size",
-            "type": "integer"
-          },
-          "radius_km": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Radius Km"
-          },
-          "rating": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rating"
-          },
-          "search_term": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Search Term"
-          },
-          "sort_by": {
-            "default": "captured_at",
-            "enum": [
-              "captured_at",
-              "size_bytes",
-              "camera_model",
-              "file_name"
-            ],
-            "title": "Sort By",
-            "type": "string"
-          },
-          "sort_order": {
-            "default": "asc",
-            "enum": [
-              "asc",
-              "desc"
-            ],
-            "title": "Sort Order",
-            "type": "string"
-          },
-          "tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tags"
-          },
-          "text": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Text"
-          },
-          "within": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BoundingBoxSchema"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Only photos inside this map area"
-          }
-        },
-        "title": "SemanticSearchRequest",
-        "type": "object"
-      },
-      "SemanticSearchResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/SemanticHitSchema"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "model_id": {
-            "title": "Model Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "model_id"
-        ],
-        "title": "SemanticSearchResponse",
         "type": "object"
       },
       "SyncFolderRequest": {
@@ -4775,7 +4565,7 @@
     },
     "/api/search": {
       "post": {
-        "description": "Advanced multi-criteria photo search with filtering, sorting, and pagination.",
+        "description": "Advanced multi-criteria photo search with filtering, sorting, and pagination.\n\nWith ``rank``, the photos that pass the filters are ranked by meaning instead of sorted:\npage 1 returns a ``rank_token`` and each item's score, later pages send the token back\n(410 once it has expired: search again from page 1).",
         "operationId": "search_photos_api_search_post",
         "requestBody": {
           "content": {
@@ -4817,7 +4607,7 @@
     },
     "/api/search/ids": {
       "post": {
-        "description": "All matches of the search, ignoring paging: \"select all\" across every page (PMO-27).",
+        "description": "All matches of the search, ignoring paging: \"select all\" across every page (PMO-27).\n\nA ranked search returns its ranked list, best first.",
         "operationId": "search_photo_ids_api_search_ids_post",
         "requestBody": {
           "content": {
@@ -4858,48 +4648,6 @@
         "summary": "Every photo matching a search (hash and size only)",
         "tags": [
           "search"
-        ]
-      }
-    },
-    "/api/search/semantic": {
-      "post": {
-        "description": "Rank analysed photos by similarity to ``text`` (or to the photo ``like_hash``).\n\nThe usual search filters apply and decide who competes. Returns the ``k`` best matches,\nbest first. 409 if nothing (or that photo) has been analysed yet.",
-        "operationId": "semantic_search_api_search_semantic_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SemanticSearchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SemanticSearchResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Find photos by meaning, or like another photo",
-        "tags": [
-          "ai"
         ]
       }
     },

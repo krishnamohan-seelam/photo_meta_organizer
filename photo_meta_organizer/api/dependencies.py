@@ -23,6 +23,7 @@ from photo_meta_organizer.application.interfaces.place_namer import PlaceNamer
 from photo_meta_organizer.application.interfaces.root_store import RootStore
 from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.keep_analysed import KeepAnalysed
+from photo_meta_organizer.application.ranking import RankSnapshots
 from photo_meta_organizer.application.root_watcher import RootWatcher
 from photo_meta_organizer.application.settings import Settings
 from photo_meta_organizer.application.trash import TrashPurger
@@ -48,6 +49,7 @@ class Services:
     model_store: ModelStore
     embedder: ImageEmbedder
     tagger: ZeroShotTagger
+    rankings: RankSnapshots  # ranked searches by token (ADR-003 R9)
 
 
 def get_services(request: Request) -> Services:

@@ -12,7 +12,7 @@ const searchKey = ['photos', 'search', { sort_by: 'captured_at' }]
 
 function setup(photo: PhotoMetadata) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  const page: PaginatedPhotosResponse = { items: [photo], total_count: 1, page: 1, page_size: 200, total_pages: 1 }
+  const page: PaginatedPhotosResponse = { items: [photo], total_count: 1, page: 1, page_size: 200, total_pages: 1, scores: null, rank_token: null }
   qc.setQueryData(searchKey, page)
   qc.setQueryData(['photos', 'detail', HASH], photo)
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -100,6 +100,8 @@ describe('useCuration (PMO-13/15)', () => {
       page: 1,
       page_size: 200,
       total_pages: 1,
+    scores: null,
+    rank_token: null,
     }
     qc.setQueryData(searchKey, page)
     const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>

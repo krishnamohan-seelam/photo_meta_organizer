@@ -161,3 +161,10 @@ class TestUserDirs:
         monkeypatch.undo()
         dirs = settings_module.user_dirs()
         assert len({dirs.data, dirs.cache, dirs.log}) == 3
+
+
+def test_the_semantic_cut_off_comes_from_the_environment() -> None:
+    default = Settings.from_env({})
+    assert (default.semantic_top_n, default.semantic_margin) == (500, 0.08)
+    tuned = Settings.from_env({"PMO_SEMANTIC_TOP_N": "120", "PMO_SEMANTIC_MARGIN": "0.05"})
+    assert (tuned.semantic_top_n, tuned.semantic_margin) == (120, 0.05)

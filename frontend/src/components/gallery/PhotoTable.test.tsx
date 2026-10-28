@@ -22,7 +22,7 @@ function photosOf(n: number): PhotoMetadata[] {
 function seed(ui: React.ReactElement, photos: PhotoMetadata[]) {
   const qc = testQueryClient()
   const request = toSearchRequest({ ...useViewStore.getState() })
-  const page: PaginatedPhotosResponse = { items: photos, total_count: photos.length, page: 1, page_size: photos.length, total_pages: 1 }
+  const page: PaginatedPhotosResponse = { items: photos, total_count: photos.length, page: 1, page_size: photos.length, total_pages: 1, scores: null, rank_token: null }
   qc.setQueryData(['photos', 'search', request], { pages: [page], pageParams: [1] })
   return renderWithQuery(ui, qc)
 }

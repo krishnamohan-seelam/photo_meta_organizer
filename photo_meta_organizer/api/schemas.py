@@ -110,6 +110,14 @@ class PaginatedPhotosResponse(ResponseModel):
     page: int
     page_size: int
     total_pages: int
+    scores: list[float] | None = Field(
+        default=None,
+        description="A ranked search: each item's similarity (cosine, -1 to 1), in item order",
+    )
+    rank_token: str | None = Field(
+        default=None,
+        description="A ranked search: send it back with later pages; 410 once it has expired",
+    )
 
 
 class BoundingBoxSchema(BaseModel):
@@ -119,6 +127,27 @@ class BoundingBoxSchema(BaseModel):
     west: float = Field(ge=-180, le=180)
     north: float = Field(ge=-90, le=90)
     east: float = Field(ge=-180, le=180)
+
+
+class RankSchema(BaseModel):
+    """Rank the filtered photos by meaning: free text, or "like this photo" (exactly one)."""
+
+    text: str | None = Field(default=None, max_length=500)
+    like_hash: str | None = None
+    everything: bool = Field(
+        default=False,
+        description="Every analysed photo that passes the filters, not only the close matches",
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one_query(self) -> "RankSchema":
+        if self.text is not None:
+            self.text = self.text.strip()
+        if (self.text or None) is None and self.like_hash is None:
+            raise ValueError("give either a non-empty text or a like_hash")
+        if self.text and self.like_hash is not None:
+            raise ValueError("give text or like_hash, not both")
+        return self
 
 
 class SearchRequest(BaseModel):
@@ -157,6 +186,13 @@ class SearchRequest(BaseModel):
     sort_order: Literal["asc", "desc"] = "asc"
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=500)
+    rank: RankSchema | None = Field(
+        default=None,
+        description="Rank by similarity instead of sorting (sort_by and sort_order are ignored)",
+    )
+    rank_token: str | None = Field(
+        default=None, description="The rank_token of page 1, for the later pages of a ranking"
+    )
 
 
 class GeoClustersRequest(SearchRequest):
@@ -385,38 +421,6 @@ class AnalyzeRequest(BaseModel):
         default=False,
         description="Only recompute suggested tags from the stored embeddings (no photo is opened)",
     )
-
-
-class SemanticSearchRequest(SearchRequest):
-    """Search by meaning: free text, or "photos like this one", plus the usual filters.
-
-    Exactly one of ``text`` and ``like_hash``. Sorting and paging fields are ignored: the
-    result is the ``k`` best matches, best first.
-    """
-
-    text: str | None = Field(default=None, max_length=500)
-    like_hash: str | None = None
-    k: int = Field(default=50, ge=1, le=200)
-
-    @model_validator(mode="after")
-    def _exactly_one_query(self) -> "SemanticSearchRequest":
-        if self.text is not None:
-            self.text = self.text.strip()
-        if (self.text or None) is None and self.like_hash is None:
-            raise ValueError("give either a non-empty text or a like_hash")
-        if self.text and self.like_hash is not None:
-            raise ValueError("give text or like_hash, not both")
-        return self
-
-
-class SemanticHitSchema(ResponseModel):
-    photo: PhotoMetadataResponse
-    score: float = Field(description="Cosine similarity, -1 to 1; higher is closer")
-
-
-class SemanticSearchResponse(ResponseModel):
-    items: list[SemanticHitSchema]
-    model_id: str
 
 
 class AiTagSchema(ResponseModel):

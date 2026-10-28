@@ -1,5 +1,5 @@
-import { useCallback, useMemo } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   errorMessage,
   fetchAiTagCountsApi,
@@ -7,20 +7,17 @@ import {
   fetchAnalysisStatusApi,
   resolveAiTagApi,
   resolveAiTagsBatchApi,
-  semanticSearchApi,
   startAnalysisApi,
   startModelDownloadApi,
 } from '../api/client'
-import type { AiTag, AnalysisStatus, Job, SemanticSearchRequest } from '../types/metadata'
+import type { AiTag, AnalysisStatus, Job } from '../types/metadata'
 import { useUiStore } from '../stores/useUiStore'
-import { useViewStore, type SemanticQuery } from '../stores/useViewStore'
-import { isDemoMode, photosKey, useSearchRequest } from './usePhotos'
+import { useViewStore } from '../stores/useViewStore'
+import { isDemoMode, photosKey, runSearch } from './usePhotos'
 import { jobsKey } from './useJobs'
 
 export const analysisKey = ['analysis'] as const
 const STATUS_POLL_MS = 1500
-/** How many matches a "by meaning" search shows. */
-export const SEMANTIC_K = 60
 
 /** What the AI features need and how far along analysis is. Not available in `?demo=1`. */
 export function useAnalysisStatus(): AnalysisStatus | undefined {
@@ -69,24 +66,14 @@ export function useAnalysisActions() {
 }
 
 /**
- * The best matches for a semantic query under the Library's current filters. Disabled when no
- * semantic query is set, so ordinary browsing never loads the model.
+ * The photos that look most like `hash`, ignoring the Library's filters (the inspector's Similar
+ * strip): page 1 of a ranked search. Disabled until something is analysed.
  */
-export function useSemanticSearch(semantic: SemanticQuery | null, k: number = SEMANTIC_K, useFilters: boolean = true) {
-  const libraryFilters = useSearchRequest()
-  const filters = useFilters ? libraryFilters : {}
-  const request: SemanticSearchRequest | null = semantic
-    ? {
-        ...filters,
-        ...(semantic.kind === 'text' ? { text: semantic.text } : { like_hash: semantic.hash }),
-        k,
-      }
-    : null
+export function useSimilarPhotos(hash: string, count: number, enabled: boolean) {
   return useQuery({
-    queryKey: [...analysisKey, 'semantic', request],
-    queryFn: () => semanticSearchApi(request!),
-    enabled: request !== null && !isDemoMode(),
-    placeholderData: keepPreviousData,
+    queryKey: [...analysisKey, 'similar', hash, count],
+    queryFn: () => runSearch({ rank: { like_hash: hash }, page: 1, page_size: count }),
+    enabled: enabled && !isDemoMode(),
     retry: false,
   })
 }
@@ -99,16 +86,6 @@ export function useAiTagCounts(enabled: boolean) {
     enabled: enabled && !isDemoMode(),
     retry: false,
   })
-}
-
-/** The photos of the active search by meaning (empty when none), in rank order. */
-export function useSemanticPhotos() {
-  const semantic = useViewStore((s) => s.semantic)
-  const limit = useViewStore((s) => s.semanticLimit)
-  const query = useSemanticSearch(semantic, limit)
-  const hits = query.data?.items
-  const photos = useMemo(() => (semantic ? (hits ?? []).map((h) => h.photo) : []), [semantic, hits])
-  return { semantic, limit, query, hits: hits ?? [], photos }
 }
 
 /** A photo's suggested tags (any status). */

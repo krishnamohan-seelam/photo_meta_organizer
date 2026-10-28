@@ -1,6 +1,6 @@
 import React from 'react'
 import { Check, Sparkles, X } from 'lucide-react'
-import { useAnalysisStatus, usePhotoAiTags, useResolveAiTag, useSemanticSearch } from '../../hooks/useAnalysis'
+import { useAnalysisStatus, usePhotoAiTags, useResolveAiTag, useSimilarPhotos } from '../../hooks/useAnalysis'
 import { useViewStore } from '../../stores/useViewStore'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
@@ -20,10 +20,12 @@ export const AiTagsSection: React.FC<{ hash: string; name: string }> = ({ hash, 
   const setSemantic = useViewStore((s) => s.setSemantic)
   const setActiveView = useViewStore((s) => s.setActiveView)
   const setInspectedHash = useViewStore((s) => s.setInspectedHash)
-  const similar = useSemanticSearch(enabled ? { kind: 'like', hash, name } : null, SIMILAR_SHOWN + 1, false)
+  const similar = useSimilarPhotos(hash, SIMILAR_SHOWN, enabled)
 
   const open = tags.filter((t) => t.status === 'suggested')
-  const hits = (similar.data?.items ?? []).filter((h) => h.photo.file_hash !== hash).slice(0, SIMILAR_SHOWN)
+  const items = similar.data?.items ?? []
+  const scores = similar.data?.scores ?? []
+  const hits = items.map((photo, i) => ({ photo, score: scores[i] ?? 0 }))
   if (!enabled || (open.length === 0 && hits.length === 0)) return null
 
   return (

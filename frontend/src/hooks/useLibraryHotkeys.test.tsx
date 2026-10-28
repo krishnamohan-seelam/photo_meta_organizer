@@ -18,7 +18,7 @@ function Harness({ reveal = () => {} }: { reveal?: (i: number) => void }) {
 
 function setup(reveal?: (i: number) => void) {
   const qc = testQueryClient()
-  const page: PaginatedPhotosResponse = { items: photos, total_count: 3, page: 1, page_size: 200, total_pages: 1 }
+  const page: PaginatedPhotosResponse = { items: photos, total_count: 3, page: 1, page_size: 200, total_pages: 1, scores: null, rank_token: null }
   qc.setQueryData(searchKey, page)
   renderWithQuery(<Harness reveal={reveal} />, qc)
   return { rating: (i: number) => qc.getQueryData<PaginatedPhotosResponse>(searchKey)!.items[i].rating }

@@ -25,8 +25,6 @@ import type {
   Root,
   RootSuggestions,
   SearchRequest,
-  SemanticSearchRequest,
-  SemanticSearchResponse,
   SyncFolderRequest,
 } from '../types/metadata'
 
@@ -302,10 +300,6 @@ export function setKeepAnalysedApi(enabled: boolean): Promise<KeepAnalysed> {
 
 export function startAnalysisApi(options: { reanalyze?: boolean } = {}): Promise<Job> {
   return request('/analysis/run', 'Analyzing the library', jsonInit('POST', options))
-}
-
-export function semanticSearchApi(body: SemanticSearchRequest): Promise<SemanticSearchResponse> {
-  return request('/search/semantic', 'Searching by meaning', jsonInit('POST', body))
 }
 
 export function fetchAiTagCountsApi(): Promise<FacetCount[]> {

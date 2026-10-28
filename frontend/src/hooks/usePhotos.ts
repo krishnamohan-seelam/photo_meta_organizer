@@ -45,9 +45,22 @@ export function useSearchRequest(): SearchRequest {
  */
 export function usePhotoSearch() {
   const request = useSearchRequest()
+  const qc = useQueryClient()
+  const queryKey = [...photosKey, 'search', request]
   const query = useInfiniteQuery({
-    queryKey: [...photosKey, 'search', request],
-    queryFn: ({ pageParam }) => runSearch({ ...request, page: pageParam, page_size: PAGE_SIZE }),
+    queryKey,
+    queryFn: async ({ pageParam }) => {
+      // A ranked search pages through the server's snapshot: later pages send page 1's token.
+      const first = pageParam > 1 ? qc.getQueryData<InfiniteData<PaginatedPhotosResponse>>(queryKey)?.pages[0] : undefined
+      const token = first?.rank_token
+      try {
+        return await runSearch({ ...request, page: pageParam, page_size: PAGE_SIZE, ...(token && { rank_token: token }) })
+      } catch (err) {
+        // The snapshot expired: run the search again from page 1.
+        if (token && err instanceof ApiError && err.status === 410) void qc.resetQueries({ queryKey, exact: true })
+        throw err
+      }
+    },
     initialPageParam: 1,
     getNextPageParam: (last) => (last.page < last.total_pages ? last.page + 1 : undefined),
     placeholderData: keepPreviousData,

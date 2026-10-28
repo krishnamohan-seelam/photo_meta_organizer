@@ -53,6 +53,8 @@ const NOT_A_FILTER: Record<string, string> = {
   page: 'paging, not a filter',
   page_size: 'paging, not a filter',
   sort_by: 'view state: ticket 14 keeps sorting in its own URL parameters',
+  rank: 'a search by meaning: its own URL parameters (meaning=, like=), not a query token',
+  rank_token: 'paging of a ranked search, not a filter',
   sort_order: 'view state: ticket 14 keeps sorting in its own URL parameters',
   camera_make: 'the older single-value form of camera_makes, which the UI never sends',
 }

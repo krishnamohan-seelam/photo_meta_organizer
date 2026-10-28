@@ -38,6 +38,12 @@ describe('URL state (ADR-003 R8)', () => {
     expect(searchToState(stateToSearch(state))).toEqual(state)
   })
 
+  it('keeps "show everything" of a search by meaning', () => {
+    const state: UrlState = { ...base, semantic: { kind: 'text', text: 'dog', everything: true } }
+    expect(new URLSearchParams(stateToSearch(state)).get('ranked')).toBe('all')
+    expect(searchToState(stateToSearch(state))).toEqual(state)
+  })
+
   it('falls back to defaults for unknown values', () => {
     expect(searchToState('view=nowhere&sort=bogus-asc&photo=')).toEqual(base)
   })

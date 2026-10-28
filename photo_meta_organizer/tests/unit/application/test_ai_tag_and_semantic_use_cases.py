@@ -158,21 +158,21 @@ class TestSemanticSearch:
 
     def test_text_finds_the_photo_it_describes_first(self, library, analysis, embedder):
         hits = self._use_case(analysis, embedder, library).by_text("tiger", k=3)
-        assert hits[0].photo.file_hash == "h-tiger"
+        assert hits[0].file_hash == "h-tiger"
         assert hits[0].score == pytest.approx(1.0, abs=1e-5)
         assert [h.score for h in hits] == sorted((h.score for h in hits), reverse=True)
 
     def test_filters_decide_who_competes(self, library, analysis, embedder):
         query = SearchQuery(camera_make="Canon")
         hits = self._use_case(analysis, embedder, library).by_text("tiger", query=query, k=5)
-        assert [h.photo.file_hash for h in hits] == ["h-beach"]
+        assert [h.file_hash for h in hits] == ["h-beach"]
 
     def test_k_limits_the_hits(self, library, analysis, embedder):
         assert len(self._use_case(analysis, embedder, library).by_text("tiger", k=2)) == 2
 
     def test_similar_to_leaves_the_photo_itself_out(self, library, analysis, embedder):
         hits = self._use_case(analysis, embedder, library).similar_to("h-tiger", k=5)
-        assert "h-tiger" not in [h.photo.file_hash for h in hits]
+        assert "h-tiger" not in [h.file_hash for h in hits]
         assert len(hits) == 2
 
     def test_nothing_analysed_yet_is_not_an_empty_result(self, photos, analysis, embedder):
@@ -192,10 +192,3 @@ class TestSemanticSearch:
     def test_blank_text_is_refused(self, library, analysis, embedder):
         with pytest.raises(ValueError, match="text"):
             self._use_case(analysis, embedder, library).by_text("   ")
-
-    def test_hits_for_photos_deleted_meanwhile_are_dropped(self, library, analysis, embedder):
-        use_case = self._use_case(analysis, embedder, library)
-        library.connection.execute("PRAGMA foreign_keys = OFF")
-        library.connection.execute("DELETE FROM assets WHERE file_hash = 'h-tiger'")
-        library.connection.commit()
-        assert "h-tiger" not in [h.photo.file_hash for h in use_case.by_text("tiger", k=5)]

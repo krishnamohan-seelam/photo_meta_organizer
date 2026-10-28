@@ -66,6 +66,7 @@ from photo_meta_organizer.application.events import LIBRARY_CHANGED, EventBus
 from photo_meta_organizer.application.interfaces.image_embedder import ImageEmbedder
 from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.keep_analysed import ANALYZE_PARAMS, KeepAnalysed
+from photo_meta_organizer.application.ranking import RankSnapshots
 from photo_meta_organizer.application.root_watcher import RootWatcher
 from photo_meta_organizer.application.roots import scan_roots
 from photo_meta_organizer.application.settings import (  # noqa: F401 (re-exported)
@@ -265,6 +266,7 @@ def create_app(
         model_store=store,
         embedder=ai_embedder,
         tagger=composition.build_tagger(settings, ai_embedder),
+        rankings=RankSnapshots(),
     )
 
     # Mount routers

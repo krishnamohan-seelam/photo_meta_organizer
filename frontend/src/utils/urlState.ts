@@ -5,7 +5,10 @@ import { EMPTY_QUERY_FILTERS, filtersToTokens, parseQuery, tokensToFilters, toke
 export type ViewMode = 'studio' | 'timeline' | 'map' | 'kanban' | 'analytics'
 
 /** A search by meaning: free text, or "photos like this one". */
-export type SemanticQuery = { kind: 'text'; text: string } | { kind: 'like'; hash: string; name: string }
+export type SemanticQuery = ({ kind: 'text'; text: string } | { kind: 'like'; hash: string; name: string }) & {
+  /** Every analysed photo that passes the filters, not only the close matches. */
+  everything?: boolean
+}
 
 /**
  * What the URL holds (ADR-003 R8): the view, the filters, the sort, a search by meaning and the
@@ -45,6 +48,7 @@ export function stateToSearch(s: UrlState): string {
     p.set('like', s.semantic.hash)
     if (s.semantic.name) p.set('name', s.semantic.name)
   }
+  if (s.semantic?.everything) p.set('ranked', 'all')
   if (s.inspectedHash) p.set('photo', s.inspectedHash)
   return p.toString()
 }
@@ -63,11 +67,12 @@ export function searchToState(search: string): UrlState {
   }
   const meaning = p.get('meaning')?.trim()
   const like = p.get('like')
-  const semantic: SemanticQuery | null = meaning
+  const base: SemanticQuery | null = meaning
     ? { kind: 'text', text: meaning }
     : like
       ? { kind: 'like', hash: like, name: p.get('name') ?? '' }
       : null
+  const semantic = base && p.get('ranked') === 'all' ? { ...base, everything: true } : base
   return { activeView: view, filters, sortBy, sortOrder, semantic, inspectedHash: p.get('photo') || null }
 }
 
@@ -94,7 +99,7 @@ export function onlyTextDiffers(a: string, b: string): boolean {
 }
 
 /** The parameters this module owns; any other (`demo=1`) is kept as it is. */
-const OWN_PARAMS = ['view', 'q', 'sort', 'meaning', 'like', 'name', 'photo']
+const OWN_PARAMS = ['view', 'q', 'sort', 'meaning', 'like', 'name', 'ranked', 'photo']
 
 /** `next` (from `stateToSearch`) plus the parameters of `current` that are not ours. */
 export function withForeignParams(current: string, next: string): string {
