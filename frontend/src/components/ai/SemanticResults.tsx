@@ -2,8 +2,8 @@ import React, { useCallback } from 'react'
 import { Sparkles, X } from 'lucide-react'
 import { useSemanticPhotos } from '../../hooks/useAnalysis'
 import { useLibraryHotkeys } from '../../hooks/useLibraryHotkeys'
-import { SEMANTIC_MAX, useUiStore } from '../../stores/useUiStore'
-import type { SemanticQuery } from '../../stores/useUiStore'
+import { useUiStore } from '../../stores/useUiStore'
+import { SEMANTIC_MAX, useViewStore, type SemanticQuery } from '../../stores/useViewStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { getThumbnailUrl, errorMessage } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
@@ -18,9 +18,9 @@ function semanticTitle(q: SemanticQuery): string {
 
 const Tile: React.FC<{ hit: SemanticHit; index: number }> = ({ hit, index }) => {
   const photo = hit.photo
-  const setInspectedHash = useUiStore((s) => s.setInspectedHash)
+  const setInspectedHash = useViewStore((s) => s.setInspectedHash)
   const setLightboxIndex = useUiStore((s) => s.setLightboxIndex)
-  const inspected = useUiStore((s) => s.inspectedHash === photo.file_hash)
+  const inspected = useViewStore((s) => s.inspectedHash === photo.file_hash)
   const selected = useSelectionStore((s) => s.selectedHashes.has(photo.file_hash))
   const toggleSelect = useSelectionStore((s) => s.toggleSelect)
   return (
@@ -54,8 +54,8 @@ const Tile: React.FC<{ hit: SemanticHit; index: number }> = ({ hit, index }) => 
  */
 export const SemanticResults: React.FC = () => {
   const { semantic, limit, query, hits, photos } = useSemanticPhotos()
-  const setSemantic = useUiStore((s) => s.setSemantic)
-  const showMore = useUiStore((s) => s.showMoreSemantic)
+  const setSemantic = useViewStore((s) => s.setSemantic)
+  const showMore = useViewStore((s) => s.showMoreSemantic)
   const setAiDialogOpen = useUiStore((s) => s.setAiDialogOpen)
 
   const reveal = useCallback((index: number) => {

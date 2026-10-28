@@ -13,7 +13,7 @@ import {
 } from '../api/client'
 import type { AiTag, AnalysisStatus, Job, SemanticSearchRequest } from '../types/metadata'
 import { useUiStore } from '../stores/useUiStore'
-import type { SemanticQuery } from '../stores/useUiStore'
+import { useViewStore, type SemanticQuery } from '../stores/useViewStore'
 import { isDemoMode, photosKey, useSearchRequest } from './usePhotos'
 import { jobsKey } from './useJobs'
 
@@ -103,8 +103,8 @@ export function useAiTagCounts(enabled: boolean) {
 
 /** The photos of the active search by meaning (empty when none), in rank order. */
 export function useSemanticPhotos() {
-  const semantic = useUiStore((s) => s.semantic)
-  const limit = useUiStore((s) => s.semanticLimit)
+  const semantic = useViewStore((s) => s.semantic)
+  const limit = useViewStore((s) => s.semanticLimit)
   const query = useSemanticSearch(semantic, limit)
   const hits = query.data?.items
   const photos = useMemo(() => (semantic ? (hits ?? []).map((h) => h.photo) : []), [semantic, hits])
@@ -131,7 +131,7 @@ export function useResolveAiTag(hash: string) {
     onSuccess: (tags: AiTag[], { action }) => {
       qc.setQueryData([...analysisKey, 'tags', hash], tags)
       void qc.invalidateQueries({ queryKey: [...analysisKey, 'counts'] })
-      if (action === 'accept' || useUiStore.getState().filterAiTag) {
+      if (action === 'accept' || useViewStore.getState().filterAiTag) {
         void qc.invalidateQueries({ queryKey: photosKey })
         void qc.invalidateQueries({ queryKey: ['facets'] })
       }

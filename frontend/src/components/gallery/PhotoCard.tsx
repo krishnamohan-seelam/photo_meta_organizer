@@ -2,6 +2,7 @@ import React from 'react'
 import { Check, FileX, Flag } from 'lucide-react'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
@@ -20,9 +21,9 @@ interface PhotoCardProps {
 // memo + narrow selectors: the grid can hold thousands of tiles, and a tile must re-render
 // only when its own photo, selection state or inspected state changes, never on every store update.
 export const PhotoCard = React.memo(function PhotoCard({ photo, index, width, height, thumbSize }: PhotoCardProps) {
-  const setInspectedHash = useUiStore((s) => s.setInspectedHash)
+  const setInspectedHash = useViewStore((s) => s.setInspectedHash)
   const setLightboxIndex = useUiStore((s) => s.setLightboxIndex)
-  const inspected = useUiStore((s) => s.inspectedHash === photo.file_hash)
+  const inspected = useViewStore((s) => s.inspectedHash === photo.file_hash)
   const selected = useSelectionStore((s) => s.selectedHashes.has(photo.file_hash))
   const toggleSelect = useSelectionStore((s) => s.toggleSelect)
 

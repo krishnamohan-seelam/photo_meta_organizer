@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { ArrowDown, ArrowUp, Check, FileX, Flag, Minus } from 'lucide-react'
 import type { PhotoMetadata, SortField } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { usePhotoSearch } from '../../hooks/usePhotos'
 import { useLibraryHotkeys, type StepKeys } from '../../hooks/useLibraryHotkeys'
@@ -44,7 +45,7 @@ const COLUMNS: { id: string; label: string; className?: string; numeric?: boolea
 ]
 
 const SortHeader: React.FC<{ id: string; label: string; className?: string; numeric?: boolean }> = ({ id, label, className, numeric }) => {
-  const { sortBy, sortOrder, setSort } = useUiStore(useShallow((s) => ({ sortBy: s.sortBy, sortOrder: s.sortOrder, setSort: s.setSort })))
+  const { sortBy, sortOrder, setSort } = useViewStore(useShallow((s) => ({ sortBy: s.sortBy, sortOrder: s.sortOrder, setSort: s.setSort })))
   const sortable = SORTABLE[id]
   const cls = `tcell${numeric ? ' num-cell' : ''}${className ? ` ${className}` : ''}`
   if (!sortable) {
@@ -76,7 +77,7 @@ interface RowProps {
 }
 
 const TableRow = React.memo(function TableRow({ photo, index, start, onActivate }: RowProps) {
-  const inspected = useUiStore((s) => s.inspectedHash === photo.file_hash)
+  const inspected = useViewStore((s) => s.inspectedHash === photo.file_hash)
   const selected = useSelectionStore((s) => s.selectedHashes.has(photo.file_hash))
   const toggleSelect = useSelectionStore((s) => s.toggleSelect)
   const setLightboxIndex = useUiStore((s) => s.setLightboxIndex)
@@ -209,7 +210,7 @@ export const PhotoTable: React.FC = () => {
       } else {
         anchor.current = index
       }
-      useUiStore.getState().setInspectedHash(photo.file_hash)
+      useViewStore.getState().setInspectedHash(photo.file_hash)
     },
     [photos, selectRange]
   )

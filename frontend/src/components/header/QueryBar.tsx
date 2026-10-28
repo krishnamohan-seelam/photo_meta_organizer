@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useFacets } from '../../hooks/useFacets'
 import { useCollections } from '../../hooks/useCollections'
 import { aiSearchReady, useAnalysisStatus } from '../../hooks/useAnalysis'
@@ -96,18 +97,18 @@ export const QueryBar: React.FC = () => {
     if (liveTimer.current) clearTimeout(liveTimer.current)
   }, [])
 
-  const apply = (tokens: Token[]) => useUiStore.getState().applyQueryFilters(tokensToFilters(tokens))
+  const apply = (tokens: Token[]) => useViewStore.getState().applyQueryFilters(tokensToFilters(tokens))
 
   const setLive = (text: string) => {
     if (liveTimer.current) clearTimeout(liveTimer.current)
     liveTimer.current = setTimeout(() => {
       liveTimer.current = null
-      useUiStore.getState().setSearchQuery(text)
+      useViewStore.getState().setSearchQuery(text)
     }, LIVE_DELAY_MS)
   }
 
   const onDraftChange = (next: string) => {
-    if (baseText.current === null) baseText.current = useUiStore.getState().searchQuery
+    if (baseText.current === null) baseText.current = useViewStore.getState().searchQuery
     setDraft(next)
     setOpen(true)
     setActive(0)
@@ -125,7 +126,7 @@ export const QueryBar: React.FC = () => {
     const bad = parsed.filter((t) => t.kind === 'invalid')
     // A committed plain draft is already the live search text; re-applying it is harmless.
     if (valid.length > 0) apply([...storeTokens.filter((t) => !(liveDraft && t.kind === 'text')), ...valid])
-    else if (liveDraft) useUiStore.getState().setSearchQuery(draft.trim())
+    else if (liveDraft) useViewStore.getState().setSearchQuery(draft.trim())
     if (bad.length > 0) setInvalid((current) => [...current, ...bad])
     baseText.current = null
     setDraft('')
@@ -186,12 +187,12 @@ export const QueryBar: React.FC = () => {
 
   const choose = (s: Suggestion) => {
     if (s.meaning !== undefined) {
-      if (aiReady) useUiStore.getState().setSemantic({ kind: 'text', text: s.meaning })
+      if (aiReady) useViewStore.getState().setSemantic({ kind: 'text', text: s.meaning })
       else useUiStore.getState().setAiDialogOpen(true)
       if (liveTimer.current) clearTimeout(liveTimer.current)
       liveTimer.current = null
       // The words were being applied live as a text filter; a search by meaning replaces that.
-      useUiStore.getState().setSearchQuery(baseText.current ?? '')
+      useViewStore.getState().setSearchQuery(baseText.current ?? '')
       baseText.current = null
       setDraft('')
       setOpen(false)

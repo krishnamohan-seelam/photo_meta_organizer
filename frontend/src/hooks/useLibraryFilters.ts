@@ -1,11 +1,11 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useUiStore } from '../stores/useUiStore'
+import { useViewStore } from '../stores/useViewStore'
 import type { FilterChip } from '../utils/filterChips'
 import type { LibraryFilters } from '../utils/search'
 
 /** The filter and sort state as one object (stable while it does not change). */
 export function useLibraryFilters(): LibraryFilters {
-  return useUiStore(
+  return useViewStore(
     useShallow((s) => ({
       searchQuery: s.searchQuery,
       filterCameras: s.filterCameras,
@@ -28,7 +28,7 @@ export function useLibraryFilters(): LibraryFilters {
 
 /** Remove the filter a chip stands for. */
 export function removeFilterChip(chip: FilterChip): void {
-  const s = useUiStore.getState()
+  const s = useViewStore.getState()
   switch (chip.kind) {
     case 'search':
       return s.setSearchQuery('')
@@ -43,13 +43,13 @@ export function removeFilterChip(chip: FilterChip): void {
     case 'year':
       return s.setTimeframeFilter('all')
     case 'model':
-      return useUiStore.setState({ filterModel: '' })
+      return useViewStore.setState({ filterModel: '' })
     case 'geo':
-      return useUiStore.setState({ filterHasLocation: null })
+      return useViewStore.setState({ filterHasLocation: null })
     case 'dupes':
-      return useUiStore.setState({ filterDuplicates: null })
+      return useViewStore.setState({ filterDuplicates: null })
     case 'near':
-      return useUiStore.setState({ filterNear: null })
+      return useViewStore.setState({ filterNear: null })
     case 'area':
       return s.setFilterArea(null)
     case 'aitag':

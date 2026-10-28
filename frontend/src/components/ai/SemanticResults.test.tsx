@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
-import { SEMANTIC_MAX, SEMANTIC_PAGE, useUiStore } from '../../stores/useUiStore'
+import { useUiStore } from '../../stores/useUiStore'
+import { SEMANTIC_MAX, SEMANTIC_PAGE, useViewStore } from '../../stores/useViewStore'
 import { makePhoto } from '../../test/photos'
 import { renderWithQuery, testQueryClient } from '../../test/render'
 import { SemanticResults } from './SemanticResults'
@@ -16,7 +17,7 @@ function hits(n: number) {
 
 /** Seed the cache under the key the component will ask for (no filters, the store's limit). */
 function render(n: number, limit = SEMANTIC_PAGE) {
-  useUiStore.setState({ semantic: { kind: 'text', text: 'beach' }, semanticLimit: limit })
+  useViewStore.setState({ semantic: { kind: 'text', text: 'beach' }, semanticLimit: limit })
   const qc = testQueryClient()
   qc.setQueryData(
     ['analysis', 'semantic', { sort_by: 'captured_at', sort_order: 'desc', text: 'beach', k: limit }],
@@ -48,7 +49,7 @@ describe('SemanticResults', () => {
     unmount()
     render(SEMANTIC_PAGE)
     fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
-    expect(useUiStore.getState().semanticLimit).toBe(SEMANTIC_PAGE * 2)
+    expect(useViewStore.getState().semanticLimit).toBe(SEMANTIC_PAGE * 2)
   })
 
   it('stops offering more at the API cap', () => {
@@ -58,10 +59,10 @@ describe('SemanticResults', () => {
 
   it('Clear returns to the library and a new query starts from one page again', () => {
     render(SEMANTIC_PAGE)
-    useUiStore.getState().showMoreSemantic()
-    useUiStore.getState().setSemantic({ kind: 'text', text: 'dog' })
-    expect(useUiStore.getState().semanticLimit).toBe(SEMANTIC_PAGE)
-    useUiStore.getState().setSemantic(null)
-    expect(useUiStore.getState().semantic).toBeNull()
+    useViewStore.getState().showMoreSemantic()
+    useViewStore.getState().setSemantic({ kind: 'text', text: 'dog' })
+    expect(useViewStore.getState().semanticLimit).toBe(SEMANTIC_PAGE)
+    useViewStore.getState().setSemantic(null)
+    expect(useViewStore.getState().semantic).toBeNull()
   })
 })

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import type { PaginatedPhotosResponse, PhotoMetadata } from '../types/metadata'
 import { useUiStore } from '../stores/useUiStore'
+import { useViewStore } from '../stores/useViewStore'
 import { useSelectionStore } from '../stores/useSelectionStore'
 import { makePhoto } from '../test/photos'
 import { renderWithQuery, testQueryClient } from '../test/render'
@@ -24,7 +25,8 @@ function setup(reveal?: (i: number) => void) {
 }
 
 beforeEach(() => {
-  useUiStore.setState({ inspectedHash: photos[0].file_hash, lightboxIndex: null })
+  useUiStore.setState({ lightboxIndex: null })
+  useViewStore.setState({ inspectedHash: photos[0].file_hash })
   useSelectionStore.getState().clearSelection()
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -34,11 +36,11 @@ describe('Library culling hotkeys (FR-1f.1)', () => {
     const reveal = vi.fn()
     setup(reveal)
     fireEvent.keyDown(document.body, { key: 'ArrowRight' })
-    expect(useUiStore.getState().inspectedHash).toBe(photos[1].file_hash)
+    expect(useViewStore.getState().inspectedHash).toBe(photos[1].file_hash)
     expect(reveal).toHaveBeenLastCalledWith(1)
     fireEvent.keyDown(document.body, { key: 'ArrowLeft' })
     fireEvent.keyDown(document.body, { key: 'ArrowLeft' })
-    expect(useUiStore.getState().inspectedHash).toBe(photos[0].file_hash)
+    expect(useViewStore.getState().inspectedHash).toBe(photos[0].file_hash)
   })
 
   it('1-5 rate the inspected photo (optimistically)', async () => {
@@ -62,7 +64,7 @@ describe('Library culling hotkeys (FR-1f.1)', () => {
     const input = screen.getByRole('textbox', { name: 'typing here' })
     input.focus()
     for (const key of ['ArrowRight', '4', 'x', 'p', 'Enter']) fireEvent.keyDown(input, { key })
-    expect(useUiStore.getState().inspectedHash).toBe(photos[0].file_hash)
+    expect(useViewStore.getState().inspectedHash).toBe(photos[0].file_hash)
     expect(useSelectionStore.getState().selectedHashes.size).toBe(0)
     expect(useUiStore.getState().lightboxIndex).toBeNull()
     expect(rating(0)).toBeNull()
@@ -76,7 +78,7 @@ describe('Library culling hotkeys (FR-1f.1)', () => {
     fireEvent.keyDown(document.body, { key: 'ArrowRight' })
     fireEvent.keyDown(document.body, { key: 'x' })
     dialog.remove()
-    expect(useUiStore.getState().inspectedHash).toBe(photos[0].file_hash)
+    expect(useViewStore.getState().inspectedHash).toBe(photos[0].file_hash)
     expect(useSelectionStore.getState().selectedHashes.size).toBe(0)
   })
 })

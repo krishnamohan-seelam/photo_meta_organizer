@@ -8,6 +8,7 @@ import { useEventStream } from './hooks/useEventStream'
 import { useRecheckRootsOnFocus } from './hooks/useRoots'
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys'
 import { useUiStore } from './stores/useUiStore'
+import { useViewStore } from './stores/useViewStore'
 import { NavRail } from './components/shell/NavRail'
 import { TopBar } from './components/header/TopBar'
 import { CommandPalette } from './components/header/CommandPalette'
@@ -35,7 +36,8 @@ import { AlertCircle, CheckCircle2, EyeOff } from 'lucide-react'
 const MapExplorerView = lazy(() => import('./components/maps/MapExplorerView').then((m) => ({ default: m.MapExplorerView })))
 
 export const App: React.FC = () => {
-  const { theme, activeView, lightsOut, inspectedHash, setInspectedHash, toastMessage, toastKind, toastAction } = useUiStore(useShallow((s) => ({ theme: s.theme, activeView: s.activeView, lightsOut: s.lightsOut, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash, toastMessage: s.toastMessage, toastKind: s.toastKind, toastAction: s.toastAction })))
+  const { activeView, inspectedHash, setInspectedHash } = useViewStore(useShallow((s) => ({ activeView: s.activeView, inspectedHash: s.inspectedHash, setInspectedHash: s.setInspectedHash })))
+  const { theme, lightsOut, toastMessage, toastKind, toastAction } = useUiStore(useShallow((s) => ({ theme: s.theme, lightsOut: s.lightsOut, toastMessage: s.toastMessage, toastKind: s.toastKind, toastAction: s.toastAction })))
 
   // The server filters, sorts and pages the library (PMO-27); views read the loaded pages from one cache entry.
   const { data, photos, isPending, isError, error, refetch, isFetching } = usePhotoSearch()

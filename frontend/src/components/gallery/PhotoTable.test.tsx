@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import type { PaginatedPhotosResponse, PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { toSearchRequest } from '../../utils/search'
 import { makePhoto } from '../../test/photos'
@@ -20,7 +21,7 @@ function photosOf(n: number): PhotoMetadata[] {
 
 function seed(ui: React.ReactElement, photos: PhotoMetadata[]) {
   const qc = testQueryClient()
-  const request = toSearchRequest({ ...useUiStore.getState() })
+  const request = toSearchRequest({ ...useViewStore.getState() })
   const page: PaginatedPhotosResponse = { items: photos, total_count: photos.length, page: 1, page_size: photos.length, total_pages: 1 }
   qc.setQueryData(['photos', 'search', request], { pages: [page], pageParams: [1] })
   return renderWithQuery(ui, qc)
@@ -42,7 +43,8 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, top: 0, left: 0, width: 1200, height: 800, right: 1200, bottom: 800, toJSON: () => ({}) })
 })
 beforeEach(() => {
-  useUiStore.setState({ ...initial, sortBy: 'captured_at', sortOrder: 'desc', topPhotoIndex: 0 })
+  useUiStore.setState({ ...initial, topPhotoIndex: 0 })
+  useViewStore.setState({ sortBy: 'captured_at', sortOrder: 'desc' })
   useSelectionStore.getState().clearSelection()
 })
 afterEach(() => {
@@ -54,11 +56,11 @@ describe('PhotoTable sorting (FR-2c.3, AC-2c.1)', () => {
   it('a sortable header sorts in its natural order first, then reverses', () => {
     seed(<PhotoTable />, photosOf(3))
     fireEvent.click(screen.getByRole('button', { name: 'Name' }))
-    expect(useUiStore.getState()).toMatchObject({ sortBy: 'file_name', sortOrder: 'asc' })
+    expect(useViewStore.getState()).toMatchObject({ sortBy: 'file_name', sortOrder: 'asc' })
     fireEvent.click(screen.getByRole('button', { name: 'Name' }))
-    expect(useUiStore.getState()).toMatchObject({ sortBy: 'file_name', sortOrder: 'desc' })
+    expect(useViewStore.getState()).toMatchObject({ sortBy: 'file_name', sortOrder: 'desc' })
     fireEvent.click(screen.getByRole('button', { name: 'Size' }))
-    expect(useUiStore.getState()).toMatchObject({ sortBy: 'size_bytes', sortOrder: 'desc' })
+    expect(useViewStore.getState()).toMatchObject({ sortBy: 'size_bytes', sortOrder: 'desc' })
   })
 
   it('the current sort column shows aria-sort', () => {
@@ -84,7 +86,7 @@ describe('PhotoTable selection (FR-2c.5, AC-2c.2)', () => {
     fireEvent.click(rows[1])
     fireEvent.click(rows[4], { shiftKey: true })
     expect([...useSelectionStore.getState().selectedHashes].sort()).toEqual(photos.slice(1, 5).map((p) => p.file_hash).sort())
-    expect(useUiStore.getState().inspectedHash).toBe(photos[4].file_hash)
+    expect(useViewStore.getState().inspectedHash).toBe(photos[4].file_hash)
   })
 
   it('Ctrl-click toggles one row', () => {

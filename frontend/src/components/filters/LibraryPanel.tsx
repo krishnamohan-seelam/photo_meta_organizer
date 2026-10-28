@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Camera, Copy, Flag, Folder, Images, Plus, Sparkles, Star } from 'lucide-react'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { useFacets } from '../../hooks/useFacets'
 import { aiSearchReady, useAiTagCounts, useAnalysisStatus } from '../../hooks/useAnalysis'
@@ -52,9 +53,11 @@ const Section: React.FC<{ title: string; onClear?: () => void; action?: React.Re
 
 /** Flat filter panel (FR-1d.1): Library, Rating, Collections, Cameras and Tags, with whole-library counts. */
 export const LibraryPanel: React.FC = () => {
-  const s = useUiStore(
+  const ui = useUiStore(
+    useShallow((st) => ({ sidebarOpen: st.sidebarOpen, setDuplicatesDialogOpen: st.setDuplicatesDialogOpen }))
+  )
+  const route = useViewStore(
     useShallow((st) => ({
-      sidebarOpen: st.sidebarOpen,
       filterCameras: st.filterCameras,
       toggleCameraFilter: st.toggleCameraFilter,
       filterTags: st.filterTags,
@@ -65,10 +68,10 @@ export const LibraryPanel: React.FC = () => {
       setRatingFilter: st.setRatingFilter,
       filterAiTag: st.filterAiTag,
       filterDuplicates: st.filterDuplicates,
-      setDuplicatesDialogOpen: st.setDuplicatesDialogOpen,
       setAiTagFilter: st.setAiTagFilter,
     }))
   )
+  const s = { ...ui, ...route }
   const selectionCount = useSelectionStore((st) => st.selectedHashes.size)
   const { cameras, tags, stats } = useFacets()
   const collections = useCollections()
@@ -97,7 +100,7 @@ export const LibraryPanel: React.FC = () => {
               label="Duplicates"
               count={stats.duplicate_count}
               pressed={s.filterDuplicates === true}
-              onClick={() => useUiStore.setState({ filterDuplicates: s.filterDuplicates === true ? null : true })}
+              onClick={() => useViewStore.setState({ filterDuplicates: s.filterDuplicates === true ? null : true })}
             />
             <button type="button" className="btn-reset link-btn lib-review" onClick={() => s.setDuplicatesDialogOpen(true)}>
               Review and see {formatBytes(stats.reclaimable_bytes)} of extra copies…
@@ -147,7 +150,7 @@ export const LibraryPanel: React.FC = () => {
         ))}
       </Section>
 
-      <Section title="Cameras" onClear={s.filterCameras.length > 0 ? () => useUiStore.setState({ filterCameras: [] }) : undefined}>
+      <Section title="Cameras" onClear={s.filterCameras.length > 0 ? () => useViewStore.setState({ filterCameras: [] }) : undefined}>
         {camerasByCount.length === 0 && <div className="lib-empty">No camera data</div>}
         {camerasByCount.map((c) => (
           <PanelRow
@@ -162,7 +165,7 @@ export const LibraryPanel: React.FC = () => {
         ))}
       </Section>
 
-      <Section title="Tags" onClear={s.filterTags.length > 0 ? () => useUiStore.setState({ filterTags: [] }) : undefined}>
+      <Section title="Tags" onClear={s.filterTags.length > 0 ? () => useViewStore.setState({ filterTags: [] }) : undefined}>
         {tags.length === 0 ? (
           <div className="lib-empty">No tags yet</div>
         ) : (

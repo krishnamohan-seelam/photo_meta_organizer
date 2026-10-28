@@ -4,6 +4,7 @@ import { Crosshair, Images, MapPin } from 'lucide-react'
 import { useFacets } from '../../hooks/useFacets'
 import { useAppConfig, useGeoClusters, useMapFilterRequest } from '../../hooks/useGeoClusters'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import type { GeoCluster } from '../../types/metadata'
 import { normalizeBounds, padBounds } from '../../utils/geo'
 import { LeafletMap, type FitRequest, type MapView } from './LeafletMap'
@@ -17,15 +18,15 @@ const NO_CLUSTERS: GeoCluster[] = []
  * and filtered like the Library. The Library's own filters apply; the map has its own area.
  */
 export const MapExplorerView: React.FC = () => {
-  const { theme, inspectorOpen, toggleInspector, setInspectedHash, setActiveView, setFilterArea, showToast } =
+  const { setInspectedHash, setActiveView, setFilterArea } = useViewStore(
+    useShallow((s) => ({ setInspectedHash: s.setInspectedHash, setActiveView: s.setActiveView, setFilterArea: s.setFilterArea }))
+  )
+  const { theme, inspectorOpen, toggleInspector, showToast } =
     useUiStore(
       useShallow((s) => ({
         theme: s.theme,
         inspectorOpen: s.inspectorOpen,
         toggleInspector: s.toggleInspector,
-        setInspectedHash: s.setInspectedHash,
-        setActiveView: s.setActiveView,
-        setFilterArea: s.setFilterArea,
         showToast: s.showToast,
       }))
     )

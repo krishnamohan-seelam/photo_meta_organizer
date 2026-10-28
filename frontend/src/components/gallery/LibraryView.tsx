@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { CheckSquare, ImageIcon, LayoutGrid, Table2, X } from 'lucide-react'
 import type { SortField } from '../../types/metadata'
 import { ROW_HEIGHT_MAX, ROW_HEIGHT_MIN, useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { usePhotoSearch } from '../../hooks/usePhotos'
 import { useFacets } from '../../hooks/useFacets'
 import { removeFilterChip, useLibraryFilters } from '../../hooks/useLibraryFilters'
@@ -23,13 +24,11 @@ const SORTS: { value: string; label: string; field: SortField; order: 'asc' | 'd
 
 /** Title, counts, active-filter chips, sort, layout and size (FR-1c.9, FR-2c.1). */
 const GalleryToolbar: React.FC = () => {
-  const { gridItemSize, setGridItemSize, sortBy, sortOrder, setSort, libraryLayout, setLibraryLayout } = useUiStore(
+  const { sortBy, sortOrder, setSort } = useViewStore(useShallow((s) => ({ sortBy: s.sortBy, sortOrder: s.sortOrder, setSort: s.setSort })))
+  const { gridItemSize, setGridItemSize, libraryLayout, setLibraryLayout } = useUiStore(
     useShallow((s) => ({
       gridItemSize: s.gridItemSize,
       setGridItemSize: s.setGridItemSize,
-      sortBy: s.sortBy,
-      sortOrder: s.sortOrder,
-      setSort: s.setSort,
       libraryLayout: s.libraryLayout,
       setLibraryLayout: s.setLibraryLayout,
     }))
@@ -99,7 +98,7 @@ const GalleryToolbar: React.FC = () => {
 /** The Library view: one toolbar over the grid or the table (FR-2c.1). Filters, selection and the inspected photo are shared. */
 export const LibraryView: React.FC = () => {
   const layout = useUiStore((s) => s.libraryLayout)
-  const semantic = useUiStore((s) => s.semantic)
+  const semantic = useViewStore((s) => s.semantic)
   return (
     <main className="gallery-pane" aria-label="Library">
       <GalleryToolbar />

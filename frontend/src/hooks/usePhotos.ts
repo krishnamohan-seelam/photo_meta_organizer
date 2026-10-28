@@ -2,9 +2,9 @@ import { useMemo } from 'react'
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 import type { PaginatedPhotosResponse, PhotoMetadata, SearchRequest } from '../types/metadata'
-import { getPhotoByHash, searchPhotosApi } from '../api/client'
+import { ApiError, getPhotoByHash, searchPhotosApi } from '../api/client'
 import { demoSearch, findDemoPhoto } from '../demo/demoLibrary'
-import { useUiStore } from '../stores/useUiStore'
+import { useViewStore } from '../stores/useViewStore'
 import { toSearchRequest } from '../utils/search'
 import { useLibraryFilters } from './useLibraryFilters'
 
@@ -88,20 +88,28 @@ export function findCachedPhotos(qc: QueryClient, hashes: Iterable<string>): Map
   return found
 }
 
+/** The inspected photo, and whether its hash names a photo the library no longer has (a stale `photo=` link). */
+export interface InspectedPhoto {
+  photo: PhotoMetadata | undefined
+  missing: boolean
+}
+
+const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404
+
 /**
  * The photo shown in the inspector. Served from whatever query already holds it (edits patch
  * every copy), fetched by hash when the current results do not include it.
  */
-export function useInspectedPhoto(): PhotoMetadata | undefined {
-  const hash = useUiStore((s) => s.inspectedHash)
+export function useInspectedPhoto(): InspectedPhoto {
+  const hash = useViewStore((s) => s.inspectedHash)
   const qc = useQueryClient()
-  return useQuery({
+  const query = useQuery({
     queryKey: [...photosKey, 'one', hash],
     queryFn: async () => {
       if (!hash) throw new Error('no photo')
       if (isDemoMode()) {
         const photo = findDemoPhoto(hash)
-        if (!photo) throw new Error('Photo not found')
+        if (!photo) throw new ApiError('Photo not found', 404)
         return photo
       }
       return getPhotoByHash(hash)
@@ -109,5 +117,7 @@ export function useInspectedPhoto(): PhotoMetadata | undefined {
     enabled: hash !== null,
     initialData: () => (hash ? findCachedPhotos(qc, [hash]).get(hash) : undefined),
     staleTime: Infinity,
-  }).data
+    retry: (count, error) => !isNotFound(error) && count < 1,
+  })
+  return { photo: query.data, missing: hash !== null && isNotFound(query.error) }
 }

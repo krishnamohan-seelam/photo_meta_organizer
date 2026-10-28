@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
 import type { PaginatedPhotosResponse, PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { toSearchRequest } from '../../utils/search'
 import { makePhoto } from '../../test/photos'
 import { renderWithQuery, testQueryClient } from '../../test/render'
@@ -24,14 +25,17 @@ const photos = [
 
 function renderTimeline() {
   const qc = testQueryClient()
-  const request = toSearchRequest({ ...useUiStore.getState() })
+  const request = toSearchRequest({ ...useViewStore.getState() })
   const page: PaginatedPhotosResponse = { items: photos, total_count: photos.length, page: 1, page_size: 200, total_pages: 1 }
   qc.setQueryData(['photos', 'search', request], { pages: [page], pageParams: [1] })
   qc.setQueryData(['facets'], { cameras: [], tags: [], years: [{ name: '2026', count: 4 }], isos: [], gps_bounds: null, stats: { total_count: 4, flagged_count: 0, geotagged_count: 0, undated_count: 0, total_bytes: 0, avg_megapixels: 0 } })
   return renderWithQuery(<TimelineView />, qc)
 }
 
-beforeEach(() => useUiStore.setState({ ...initial, sortBy: 'captured_at', sortOrder: 'desc', chapterGapHours: 36 }))
+beforeEach(() => {
+  useUiStore.setState({ ...initial, chapterGapHours: 36 })
+  useViewStore.setState({ sortBy: 'captured_at', sortOrder: 'desc' })
+})
 afterEach(() => vi.unstubAllGlobals())
 
 describe('TimelineView chapters (FR-3)', () => {
@@ -62,14 +66,14 @@ describe('TimelineView chapters (FR-3)', () => {
 
 describe('sort dependency (FR-3.8, AC-3.4)', () => {
   it('another sort shows the notice and a flat mosaic, and never re-sorts on its own', () => {
-    useUiStore.setState({ sortBy: 'file_name', sortOrder: 'asc' })
+    useViewStore.setState({ sortBy: 'file_name', sortOrder: 'asc' })
     renderTimeline()
     expect(screen.getByRole('status').textContent).toContain('Chapters follow capture date.')
     expect(screen.queryAllByRole('heading')).toHaveLength(0)
     expect(document.querySelectorAll('.mtile')).toHaveLength(4)
-    expect(useUiStore.getState().sortBy).toBe('file_name')
+    expect(useViewStore.getState().sortBy).toBe('file_name')
 
     fireEvent.click(screen.getByRole('button', { name: 'Sort by date' }))
-    expect(useUiStore.getState()).toMatchObject({ sortBy: 'captured_at', sortOrder: 'desc' })
+    expect(useViewStore.getState()).toMatchObject({ sortBy: 'captured_at', sortOrder: 'desc' })
   })
 })

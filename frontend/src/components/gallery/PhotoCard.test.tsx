@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { makePhoto } from '../../test/photos'
 import { PhotoCard } from './PhotoCard'
@@ -14,7 +15,8 @@ const photo = makePhoto({
 })
 
 beforeEach(() => {
-  useUiStore.setState({ inspectedHash: null, lightboxIndex: null })
+  useUiStore.setState({ lightboxIndex: null })
+  useViewStore.setState({ inspectedHash: null })
   useSelectionStore.getState().clearSelection()
 })
 
@@ -32,7 +34,7 @@ describe('PhotoCard tile (FR-1c.6–1c.8)', () => {
     renderCard()
     const tile = screen.getByRole('button', { name: /Tokyo Tower Sunset/ })
     fireEvent.click(tile)
-    expect(useUiStore.getState().inspectedHash).toBe(HASH)
+    expect(useViewStore.getState().inspectedHash).toBe(HASH)
     expect(tile.getAttribute('aria-current')).toBe('true')
   })
 
@@ -51,7 +53,7 @@ describe('PhotoCard tile (FR-1c.6–1c.8)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Tokyo Tower Sunset/ }), { ctrlKey: true })
     expect(useSelectionStore.getState().selectedHashes.has(HASH)).toBe(false)
-    expect(useUiStore.getState().inspectedHash).toBeNull()
+    expect(useViewStore.getState().inspectedHash).toBeNull()
   })
 
   it('keeps the aspect-ratio size it is given', () => {

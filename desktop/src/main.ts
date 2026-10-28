@@ -216,6 +216,33 @@ function killBackend() {
 }
 
 /**
+ * The window reopens where the user left off (ADR-003 R8): the page keeps its view, filters and
+ * inspected photo in the query string, so only that is kept. The port changes per launch.
+ */
+const LAST_VIEW_FILE = 'last-view.json';
+
+function lastViewPath(): string {
+  return path.join(app.getPath('userData'), LAST_VIEW_FILE);
+}
+
+function loadLastSearch(): string {
+  try {
+    const { search } = JSON.parse(fs.readFileSync(lastViewPath(), 'utf-8'));
+    return typeof search === 'string' && search.startsWith('?') && search.length < 4096 ? search : '';
+  } catch {
+    return '';
+  }
+}
+
+function saveLastSearch(url: string): void {
+  try {
+    fs.writeFileSync(lastViewPath(), JSON.stringify({ search: new URL(url).search }));
+  } catch (err) {
+    console.warn('[Desktop Main] Could not remember the last view:', err);
+  }
+}
+
+/**
  * Create the main desktop window.
  */
 async function createWindow() {
@@ -238,6 +265,10 @@ async function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // The page writes its state to the URL with pushState/replaceState.
+  mainWindow.webContents.on('did-navigate-in-page', (_event, url) => saveLastSearch(url));
+  const lastSearch = loadLastSearch();
 
   // Forward renderer console logs to terminal
   mainWindow.webContents.on('console-message', (_event, _level, message, line, sourceId) => {
@@ -275,10 +306,10 @@ async function createWindow() {
     checkVite().then((isVite) => {
       if (isVite) {
         console.log(`[Desktop Main] Loading Vite dev server at ${devUrl}`);
-        mainWindow?.loadURL(devUrl);
+        mainWindow?.loadURL(`${devUrl}/${lastSearch}`);
       } else {
         console.log(`[Desktop Main] Vite dev server not detected; loading backend server at http://127.0.0.1:${backendPort}/`);
-        mainWindow?.loadURL(`http://127.0.0.1:${backendPort}/`);
+        mainWindow?.loadURL(`http://127.0.0.1:${backendPort}/${lastSearch}`);
       }
     });
   } else {
@@ -294,7 +325,7 @@ async function createWindow() {
         path: '/',
       });
     }
-    mainWindow.loadURL(`${backendUrl}/`);
+    mainWindow.loadURL(`${backendUrl}/${lastSearch}`);
   }
 }
 

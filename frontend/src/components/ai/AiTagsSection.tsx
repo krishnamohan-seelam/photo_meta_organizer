@@ -1,7 +1,7 @@
 import React from 'react'
 import { Check, Sparkles, X } from 'lucide-react'
 import { useAnalysisStatus, usePhotoAiTags, useResolveAiTag, useSemanticSearch } from '../../hooks/useAnalysis'
-import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
 import { formatScore } from '../../utils/analysis'
@@ -17,9 +17,9 @@ export const AiTagsSection: React.FC<{ hash: string; name: string }> = ({ hash, 
   const enabled = Boolean(status?.runtime_installed && status.model_installed && status.analyzed_photos > 0)
   const { data: tags = [] } = usePhotoAiTags(hash, enabled)
   const resolve = useResolveAiTag(hash)
-  const setSemantic = useUiStore((s) => s.setSemantic)
-  const setActiveView = useUiStore((s) => s.setActiveView)
-  const setInspectedHash = useUiStore((s) => s.setInspectedHash)
+  const setSemantic = useViewStore((s) => s.setSemantic)
+  const setActiveView = useViewStore((s) => s.setActiveView)
+  const setInspectedHash = useViewStore((s) => s.setInspectedHash)
   const similar = useSemanticSearch(enabled ? { kind: 'like', hash, name } : null, SIMILAR_SHOWN + 1, false)
 
   const open = tags.filter((t) => t.status === 'suggested')

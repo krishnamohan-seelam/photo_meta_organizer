@@ -20,7 +20,8 @@ import {
   Tag,
   Trash2,
 } from 'lucide-react'
-import { useUiStore, type ViewMode } from '../../stores/useUiStore'
+import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore, type ViewMode } from '../../stores/useViewStore'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useExport } from '../../hooks/useExport'
 import { useFacets } from '../../hooks/useFacets'
@@ -61,13 +62,13 @@ export const CommandPalette: React.FC = () => {
 }
 
 const Palette: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { toggleTheme, toggleLightsOut, setActiveView, toggleCameraFilter, toggleTagFilter, setJobDialog, setShortcutsOpen, setAiDialogOpen, setFoldersDialogOpen, setDuplicatesDialogOpen, setReviewDialogOpen, setRemovedDialogOpen } = useUiStore(
+  const { setActiveView, toggleCameraFilter, toggleTagFilter } = useViewStore(
+    useShallow((s) => ({ setActiveView: s.setActiveView, toggleCameraFilter: s.toggleCameraFilter, toggleTagFilter: s.toggleTagFilter }))
+  )
+  const { toggleTheme, toggleLightsOut, setJobDialog, setShortcutsOpen, setAiDialogOpen, setFoldersDialogOpen, setDuplicatesDialogOpen, setReviewDialogOpen, setRemovedDialogOpen } = useUiStore(
     useShallow((s) => ({
       toggleTheme: s.toggleTheme,
       toggleLightsOut: s.toggleLightsOut,
-      setActiveView: s.setActiveView,
-      toggleCameraFilter: s.toggleCameraFilter,
-      toggleTagFilter: s.toggleTagFilter,
       setJobDialog: s.setJobDialog,
       setShortcutsOpen: s.setShortcutsOpen,
       setAiDialogOpen: s.setAiDialogOpen,

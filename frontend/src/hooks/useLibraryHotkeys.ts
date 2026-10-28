@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { PhotoMetadata } from '../types/metadata'
 import { useUiStore } from '../stores/useUiStore'
+import { useViewStore } from '../stores/useViewStore'
 import { useSelectionStore } from '../stores/useSelectionStore'
 import { shouldIgnoreHotkey } from '../utils/hotkeys'
 import { dialogOpen } from '../utils/shortcuts'
@@ -53,7 +54,7 @@ export function useLibraryHotkeys({ photos, reveal, loadMore, stepKeys = GRID_ST
       if (shouldIgnoreHotkey(e) || dialogOpen()) return
 
       const { photos, reveal, loadMore, stepKeys, spaceSelects, onShiftStep, patchPhoto } = latest.current
-      const ui = useUiStore.getState()
+      const ui = { ...useUiStore.getState(), ...useViewStore.getState() }
       const selection = useSelectionStore.getState()
       const index = photos.findIndex((p) => p.file_hash === ui.inspectedHash)
       const current = index >= 0 ? photos[index] : undefined

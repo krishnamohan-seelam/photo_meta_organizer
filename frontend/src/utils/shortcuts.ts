@@ -1,4 +1,4 @@
-import type { ViewMode } from '../stores/useUiStore'
+import type { ViewMode } from '../utils/urlState'
 
 /** Single-key view shortcuts (FR-1b.3). */
 export const VIEW_KEYS: Record<string, ViewMode> = {

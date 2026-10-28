@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { Facets, GeoClustersResponse } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { renderWithQuery } from '../../test/render'
 import { MapExplorerView } from './MapExplorerView'
 import type { LeafletMap } from './LeafletMap'
@@ -78,7 +79,7 @@ describe('MapExplorerView', () => {
   })
 
   it('applies the library filters but not the library map area', async () => {
-    useUiStore.setState({ filterCameras: ['Sony'], filterArea: { south: 0, west: 0, north: 1, east: 1 } })
+    useViewStore.setState({ filterCameras: ['Sony'], filterArea: { south: 0, west: 0, north: 1, east: 1 } })
     await showMap()
     const request = api.fetchGeoClustersApi.mock.calls.at(-1)![0]
     expect(request.camera_makes).toEqual(['Sony'])
@@ -86,10 +87,10 @@ describe('MapExplorerView', () => {
   })
 
   it('"Show these in Library" narrows the Library to the visible area and opens it', async () => {
-    useUiStore.setState({ activeView: 'map' })
+    useViewStore.setState({ activeView: 'map' })
     await showMap()
     fireEvent.click(screen.getByRole('button', { name: /show these in library/i }))
-    const state = useUiStore.getState()
+    const state = useViewStore.getState()
     expect(state.filterArea).toEqual(VIEW.bbox)
     expect(state.activeView).toBe('studio')
   })
@@ -114,7 +115,7 @@ describe('MapExplorerView', () => {
     useUiStore.setState({ inspectorOpen: false })
     await showMap()
     act(() => mapProps.onOpenPhoto('h2'))
-    expect(useUiStore.getState().inspectedHash).toBe('h2')
+    expect(useViewStore.getState().inspectedHash).toBe('h2')
     expect(useUiStore.getState().inspectorOpen).toBe(true)
   })
 

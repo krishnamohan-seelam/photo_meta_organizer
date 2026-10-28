@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useUiStore } from '../stores/useUiStore'
+import { useViewStore } from '../stores/useViewStore'
 import { shouldIgnoreHotkey } from '../utils/hotkeys'
 import { VIEW_KEYS, dialogOpen } from '../utils/shortcuts'
 
@@ -15,17 +16,18 @@ export function useGlobalHotkeys(): void {
     const onKeyDown = (e: KeyboardEvent) => {
       if (shouldIgnoreHotkey(e) || dialogOpen()) return
       const state = useUiStore.getState()
+      const route = useViewStore.getState()
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
       const view = VIEW_KEYS[key]
       if (view) {
-        state.setActiveView(view)
+        route.setActiveView(view)
       } else if (key === 'l') {
         state.toggleLightsOut()
-      } else if (key === '\\' && state.activeView === 'studio') {
+      } else if (key === '\\' && route.activeView === 'studio') {
         state.toggleSidebar()
-      } else if (key === 'i' && state.activeView === 'studio') {
+      } else if (key === 'i' && route.activeView === 'studio') {
         state.toggleInspector()
-      } else if (key === 'v' && state.activeView === 'studio') {
+      } else if (key === 'v' && route.activeView === 'studio') {
         state.setLibraryLayout(state.libraryLayout === 'grid' ? 'table' : 'grid')
       } else if (key === '?') {
         state.setShortcutsOpen(true)

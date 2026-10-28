@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { Check, Flag, ListChecks, MapPin } from 'lucide-react'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useSelectionStore } from '../../stores/useSelectionStore'
 import { getThumbnailUrl } from '../../api/client'
 import { swapToPlaceholder } from '../../utils/placeholder'
@@ -33,7 +34,7 @@ interface TileProps {
 
 /** A mosaic tile: same states and actions as a Library tile (FR-3.5), cropped on purpose. */
 const TimelineTile = React.memo(function TimelineTile({ photo, index, hero }: TileProps) {
-  const setInspectedHash = useUiStore((s) => s.setInspectedHash)
+  const setInspectedHash = useViewStore((s) => s.setInspectedHash)
   const setLightboxIndex = useUiStore((s) => s.setLightboxIndex)
   const selected = useSelectionStore((s) => s.selectedHashes.has(photo.file_hash))
   const toggleSelect = useSelectionStore((s) => s.toggleSelect)
@@ -97,7 +98,7 @@ function estimatedHeight(count: number): number {
 }
 
 const ChapterSection: React.FC<{ chapter: Chapter; indexOf: Map<string, number>; headed: boolean }> = ({ chapter, indexOf, headed }) => {
-  const setActiveView = useUiStore((s) => s.setActiveView)
+  const setActiveView = useViewStore((s) => s.setActiveView)
   const hero = chapterHero(chapter.photos)
   const geotagged = chapter.photos.filter((p) => p.exif.location).length
   const title = !headed ? 'Photos' : chapter.undated || !chapter.start || !chapter.end ? 'Unknown date' : chapterLabel(chapter.start, chapter.end)
@@ -138,12 +139,11 @@ const ChapterSection: React.FC<{ chapter: Chapter; indexOf: Map<string, number>;
 /** The Timeline as a photo book (FR-3): trip-like chapters with a mosaic, over the loaded pages. */
 export const TimelineView: React.FC = () => {
   const { photos, totalCount, hasNextPage, isFetchingNextPage, fetchNextPage } = usePhotoSearch()
-  const { filterTimeframe, setTimeframeFilter, sortBy, setSort, chapterGapHours, setChapterGapHours } = useUiStore(
+  const { filterTimeframe, setTimeframeFilter, sortBy, setSort } = useViewStore(
+    useShallow((s) => ({ filterTimeframe: s.filterTimeframe, setTimeframeFilter: s.setTimeframeFilter, sortBy: s.sortBy, setSort: s.setSort }))
+  )
+  const { chapterGapHours, setChapterGapHours } = useUiStore(
     useShallow((s) => ({
-      filterTimeframe: s.filterTimeframe,
-      setTimeframeFilter: s.setTimeframeFilter,
-      sortBy: s.sortBy,
-      setSort: s.setSort,
       chapterGapHours: s.chapterGapHours,
       setChapterGapHours: s.setChapterGapHours,
     }))

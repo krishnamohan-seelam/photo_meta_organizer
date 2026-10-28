@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useGlobalHotkeys } from '../../hooks/useGlobalHotkeys'
 import { NavRail } from './NavRail'
 
@@ -16,7 +17,10 @@ function HotkeyHarness() {
   )
 }
 
-beforeEach(() => useUiStore.setState({ ...initial, activeView: 'studio', sidebarOpen: true, inspectorOpen: true, lightsOut: false }))
+beforeEach(() => {
+  useUiStore.setState({ ...initial, sidebarOpen: true, inspectorOpen: true, lightsOut: false })
+  useViewStore.setState({ activeView: 'studio' })
+})
 
 describe('NavRail (FR-1b.1–1b.3)', () => {
   it.each([
@@ -28,7 +32,7 @@ describe('NavRail (FR-1b.1–1b.3)', () => {
   ] as const)('clicking %s switches the view', (label, view) => {
     render(<NavRail />)
     fireEvent.click(screen.getByRole('button', { name: label }))
-    expect(useUiStore.getState().activeView).toBe(view)
+    expect(useViewStore.getState().activeView).toBe(view)
     expect(screen.getByRole('button', { name: label }).getAttribute('aria-pressed')).toBe('true')
   })
 
@@ -37,7 +41,7 @@ describe('NavRail (FR-1b.1–1b.3)', () => {
     expect(screen.getByRole('button', { name: 'Library panel' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Library panel' }))
     expect(useUiStore.getState().sidebarOpen).toBe(false)
-    useUiStore.setState({ activeView: 'map' })
+    useViewStore.setState({ activeView: 'map' })
     rerender(<NavRail />)
     expect(screen.queryByRole('button', { name: 'Library panel' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Details panel' })).toBeNull()
@@ -52,7 +56,7 @@ describe('global hotkeys (FR-1b.3, G-8)', () => {
     fireEvent.keyDown(document.body, { key: '\\' })
     expect(useUiStore.getState().sidebarOpen).toBe(false)
     fireEvent.keyDown(document.body, { key: 't' })
-    expect(useUiStore.getState().activeView).toBe('timeline')
+    expect(useViewStore.getState().activeView).toBe('timeline')
     fireEvent.keyDown(document.body, { key: 'L' })
     expect(useUiStore.getState().lightsOut).toBe(true)
   })
@@ -63,21 +67,21 @@ describe('global hotkeys (FR-1b.3, G-8)', () => {
     input.focus()
     fireEvent.keyDown(input, { key: 'm' })
     fireEvent.keyDown(input, { key: 'l' })
-    expect(useUiStore.getState().activeView).toBe('studio')
+    expect(useViewStore.getState().activeView).toBe('studio')
     expect(useUiStore.getState().lightsOut).toBe(false)
   })
 
   it('are ignored with a modifier or while a dialog is open', () => {
     render(<HotkeyHarness />)
     fireEvent.keyDown(document.body, { key: 'm', ctrlKey: true })
-    expect(useUiStore.getState().activeView).toBe('studio')
+    expect(useViewStore.getState().activeView).toBe('studio')
 
     const dialog = document.createElement('div')
     dialog.setAttribute('aria-modal', 'true')
     document.body.appendChild(dialog)
     fireEvent.keyDown(document.body, { key: 'm' })
     dialog.remove()
-    expect(useUiStore.getState().activeView).toBe('studio')
+    expect(useViewStore.getState().activeView).toBe('studio')
   })
 
   it('? opens the shortcut overlay', () => {

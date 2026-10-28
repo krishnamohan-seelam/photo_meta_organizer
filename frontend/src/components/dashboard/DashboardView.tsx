@@ -1,11 +1,13 @@
 import React from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { useFacets } from '../../hooks/useFacets'
 import { HardDrive, MapPin, Camera, Zap } from 'lucide-react'
 
 export const DashboardView: React.FC = () => {
-  const { toggleCameraFilter, setActiveView, showToast } = useUiStore(useShallow((s) => ({ toggleCameraFilter: s.toggleCameraFilter, setActiveView: s.setActiveView, showToast: s.showToast })))
+  const { toggleCameraFilter, setActiveView } = useViewStore(useShallow((s) => ({ toggleCameraFilter: s.toggleCameraFilter, setActiveView: s.setActiveView })))
+  const showToast = useUiStore((s) => s.showToast)
 
   // Whole-library analytics from the server (PMO-27): the browser no longer holds every photo.
   const { stats, cameras, isos } = useFacets()

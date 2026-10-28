@@ -14,7 +14,8 @@ import {
   PanelRight,
   Sun,
 } from 'lucide-react'
-import { useUiStore, type ViewMode } from '../../stores/useUiStore'
+import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore, type ViewMode } from '../../stores/useViewStore'
 import { VIEW_LABELS } from '../../utils/shortcuts'
 
 const VIEW_ICONS: Record<ViewMode, React.ReactNode> = {
@@ -57,10 +58,9 @@ const RailButton: React.FC<RailButtonProps> = ({ label, shortcut, pressed, onCli
 
 /** Views on top, panel and display toggles at the bottom (FR-1b.1). */
 export const NavRail: React.FC = () => {
-  const s = useUiStore(
+  const route = useViewStore(useShallow((st) => ({ activeView: st.activeView, setActiveView: st.setActiveView })))
+  const ui = useUiStore(
     useShallow((st) => ({
-      activeView: st.activeView,
-      setActiveView: st.setActiveView,
       sidebarOpen: st.sidebarOpen,
       toggleSidebar: st.toggleSidebar,
       inspectorOpen: st.inspectorOpen,
@@ -72,6 +72,7 @@ export const NavRail: React.FC = () => {
       setShortcutsOpen: st.setShortcutsOpen,
     }))
   )
+  const s = { ...ui, ...route }
 
   return (
     <nav className="rail" aria-label="Views">

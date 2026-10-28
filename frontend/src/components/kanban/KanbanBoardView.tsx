@@ -1,6 +1,6 @@
 import React from 'react'
 import type { PatchPhotoRequest, PhotoMetadata } from '../../types/metadata'
-import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { getThumbnailUrl } from '../../api/client'
 import { useCuration } from '../../hooks/usePhotoMutations'
 import { swapToPlaceholder } from '../../utils/placeholder'
@@ -18,7 +18,7 @@ const COLUMNS: { id: KanbanStage; title: string; icon: React.ReactNode; forward?
 export const KanbanBoardView: React.FC = () => {
   // Stages are derived from the loaded pages (D4, utils/kanban.ts); more load from the footer.
   const { photos, totalCount, hasNextPage, isFetchingNextPage, fetchNextPage } = usePhotoSearch()
-  const setInspectedHash = useUiStore((s) => s.setInspectedHash)
+  const setInspectedHash = useViewStore((s) => s.setInspectedHash)
   const { patchPhoto } = useCuration()
   const stages = groupByStage(photos)
 

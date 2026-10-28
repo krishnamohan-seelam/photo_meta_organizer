@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
 import type { Facets } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { renderWithQuery, testQueryClient } from '../../test/render'
 import { LibraryPanel } from './LibraryPanel'
 
@@ -69,9 +70,9 @@ describe('LibraryPanel: suggested by AI', () => {
     const region = screen.getByRole('region', { name: 'Suggested by AI' })
     expect(region.textContent).toContain('beach')
     fireEvent.click(screen.getByRole('button', { name: /beach/ }))
-    expect(useUiStore.getState().filterAiTag).toBe('beach')
+    expect(useViewStore.getState().filterAiTag).toBe('beach')
     fireEvent.click(screen.getByRole('button', { name: /beach/ }))
-    expect(useUiStore.getState().filterAiTag).toBeNull()
+    expect(useViewStore.getState().filterAiTag).toBeNull()
   })
 })
 
@@ -94,25 +95,25 @@ describe('LibraryPanel (FR-1d)', () => {
   it('a rating row filters by that exact rating and clicking it again clears it', () => {
     renderPanel(facets)
     fireEvent.click(screen.getByRole('button', { name: /^4 stars/ }))
-    expect(useUiStore.getState().filterRating).toBe(4)
+    expect(useViewStore.getState().filterRating).toBe(4)
     fireEvent.click(screen.getByRole('button', { name: /^4 stars/ }))
-    expect(useUiStore.getState().filterRating).toBeNull()
+    expect(useViewStore.getState().filterRating).toBeNull()
   })
 
   it('tags toggle (AND) and Clear removes them', () => {
     renderPanel(facets)
     fireEvent.click(screen.getByRole('button', { name: /iceland/ }))
     fireEvent.click(screen.getByRole('button', { name: /night/ }))
-    expect(useUiStore.getState().filterTags).toEqual(['iceland', 'night'])
+    expect(useViewStore.getState().filterTags).toEqual(['iceland', 'night'])
     const tags = screen.getByRole('region', { name: 'Tags' })
     fireEvent.click(tags.querySelector('.link-btn') as HTMLElement)
-    expect(useUiStore.getState().filterTags).toEqual([])
+    expect(useViewStore.getState().filterTags).toEqual([])
   })
 
   it('Picks filters to flagged photos', () => {
     renderPanel(facets)
     fireEvent.click(screen.getByRole('button', { name: /Picks/ }))
-    expect(useUiStore.getState().filterCollection).toBe('Favorites')
+    expect(useViewStore.getState().filterCollection).toBe('Favorites')
   })
 
   it('the new-collection button needs a selection', () => {

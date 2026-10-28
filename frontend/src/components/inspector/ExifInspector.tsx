@@ -60,13 +60,14 @@ const HistogramCanvas: React.FC<{ histogram: RgbHistogram }> = ({ histogram }) =
 }
 
 export const ExifInspector: React.FC = () => {
-  const photo = useInspectedPhoto()
+  const { photo, missing } = useInspectedPhoto()
   const inspectorOpen = useUiStore((s) => s.inspectorOpen)
   if (!inspectorOpen) return null
   if (!photo) {
+    // A link can name a photo removed since; say so and leave the filters as they are.
     return (
       <aside className="inspector-pane inspector-empty" aria-label="Details">
-        Select a photo to see its details
+        {missing ? 'This photo is no longer in the library' : 'Select a photo to see its details'}
       </aside>
     )
   }

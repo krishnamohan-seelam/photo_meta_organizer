@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.tsx'
+import { startUrlSync } from './stores/useViewStore'
 
 // The library is one large query: don't refetch it every time the window regains focus, and give a failed
 // load a single retry so a stopped backend shows its error state within a second or two.
@@ -11,6 +12,9 @@ const queryClient = new QueryClient({
     queries: { staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: 1 },
   },
 })
+
+// The view, filters, sort and inspected photo live in the URL (ADR-003 R8).
+startUrlSync()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

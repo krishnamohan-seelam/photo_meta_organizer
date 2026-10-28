@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
 import type { Facets } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
+import { useViewStore } from '../../stores/useViewStore'
 import { QUERY_FIELDS } from '../../utils/query'
 import { toSearchRequest } from '../../utils/search'
 import { renderWithQuery, testQueryClient } from '../../test/render'
@@ -30,7 +31,7 @@ function renderBar() {
 }
 
 const request = () => {
-  const s = useUiStore.getState()
+  const s = useViewStore.getState()
   return toSearchRequest({ ...s })
 }
 
@@ -48,12 +49,12 @@ describe('QueryBar (FR-2b, AC-2b.1)', () => {
     const option = screen.getByRole('option', { name: /make:Sony/ })
     expect(option.textContent).toContain('8')
     fireEvent.mouseDown(option)
-    expect(useUiStore.getState().filterCameras).toEqual(['Sony'])
+    expect(useViewStore.getState().filterCameras).toEqual(['Sony'])
     expect(request().camera_makes).toEqual(['Sony'])
     expect(screen.getByRole('button', { name: 'Remove make:Sony' })).toBeTruthy()
 
     fireEvent.keyDown(input, { key: 'Backspace' })
-    expect(useUiStore.getState().filterCameras).toEqual([])
+    expect(useViewStore.getState().filterCameras).toEqual([])
   })
 
   it('Enter takes the highlighted suggestion', () => {
@@ -61,7 +62,7 @@ describe('QueryBar (FR-2b, AC-2b.1)', () => {
     input.focus()
     fireEvent.change(input, { target: { value: 'make:can' } })
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(useUiStore.getState().filterCameras).toEqual(['Canon'])
+    expect(useViewStore.getState().filterCameras).toEqual(['Canon'])
     expect(input.value).toBe('')
   })
 
@@ -70,7 +71,7 @@ describe('QueryBar (FR-2b, AC-2b.1)', () => {
     input.focus()
     fireEvent.change(input, { target: { value: 'rating:5' } })
     fireEvent.keyDown(input, { key: ' ' })
-    expect(useUiStore.getState().filterRating).toBe(5)
+    expect(useViewStore.getState().filterRating).toBe(5)
   })
 
   it('an invalid token is shown and changes nothing in the request', () => {
@@ -90,13 +91,13 @@ describe('QueryBar (FR-2b, AC-2b.1)', () => {
     const input = renderBar()
     input.focus()
     fireEvent.change(input, { target: { value: 'kyoto' } })
-    expect(useUiStore.getState().searchQuery).toBe('')
+    expect(useViewStore.getState().searchQuery).toBe('')
     act(() => {
       vi.advanceTimersByTime(260)
     })
-    expect(useUiStore.getState().searchQuery).toBe('kyoto')
+    expect(useViewStore.getState().searchQuery).toBe('kyoto')
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(useUiStore.getState().searchQuery).toBe('kyoto')
+    expect(useViewStore.getState().searchQuery).toBe('kyoto')
     expect(screen.getByRole('button', { name: 'Remove kyoto' })).toBeTruthy()
   })
 
@@ -113,19 +114,19 @@ describe('QueryBar stays in sync with the store (AC-2b.2)', () => {
   it('shows filters set elsewhere as tokens', () => {
     renderBar()
     act(() => {
-      useUiStore.getState().toggleTagFilter('night')
-      useUiStore.getState().setRatingFilter(4)
+      useViewStore.getState().toggleTagFilter('night')
+      useViewStore.getState().setRatingFilter(4)
     })
     expect(screen.getByRole('button', { name: 'Remove tag:night' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Remove rating:4' })).toBeTruthy()
   })
 
   it('removing a token updates the store', () => {
-    useUiStore.setState({ filterTags: ['night'], filterCollection: 'Favorites' })
+    useViewStore.setState({ filterTags: ['night'], filterCollection: 'Favorites' })
     renderBar()
     fireEvent.click(screen.getByRole('button', { name: 'Remove pick:yes' }))
-    expect(useUiStore.getState().filterCollection).toBe('all')
-    expect(useUiStore.getState().filterTags).toEqual(['night'])
+    expect(useViewStore.getState().filterCollection).toBe('all')
+    expect(useViewStore.getState().filterTags).toEqual(['night'])
   })
 })
 
@@ -158,8 +159,8 @@ describe('QueryBar: search by meaning (Phase 5)', () => {
     input.focus()
     fireEvent.change(input, { target: { value: 'dog on a beach' } })
     fireEvent.mouseDown(screen.getByRole('option', { name: /Search by meaning/ }))
-    expect(useUiStore.getState().semantic).toEqual({ kind: 'text', text: 'dog on a beach' })
-    expect(useUiStore.getState().searchQuery).toBe('')
+    expect(useViewStore.getState().semantic).toEqual({ kind: 'text', text: 'dog on a beach' })
+    expect(useViewStore.getState().searchQuery).toBe('')
     expect(input.value).toBe('')
   })
 
@@ -169,7 +170,7 @@ describe('QueryBar: search by meaning (Phase 5)', () => {
     fireEvent.change(input, { target: { value: 'sunset' } })
     fireEvent.mouseDown(screen.getByRole('option', { name: /Search by meaning/ }))
     expect(useUiStore.getState().aiDialogOpen).toBe(true)
-    expect(useUiStore.getState().semantic).toBeNull()
+    expect(useViewStore.getState().semantic).toBeNull()
   })
 
   it('is not offered when the backend has no AI runtime', () => {
