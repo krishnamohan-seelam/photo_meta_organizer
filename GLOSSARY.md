@@ -28,8 +28,12 @@ A file whose path was not found by the latest scan of its root. It stays recorde
 _Avoid_: Deleted file
 
 **Removed photo**:
-An asset the user took out of the library. Its files stay on disk, and scans skip those paths.
+An asset the user took out of the library. Its files stay on disk, and scans skip those paths. For a short undo window it can be brought back with everything attached; after that it is purged and its files become ignored files.
 _Avoid_: Deleted photo
+
+**Ignored file**:
+A path a scan skips because the user removed its photo. It is ignored only while the file keeps the size and modified time it had when removed; a file whose content changed is a new photo. The user can restore it from the "Removed from library" list.
+_Avoid_: Blocked file, excluded file
 
 **Offline root**:
 A root that cannot be read, such as an unplugged drive. A scan of it fails and changes nothing, so its files keep their last known state; the app shows the root as offline rather than reporting an error for each file.

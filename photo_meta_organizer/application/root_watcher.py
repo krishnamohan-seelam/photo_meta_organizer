@@ -39,6 +39,11 @@ def _within(path: str, folder: str) -> bool:
     return _key(path) == _key(folder) or _key(path).startswith(_key(folder).rstrip(os.sep) + os.sep)
 
 
+def _looks_like_other_file(path: str) -> bool:
+    """The name has an extension, and it is not a photo's."""
+    return bool(os.path.splitext(path)[1]) and not is_image_filename(path)
+
+
 class RootWatcher:
     def __init__(
         self,
@@ -101,8 +106,9 @@ class RootWatcher:
     def on_change(self, path: str) -> None:
         """A file or folder under a watched root changed (called from the watcher's thread)."""
         folder = os.path.dirname(path)
-        if not folder or (os.path.splitext(path)[1] and not is_image_filename(path)):
-            return  # an editor's temp file, a sidecar, a cache: not a photo
+        if not folder or (_looks_like_other_file(path) and not os.path.isdir(path)):
+            return  # an editor's temp file, a sidecar, a cache: not a photo (a "Trip.2024"
+            # folder is not one of those; a deleted one is caught by its files' own events)
         with self._lock:
             self._pending.add(folder)
             self._last_change = self._clock()

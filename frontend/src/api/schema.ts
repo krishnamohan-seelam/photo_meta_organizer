@@ -819,7 +819,8 @@ export interface paths {
          * @description Stop ignoring these files and scan their folders so they are recorded again.
          *
          *     A folder that is already being scanned is left to that scan; the file is picked up by it
-         *     or by the next one.
+         *     or by the next one. Paths that are not in the removed list are ignored, so only folders
+         *     the library already knew are scanned.
          */
         post: operations["restore_removed_api_removed_restore_post"];
         delete?: never;

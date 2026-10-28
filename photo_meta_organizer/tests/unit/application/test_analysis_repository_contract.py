@@ -106,6 +106,14 @@ class TestEmbeddings:
         assert analysis.save_embeddings([_emb("here", 1.0), _emb("gone", 1.0)]) == 1
         assert analysis.count_embeddings(M) == 1
 
+    def test_removed_photos_are_not_counted_as_analysed(self, photos, analysis):
+        photos.save_many([_photo("a", path="/p/a.jpg"), _photo("b", path="/p/b.jpg")])
+        analysis.save_embeddings([_emb("a", 1.0), _emb("b", 1.0)])
+        photos.remove_assets(["a"])
+        assert analysis.count_embeddings(M) == 1
+        photos.restore_assets(["a"])
+        assert analysis.count_embeddings(M) == 2
+
     def test_pending_photos_are_those_without_this_models_embedding(self, photos, analysis):
         photos.save_many([_photo("a", path="/p/a.jpg"), _photo("b", path="/p/b.jpg")])
         assert analysis.pending_photos(M) == [

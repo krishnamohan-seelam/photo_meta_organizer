@@ -114,6 +114,15 @@ def test_files_that_are_not_photos_are_ignored(rig, library) -> None:
     assert rig.scans == []
 
 
+def test_a_folder_with_a_dot_in_its_name_is_not_taken_for_a_file(rig, library) -> None:
+    trip = library / "a" / "Trip.2024"
+    trip.mkdir()
+    rig.fake.emit(str(trip))
+    rig.clock.advance(6)
+    rig.watcher.tick()
+    assert rig.scans == [str(library / "a")]
+
+
 def test_a_folder_that_was_deleted_is_scanned_from_its_nearest_parent(rig, library) -> None:
     rig.fake.emit(str(library / "gone" / "deep" / "1.jpg"))  # the folder no longer exists
     rig.clock.advance(6)

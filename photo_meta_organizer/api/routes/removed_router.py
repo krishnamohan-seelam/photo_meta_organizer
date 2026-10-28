@@ -50,10 +50,13 @@ def restore_removed(
     """Stop ignoring these files and scan their folders so they are recorded again.
 
     A folder that is already being scanned is left to that scan; the file is picked up by it
-    or by the next one.
+    or by the next one. Paths that are not in the removed list are ignored, so only folders
+    the library already knew are scanned.
     """
-    restored = services.repository.forget_ignored(request.paths)
-    folders = dict.fromkeys(os.path.dirname(p) for p in request.paths)
+    wanted = set(request.paths)
+    paths = [i.path for i in services.repository.list_ignored() if i.path in wanted]
+    restored = services.repository.forget_ignored(paths)
+    folders = dict.fromkeys(os.path.dirname(p) for p in paths)
     make_work = scan_work_factory(services)
     started = [
         job_id

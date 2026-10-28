@@ -145,9 +145,15 @@ class SqliteRepository:
         content before (the file was edited), the File now points at this Asset and the
         old Asset's curation is merged in: moved when no other File still holds the old
         content (the old Asset is then deleted), copied when one does.
+
+        Content the user removed (still in its undo window) that turns up at a new path is
+        purged first, so the new File is a new photo and the removed paths stay removed,
+        just as after the window.
         """
         now = utc_now_naive().isoformat()
         file_hash = metadata.file_hash
+        if self._is_removed_elsewhere(file_hash, metadata.file_info.path):
+            self._purge(file_hash, now)
         asset_existed = self._asset_exists(file_hash)
         asset = _asset_row(metadata, now)
         update_clause = ", ".join(
@@ -201,6 +207,16 @@ class SqliteRepository:
         self.connection.execute("DELETE FROM ignored_files WHERE path = ?", (info.path,))
         if previous is not None and previous["asset_hash"] != file_hash:
             self._carry_over(previous["asset_hash"], file_hash, adopt_added_at=not asset_existed)
+
+    def _is_removed_elsewhere(self, file_hash: str, path: str) -> bool:
+        """True when the Asset is removed and ``path`` is not one of its Files."""
+        row = self.connection.execute(
+            "SELECT 1 FROM assets a WHERE a.file_hash = ? AND a.removed_at IS NOT NULL "
+            "AND NOT EXISTS (SELECT 1 FROM files f WHERE f.asset_hash = a.file_hash "
+            "AND f.path = ?)",
+            (file_hash, path),
+        ).fetchone()
+        return row is not None
 
     def _carry_over(self, old_hash: str, new_hash: str, *, adopt_added_at: bool) -> None:
         """Merge ``old_hash``'s curation into ``new_hash``; drop the old Asset if unused.
@@ -441,15 +457,22 @@ class SqliteRepository:
                 ).fetchall()
             ]
             for file_hash in hashes:
-                self.connection.execute(
-                    "INSERT OR REPLACE INTO ignored_files "
-                    "(path, file_hash, size_bytes, mtime, removed_at) "
-                    "SELECT path, asset_hash, size_bytes, mtime, ? FROM files "
-                    "WHERE asset_hash = ? AND missing_since IS NULL",
-                    (stamp, file_hash),
-                )
-                self.connection.execute("DELETE FROM assets WHERE file_hash = ?", (file_hash,))
+                self._purge(file_hash, stamp)
             return len(hashes)
+
+    def _purge(self, file_hash: str, stamp: str) -> None:
+        """Remember every File of a removed Asset as ignored, then delete the Asset.
+
+        Missing Files are remembered too: a removed photo on an unplugged drive must not come
+        back as new when the drive does. Must run inside a transaction.
+        """
+        self.connection.execute(
+            "INSERT OR REPLACE INTO ignored_files "
+            "(path, file_hash, size_bytes, mtime, removed_at) "
+            "SELECT path, asset_hash, size_bytes, mtime, ? FROM files WHERE asset_hash = ?",
+            (stamp, file_hash),
+        )
+        self.connection.execute("DELETE FROM assets WHERE file_hash = ?", (file_hash,))
 
     def list_ignored(self) -> list[IgnoredFile]:
         with self.lock:
@@ -655,6 +678,7 @@ class SqliteRepository:
             ).fetchall()
             tag_rows = self.connection.execute(
                 "SELECT label AS name, COUNT(*) AS n FROM asset_labels "
+                "WHERE asset_hash IN (SELECT file_hash FROM live_assets) "
                 "GROUP BY label ORDER BY label"
             ).fetchall()
             year_rows = self.connection.execute(

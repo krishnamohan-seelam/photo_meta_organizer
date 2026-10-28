@@ -187,6 +187,63 @@ def test_restoring_a_removed_file_forgets_it_and_scans_its_folder(client, librar
     assert client.get("/api/removed").json() == []
 
 
+def test_restoring_scans_only_the_folders_of_files_that_were_removed(
+    client, library, tmp_path
+) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    Image.new("RGB", (8, 8), "white").save(elsewhere / "x.jpg")
+    restored = client.post(
+        "/api/removed/restore", json={"paths": [str(elsewhere / "x.jpg")]}
+    ).json()
+    assert restored == {"restored_count": 0, "job_ids": []}
+    assert str(elsewhere) not in [j["folder_path"] for j in client.get("/api/jobs").json()]
+    assert _names(client) == ["a.jpg", "b.jpg", "c.jpg"]
+
+
+def test_a_copy_found_in_the_undo_window_comes_back_and_the_removed_path_stays_removed(
+    client, library, tmp_path
+) -> None:
+    h = _hashes(client)["a.jpg"]
+    client.post("/api/photos/batch", json={"photo_hashes": [h], "action": "delete"})
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "copy.jpg").write_bytes((library / "a.jpg").read_bytes())
+
+    job = _scan(client, other)
+    assert job["counts"]["new"] == 1
+    assert _names(client) == ["b.jpg", "c.jpg", "copy.jpg"]
+    assert _purge_now(client) == 0  # nothing hidden is left to purge with the copy
+    assert _names(client) == ["b.jpg", "c.jpg", "copy.jpg"]
+    assert _scan(client, library)["counts"]["ignored"] == 1
+    assert [r["name"] for r in client.get("/api/removed").json()] == ["a.jpg"]
+
+
+def test_removed_photos_labels_are_not_counted_in_the_facets(client) -> None:
+    hashes = _hashes(client)
+    client.patch(f"/api/photos/{hashes['a.jpg']}", json={"add_tags": ["trip"]})
+    client.patch(f"/api/photos/{hashes['b.jpg']}", json={"add_tags": ["trip"]})
+    client.post("/api/photos/batch", json={"photo_hashes": [hashes["a.jpg"]], "action": "delete"})
+    tags = client.get("/api/facets").json()["tags"]
+    assert tags == [{"name": "trip", "count": 1}]
+
+
+def test_a_removed_photo_on_a_missing_drive_stays_removed_when_it_returns(
+    client, library, tmp_path
+) -> None:
+    h = _hashes(client)["a.jpg"]
+    parked = tmp_path / "a.jpg"
+    os.replace(library / "a.jpg", parked)  # unplugged: the File is flagged missing
+    _scan(client, library)
+    client.post("/api/photos/batch", json={"photo_hashes": [h], "action": "delete"})
+    _purge_now(client)
+    os.replace(parked, library / "a.jpg")  # plugged back in, unchanged
+
+    job = _scan(client, library)
+    assert job["counts"]["ignored"] == 1 and job["counts"]["new"] == 0
+    assert _names(client) == ["b.jpg", "c.jpg"]
+
+
 def test_what_was_removed_before_the_app_stopped_is_final_when_it_starts_again(
     settings, library
 ) -> None:

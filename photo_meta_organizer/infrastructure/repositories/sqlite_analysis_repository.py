@@ -136,7 +136,9 @@ class SqliteAnalysisRepository:
     def count_embeddings(self, model_id: str) -> int:
         with self._lock:
             row = self._conn.execute(
-                "SELECT COUNT(*) FROM photo_embeddings WHERE model_id = ?", (model_id,)
+                "SELECT COUNT(*) FROM photo_embeddings WHERE model_id = ? "
+                "AND file_hash IN (SELECT file_hash FROM live_assets)",
+                (model_id,),
             ).fetchone()
         return int(row[0])
 
