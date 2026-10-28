@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, errorMessage, getPhotoByHash, patchPhotoApi, startSyncJobApi } from './client'
+import { ApiError, cancelJobApi, errorMessage, getPhotoByHash, patchPhotoApi, removeRootApi, startSyncJobApi } from './client'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -65,5 +65,21 @@ describe('API client requests', () => {
     expect(url).toBe('/api/sync')
     expect(init.method).toBe('POST')
     expect(JSON.parse(String(init.body))).toEqual({ folder_path: 'D:/photos', dry_run: true, cleanup_deleted: true })
+  })
+
+  it('fills path and query parameters from the generated types (ADR-003 R10)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'j1' }))
+    vi.stubGlobal('fetch', fetchMock)
+    await cancelJobApi('j1')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/jobs/j1/cancel')
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST')
+  })
+
+  it('accepts an empty 204 response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(removeRootApi('D:/photos & more')).resolves.toBeUndefined()
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/roots?path=D%3A%2Fphotos%20%26%20more')
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('DELETE')
   })
 })
