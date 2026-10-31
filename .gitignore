@@ -173,6 +173,15 @@ DOCS/*.md
 .agent/
 .agents/
 
+# AI/agent working docs — informational only, not shipped
+documentation/
+
+# Generated architecture artifacts
+graph.json
+c4_docs.html
+photo_meta_organizer_architecture.*
+skills-lock.json
+
 desktop/node_modules/
 
 # CLAUDE.md
