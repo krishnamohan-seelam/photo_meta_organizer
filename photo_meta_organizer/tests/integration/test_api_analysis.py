@@ -291,6 +291,14 @@ class TestRankedSearch:
         assert body["total_count"] == 3
         assert body["rank_token"] is None  # one page: nothing to page through
 
+    def test_the_index_is_saved_under_the_models_directory(self, api):
+        """create_app keeps the vector index on disk (ticket 16), so a restart maps it."""
+        self._search(api, {"text": "tiger"})
+        saved = sorted(p.name for p in (api.settings.models_dir / "vector-index").iterdir())
+        assert len(saved) == 2
+        assert saved[0].startswith("api-embedder-") and saved[0].endswith(".hashes.npy")
+        assert saved[1].startswith("api-embedder-") and saved[1].endswith(".vectors.npy")
+
     def test_the_usual_filters_apply(self, api):
         body = self._search(api, {"text": "tiger"}, camera_makes=["Canon"]).json()
         assert [p["file_hash"] for p in body["items"]] == ["h-beach"]

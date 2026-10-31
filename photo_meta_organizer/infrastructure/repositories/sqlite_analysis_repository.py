@@ -8,7 +8,7 @@ hash) discards the stale ones.
 
 Vectors are stored as little-endian float32 blobs of unit length. Similarity search turns the
 search filters into a set of candidate hashes in SQL and leaves the ranking to a
-:class:`VectorIndex` (brute force by default, kept on disk when given a directory; ticket 16).
+:class:`VectorIndex` (built by ``composition.build_analysis_repository``; ticket 16).
 """
 
 import sqlite3
@@ -32,9 +32,6 @@ from photo_meta_organizer.domain.analysis import (
     normalize,
 )
 from photo_meta_organizer.domain.datetimes import utc_now_naive
-from photo_meta_organizer.infrastructure.repositories.brute_force_vector_index import (
-    BruteForceVectorIndex,
-)
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     search_source,
     search_where,
@@ -59,13 +56,13 @@ class SqliteAnalysisRepository:
         self,
         connection: sqlite3.Connection,
         lock: threading.RLock,
-        index: VectorIndex | None = None,
+        index: VectorIndex,
     ) -> None:
         self._conn = connection
         self._lock = lock
         # Follows the embeddings by itself (their generation counter), so writes here need not
         # tell it anything.
-        self._index = index or BruteForceVectorIndex(connection, lock)
+        self._index = index
 
     # =========================================================================
     # Embeddings
@@ -159,8 +156,6 @@ class SqliteAnalysisRepository:
         query: SearchQuery | None = None,
         exclude_hash: str | None = None,
     ) -> list[ScoredPhoto]:
-        if k <= 0:
-            return []
         allowed: set[str] | None = None
         if query is not None:
             where_sql, where_params = search_where(query)

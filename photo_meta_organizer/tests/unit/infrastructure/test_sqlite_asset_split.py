@@ -8,13 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from photo_meta_organizer.application.composition import build_analysis_repository
 from photo_meta_organizer.application.interfaces.search_types import SearchQuery
 from photo_meta_organizer.domain.curation import AddTag, SetFlag, SetRating
 from photo_meta_organizer.domain.models import ImageMetadata, StoredFile
 from photo_meta_organizer.infrastructure.repositories.migrations import MIGRATIONS, migrate
-from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
-    SqliteAnalysisRepository,
-)
 from photo_meta_organizer.infrastructure.repositories.sqlite_collection_repository import (
     SqliteCollectionRepository,
 )
@@ -99,7 +97,7 @@ class TestMigrationFromVersionOne:
         repo = SqliteRepository(str(path))
         try:
             collections = SqliteCollectionRepository(repo.connection, repo.lock)
-            analysis = SqliteAnalysisRepository(repo.connection, repo.lock)
+            analysis = build_analysis_repository(repo)
             trip = collections.get("trip")
             assert trip is not None
             assert trip.photo_hashes == [HASH_B, HASH_A]  # order kept
@@ -132,7 +130,7 @@ class TestMigrationFromVersionOne:
 
         repo = SqliteRepository(str(path))
         try:
-            analysis = SqliteAnalysisRepository(repo.connection, repo.lock)
+            analysis = build_analysis_repository(repo)
             assert analysis.count_embeddings("m") == 1
             assert "ghost" not in [t.name for t in repo.facets().tags]
             trip = SqliteCollectionRepository(repo.connection, repo.lock).get("trip")
@@ -276,7 +274,7 @@ class TestEditedFile:
     ) -> None:
         from photo_meta_organizer.domain.analysis import Embedding
 
-        analysis = SqliteAnalysisRepository(repo.connection, repo.lock)
+        analysis = build_analysis_repository(repo)
         repo.save(_photo(sample_image_metadata, HASH_A, "/p/one.jpg"))
         analysis.save_embeddings([Embedding(file_hash=HASH_A, model_id="m", vector=(1.0, 0.0))])
 

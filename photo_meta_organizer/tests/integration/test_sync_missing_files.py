@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from tests.conftest import FakeExtractor
 
+from photo_meta_organizer.application.composition import build_analysis_repository
 from photo_meta_organizer.application.use_cases import (
     RootUnavailableError,
     ScanLibrary,
@@ -17,9 +18,6 @@ from photo_meta_organizer.application.use_cases import (
 from photo_meta_organizer.domain.analysis import AiTag, Embedding
 from photo_meta_organizer.domain.curation import AddTag, SetRating
 from photo_meta_organizer.domain.models import SyncResult
-from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
-    SqliteAnalysisRepository,
-)
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 from photo_meta_organizer.infrastructure.retriever.filtered_retriever import (
     ExtensionFilteredRetriever,
@@ -124,7 +122,7 @@ def test_remove_missing_forgets_the_file_and_its_orphaned_photo(library: Library
     root, repo = library
     (root / "home.jpg").unlink()
 
-    analysis = SqliteAnalysisRepository(repo.connection, repo.lock)
+    analysis = build_analysis_repository(repo)
     analysis.save_embeddings([Embedding(file_hash=_sha(b"home"), model_id="m", vector=(1.0, 0.0))])
     analysis.save_ai_tags(_sha(b"home"), [AiTag("kitchen", 0.5, "m")])
 

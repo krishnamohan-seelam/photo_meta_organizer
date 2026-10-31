@@ -8,6 +8,7 @@ import sqlite3
 
 import pytest
 
+from photo_meta_organizer.application.composition import build_analysis_repository
 from photo_meta_organizer.application.interfaces.analysis_repository import (
     AnalysisRepository,
     PendingPhoto,
@@ -20,13 +21,7 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.brute_force_vector_index import (
-    BruteForceVectorIndex,
-)
 from photo_meta_organizer.infrastructure.repositories.migrations import BASELINE_SQL
-from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
-    SqliteAnalysisRepository,
-)
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 
 M = "clip-test"
@@ -34,14 +29,13 @@ M = "clip-test"
 
 def _make_sqlite(tmp_path):
     photos = SqliteRepository(db_path=str(tmp_path / "analysis.db"))
-    return photos, SqliteAnalysisRepository(photos.connection, photos.lock)
+    return photos, build_analysis_repository(photos)
 
 
 def _make_sqlite_on_disk_index(tmp_path):
     """The same store with the vector index kept on disk (ticket 16), as the app builds it."""
     photos = SqliteRepository(db_path=str(tmp_path / "analysis.db"))
-    index = BruteForceVectorIndex(photos.connection, photos.lock, tmp_path / "vector-index")
-    return photos, SqliteAnalysisRepository(photos.connection, photos.lock, index)
+    return photos, build_analysis_repository(photos, tmp_path / "models")
 
 
 BACKENDS = [("sqlite", _make_sqlite), ("sqlite-disk-index", _make_sqlite_on_disk_index)]
@@ -377,6 +371,6 @@ def test_an_existing_database_gains_the_analysis_tables(tmp_path):
     first.close()
 
     reopened = SqliteRepository(path)
-    analysis = SqliteAnalysisRepository(reopened.connection, reopened.lock)
+    analysis = build_analysis_repository(reopened)
     assert analysis.save_embeddings([_emb("a", 1.0, 0.0)]) == 1
     assert [p.file_hash for p in reopened.query(SearchQuery())] == ["a"]

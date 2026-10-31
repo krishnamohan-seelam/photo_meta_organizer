@@ -13,6 +13,8 @@ from photo_meta_organizer.domain.analysis import ScoredPhoto
 
 @runtime_checkable
 class VectorIndex(Protocol):
+    """Ranks stored embeddings by cosine similarity to a vector."""
+
     def nearest(
         self,
         vector: Sequence[float],

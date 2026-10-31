@@ -64,7 +64,10 @@ class _Library:
         self.analysis = SqliteAnalysisRepository(
             self.photos.connection,
             self.photos.lock,
-            BruteForceVectorIndex(self.photos.connection, self.photos.lock, index_dir),
+            # Every rebuild is saved, so a test can look at the files after each write.
+            BruteForceVectorIndex(
+                self.photos.connection, self.photos.lock, index_dir, save_interval=0
+            ),
         )
 
     def restart(self) -> "_Library":
@@ -240,14 +243,66 @@ class TestOnDisk:
         assert vectors.shape == (3, 2) and vectors.dtype == np.dtype("<f4")
 
 
+def _backup(library: _Library, target: Path) -> None:
+    connection = sqlite3.connect(str(target))
+    library.photos.connection.backup(connection)
+    connection.close()
+
+
+def test_a_copy_that_reaches_the_saved_generation_with_other_content_is_rebuilt(
+    library, tmp_path: Path
+) -> None:
+    """A backup restored, or a copy opened with --db, keeps the library id; one write in each
+    brings both to the same generation and the same row count with different vectors."""
+    _backup(library, tmp_path / "copy.db")
+    library.photos.save(_photo("south"))
+    library.analysis.save_embeddings([_emb("south", 0.9, -0.1)])
+    library.ranked(1.0, 0.0)
+    copy = _Library(tmp_path / "copy.db", library.index_dir)
+    copy.photos.save(_photo("ahead"))
+    copy.analysis.save_embeddings([_emb("ahead", 1.0, 0.05)])
+    assert _generation(copy.photos) == _generation(library.photos)
+    assert copy.ranked(1.0, 0.0) == ["east", "ahead", "north", "west"]
+    copy.photos.close()
+
+
+def test_rebuilds_in_one_session_are_saved_at_most_once_per_interval(tmp_path: Path) -> None:
+    now = [0.0]
+    photos = SqliteRepository(str(tmp_path / "photos.db"))
+    index = BruteForceVectorIndex(
+        photos.connection, photos.lock, tmp_path / "index", save_interval=300, clock=lambda: now[0]
+    )
+    analysis = SqliteAnalysisRepository(photos.connection, photos.lock, index)
+    vectors = tmp_path / "index" / "clip-test-2.vectors.npy"
+
+    def saved_generation() -> int:
+        read = brute_force_vector_index.read_index_file(vectors)
+        assert read is not None
+        return int(read[0]["generation"])
+
+    def search_at(seconds: float, hash_: str, x: float) -> int:
+        """Write one embedding, search at ``seconds``, return the generation then current."""
+        analysis.save_embeddings([_emb(hash_, 1.0, x)])
+        now[0] = seconds
+        assert analysis.nearest([1.0, 0.0], k=3, model_id=M)[0].file_hash == "a"
+        return _generation(photos)
+
+    photos.save_many([_photo("a"), _photo("b"), _photo("c")])
+    first = search_at(0.0, "a", 0.0)
+    assert saved_generation() == first  # the session's first rebuild is saved
+    search_at(299.0, "b", 1.0)
+    assert saved_generation() == first  # too soon after the last save
+    third = search_at(300.0, "c", 2.0)
+    assert saved_generation() == third
+    photos.close()
+
+
 def test_a_copy_of_the_library_reuses_the_index(
     library, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A backup restored over the library is the same library: same id, same generation."""
     library.ranked(1.0, 0.0)
-    target = sqlite3.connect(str(tmp_path / "copy.db"))
-    library.photos.connection.backup(target)
-    target.close()
+    _backup(library, tmp_path / "copy.db")
     copy = _Library(tmp_path / "copy.db", library.index_dir)
     _no_database_reads(monkeypatch)
     assert copy.ranked(1.0, 0.0) == ["east", "north", "west"]

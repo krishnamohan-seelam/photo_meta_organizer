@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from tests.fakes import FakeImageEmbedder
 
+from photo_meta_organizer.application.composition import build_analysis_repository
 from photo_meta_organizer.application.use_cases.analyze_photos_use_case import (
     AnalyzePhotosUseCase,
     AnalyzeProgress,
@@ -16,9 +17,6 @@ from photo_meta_organizer.domain.models import (
     ImageExifData,
     ImageFileInfo,
     ImageMetadata,
-)
-from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
-    SqliteAnalysisRepository,
 )
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 
@@ -32,7 +30,7 @@ def photos(tmp_path):
 
 @pytest.fixture
 def analysis(photos):
-    return SqliteAnalysisRepository(photos.connection, photos.lock)
+    return build_analysis_repository(photos)
 
 
 @pytest.fixture

@@ -84,6 +84,7 @@ from photo_meta_organizer.application.interfaces.search_types import (
     Page,
     SearchQuery,
 )
+from photo_meta_organizer.application.interfaces.vector_index import VectorIndex
 
 __all__ = [
     "AnalysisRepository",
@@ -103,4 +104,5 @@ __all__ = [
     "PendingPhoto",
     "RemoteFileHandle",
     "SearchQuery",
+    "VectorIndex",
 ]

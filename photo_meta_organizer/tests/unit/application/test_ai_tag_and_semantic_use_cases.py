@@ -5,6 +5,7 @@ import io
 import pytest
 from tests.fakes import FakeImageEmbedder
 
+from photo_meta_organizer.application.composition import build_analysis_repository
 from photo_meta_organizer.application.interfaces.search_types import SearchQuery
 from photo_meta_organizer.application.use_cases.resolve_ai_tags_use_case import (
     ResolveAiTagsUseCase,
@@ -20,9 +21,6 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
-    SqliteAnalysisRepository,
-)
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 
 M = "fake-embedder-v1"
@@ -37,7 +35,7 @@ def photos(tmp_path):
 
 @pytest.fixture
 def analysis(photos):
-    return SqliteAnalysisRepository(photos.connection, photos.lock)
+    return build_analysis_repository(photos)
 
 
 def _add(photos, name: str, make: str | None = None, labels: list[str] | None = None) -> str:

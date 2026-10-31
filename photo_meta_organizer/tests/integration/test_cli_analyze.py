@@ -8,6 +8,7 @@ import pytest
 from tests.fakes import FakeImageEmbedder
 
 from photo_meta_organizer.application import composition
+from photo_meta_organizer.application.composition import build_analysis_repository
 from photo_meta_organizer.domain.models import (
     ImageDimensions,
     ImageExifData,
@@ -18,9 +19,6 @@ from photo_meta_organizer.infrastructure.analysis.model_manifest import ModelFil
 from photo_meta_organizer.infrastructure.analysis.model_store import (
     ModelStore,
     ModelUnavailableError,
-)
-from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
-    SqliteAnalysisRepository,
 )
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 from photo_meta_organizer.main import main
@@ -86,9 +84,7 @@ def _run(monkeypatch, *argv) -> int:
 def _embedded(env) -> int:
     repo = SqliteRepository(env.db)
     try:
-        return SqliteAnalysisRepository(repo.connection, repo.lock).count_embeddings(
-            env.embedder.model_id
-        )
+        return build_analysis_repository(repo).count_embeddings(env.embedder.model_id)
     finally:
         repo.close()
 
@@ -96,7 +92,7 @@ def _embedded(env) -> int:
 def _tags(env, file_hash: str):
     repo = SqliteRepository(env.db)
     try:
-        return SqliteAnalysisRepository(repo.connection, repo.lock).list_ai_tags(file_hash)
+        return build_analysis_repository(repo).list_ai_tags(file_hash)
     finally:
         repo.close()
 
@@ -162,7 +158,7 @@ class TestAnalysis:
         _run(monkeypatch, "analyze", "--db", env.db, "--threshold", "0")
         assert _tags(env, "h-a.jpg")
         env_clear = SqliteRepository(env.db)
-        SqliteAnalysisRepository(env_clear.connection, env_clear.lock).clear_embeddings()
+        build_analysis_repository(env_clear).clear_embeddings()
         env_clear.connection.execute("DELETE FROM photo_ai_tags")
         env_clear.connection.commit()
         env_clear.close()

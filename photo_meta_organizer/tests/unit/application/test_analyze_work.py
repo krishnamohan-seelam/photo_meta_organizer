@@ -3,6 +3,7 @@
 import pytest
 from tests.fakes import FakeImageEmbedder
 
+from photo_meta_organizer.application.composition import build_analysis_repository
 from photo_meta_organizer.application.job_work import analyze_work
 from photo_meta_organizer.application.jobs import JobManager
 from photo_meta_organizer.application.use_cases.analyze_photos_use_case import AnalyzePhotosUseCase
@@ -12,16 +13,13 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
-from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
-    SqliteAnalysisRepository,
-)
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import SqliteRepository
 
 
 @pytest.fixture
 def setup(tmp_path):
     photos = SqliteRepository(str(tmp_path / "a.db"))
-    analysis = SqliteAnalysisRepository(photos.connection, photos.lock)
+    analysis = build_analysis_repository(photos)
     for name in ("a.jpg", "b.jpg"):
         file = tmp_path / name
         file.write_bytes(name.encode())

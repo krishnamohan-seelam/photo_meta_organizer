@@ -361,6 +361,15 @@ END;
 """
 
 
+# Ticket 16 review: a copied or restored library keeps its id and can reach a saved index's
+# generation with other content, so the saved index is also keyed by the model's row count and
+# newest ``created_at``. This index answers both without reading a single vector.
+EMBEDDINGS_STAMP_INDEX_SQL = """
+DROP INDEX idx_photo_embeddings_model;
+CREATE INDEX idx_photo_embeddings_model ON photo_embeddings(model_id, dim, created_at);
+"""
+
+
 @dataclass(frozen=True)
 class Migration:
     """One schema step. ``rebuilds`` marks steps that rewrite tables and so need a backup."""
@@ -383,6 +392,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(6, "hidden_files", HIDDEN_FILES_SQL),
     Migration(7, "removal", REMOVAL_SQL),
     Migration(8, "embeddings_generation", EMBEDDINGS_GENERATION_SQL),
+    Migration(9, "embeddings_stamp_index", EMBEDDINGS_STAMP_INDEX_SQL),
 )
 
 
