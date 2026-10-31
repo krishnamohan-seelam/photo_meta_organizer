@@ -10,6 +10,7 @@ stays cheap and the application layer keeps no import-time dependency on it.
 
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from photo_meta_organizer.application.interfaces import ImageRetriever
@@ -149,9 +150,18 @@ def build_collection_repository(
     raise TypeError(f"unsupported repository type for collections: {type(repository)!r}")
 
 
-def build_analysis_repository(repository: ImageMetadataRepository) -> AnalysisRepository:
+def build_analysis_repository(
+    repository: ImageMetadataRepository, models_dir: Path | None = None
+) -> AnalysisRepository:
     """Build the analysis repository (embeddings, suggested tags) sharing storage with
-    ``repository``, the same way :func:`build_collection_repository` does."""
+    ``repository``, the same way :func:`build_collection_repository` does.
+
+    With ``models_dir``, the vector index is saved under ``<models_dir>/vector-index`` so the
+    first search after a restart maps it instead of reading every vector (ticket 16).
+    """
+    from photo_meta_organizer.infrastructure.repositories.brute_force_vector_index import (
+        BruteForceVectorIndex,
+    )
     from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
         SqliteAnalysisRepository,
     )
@@ -160,7 +170,9 @@ def build_analysis_repository(repository: ImageMetadataRepository) -> AnalysisRe
     )
 
     if isinstance(repository, SqliteRepository):
-        return SqliteAnalysisRepository(repository.connection, repository.lock)
+        index_dir = models_dir / "vector-index" if models_dir is not None else None
+        index = BruteForceVectorIndex(repository.connection, repository.lock, index_dir)
+        return SqliteAnalysisRepository(repository.connection, repository.lock, index)
     raise TypeError(f"unsupported repository type for analysis: {type(repository)!r}")
 
 

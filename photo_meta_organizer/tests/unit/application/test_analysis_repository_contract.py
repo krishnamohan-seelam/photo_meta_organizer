@@ -20,6 +20,9 @@ from photo_meta_organizer.domain.models import (
     ImageFileInfo,
     ImageMetadata,
 )
+from photo_meta_organizer.infrastructure.repositories.brute_force_vector_index import (
+    BruteForceVectorIndex,
+)
 from photo_meta_organizer.infrastructure.repositories.migrations import BASELINE_SQL
 from photo_meta_organizer.infrastructure.repositories.sqlite_analysis_repository import (
     SqliteAnalysisRepository,
@@ -34,7 +37,14 @@ def _make_sqlite(tmp_path):
     return photos, SqliteAnalysisRepository(photos.connection, photos.lock)
 
 
-BACKENDS = [("sqlite", _make_sqlite)]
+def _make_sqlite_on_disk_index(tmp_path):
+    """The same store with the vector index kept on disk (ticket 16), as the app builds it."""
+    photos = SqliteRepository(db_path=str(tmp_path / "analysis.db"))
+    index = BruteForceVectorIndex(photos.connection, photos.lock, tmp_path / "vector-index")
+    return photos, SqliteAnalysisRepository(photos.connection, photos.lock, index)
+
+
+BACKENDS = [("sqlite", _make_sqlite), ("sqlite-disk-index", _make_sqlite_on_disk_index)]
 
 
 @pytest.fixture(params=BACKENDS, ids=[name for name, _ in BACKENDS])

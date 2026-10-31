@@ -232,10 +232,11 @@ def create_app(
     )
     store = model_store or composition.build_model_store(settings)
     ai_embedder = embedder or composition.build_embedder(store)
+    analysis = composition.build_analysis_repository(repository, settings.models_dir)
     keep_analysed = KeepAnalysed(
         composition.build_state_store(repository),
         repository,
-        composition.build_analysis_repository(repository),
+        analysis,
         job_manager,
         model_id=ai_embedder.model_id,
         folder=str(settings.models_dir),
@@ -262,7 +263,7 @@ def create_app(
             max_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
         ),
         places=OfflinePlaceNamer(),
-        analysis=composition.build_analysis_repository(repository),
+        analysis=analysis,
         model_store=store,
         embedder=ai_embedder,
         tagger=composition.build_tagger(settings, ai_embedder),

@@ -4,9 +4,11 @@
 
 **Blocked by:** 01 Migration runner and baseline (R1)
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-31). Migration `0008 embeddings_generation` (schema version 8): table `embedding_generations(model_id, generation)`, bumped by `AFTER INSERT/UPDATE/DELETE` triggers on `photo_embeddings`, so cascade deletes from `assets` (purge, last File gone) count too and a rolled-back write does not; plus a random `library_id` in `library_state`. `application/interfaces/vector_index.VectorIndex` is the port; `infrastructure/repositories/brute_force_vector_index.BruteForceVectorIndex` implements it and `SqliteAnalysisRepository.nearest` now only turns the filters into a hash set and delegates. With a directory (`composition.build_analysis_repository(repo, models_dir)` → `<models>/vector-index/`, used by `create_app`) the matrix and hash list are written as `<model>-<dim>.vectors.npy` / `.hashes.npy` (atomic replace) whose headers carry `generation`, `library` and `model`; a pair that does not match the database (other generation, other library, damaged, mismatched pair) is rebuilt from SQLite. Reading the generation (a primary-key lookup) replaced the old in-session signature (own write counter, `PRAGMA data_version`, row count): it covers all three. An unwritable directory is logged and search works from memory. The extra header keys make `np.load` refuse the files; `read_index_file` reads them.
 
-- [ ] A per-model embeddings_generation counter is bumped in the same transaction as any embedding write
-- [ ] The normalised matrix and hash list are stored as a memory-mapped .npy pair whose header holds the generation; a mismatch triggers a rebuild
-- [ ] nearest() sits behind a VectorIndex port; no ANN library is added
-- [ ] Cold-start time is measured at 100k and recorded
+**Measured** (`python -m photo_meta_organizer.scripts.benchmark_vector_index --count 100000`, 512-d random vectors, warm OS file cache, two runs on this machine): first search after a restart 2.8-4.3 s reading SQLite, 0.14-0.21 s mapping the saved index (of which about 45 ms is the load itself: hash list 17 ms, map 6 ms, first product 20 ms); then 50-60 ms unfiltered either way, 0.16-0.38 s with a 25% camera filter. The first search after an embedding write rebuilds from SQLite and saves (3.3-4.8 s, the save about 0.25 s for 200 MB). Cost of the triggers: about 14 µs per deleted embedding under WAL, so `clear_embeddings` of 100k takes 2.5-3.7 s instead of about 1.5 s.
+
+- [x] A per-model embeddings_generation counter is bumped in the same transaction as any embedding write
+- [x] The normalised matrix and hash list are stored as a memory-mapped .npy pair whose header holds the generation; a mismatch triggers a rebuild
+- [x] nearest() sits behind a VectorIndex port; no ANN library is added
+- [x] Cold-start time is measured at 100k and recorded

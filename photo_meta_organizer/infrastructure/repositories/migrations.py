@@ -329,6 +329,38 @@ JOIN files f ON f.id = (
 """
 
 
+# Ticket 16 (ADR-003 R6): the vector index is saved next to the model as a memory-mapped .npy
+# pair, so it must be able to tell whether a saved index still matches the library. Each model's
+# ``generation`` is bumped by triggers, so every write to its embeddings (cascade deletes from
+# ``assets`` included) bumps it in the same transaction. ``library_id`` tells two libraries that
+# share a models directory apart.
+EMBEDDINGS_GENERATION_SQL = """
+CREATE TABLE embedding_generations (
+    model_id   TEXT PRIMARY KEY,
+    generation INTEGER NOT NULL
+);
+INSERT INTO embedding_generations (model_id, generation)
+SELECT DISTINCT model_id, 1 FROM photo_embeddings;
+
+INSERT OR IGNORE INTO library_state (key, value) VALUES ('library_id', lower(hex(randomblob(16))));
+
+CREATE TRIGGER photo_embeddings_inserted AFTER INSERT ON photo_embeddings BEGIN
+    INSERT INTO embedding_generations (model_id, generation) VALUES (NEW.model_id, 1)
+    ON CONFLICT (model_id) DO UPDATE SET generation = generation + 1;
+END;
+CREATE TRIGGER photo_embeddings_updated AFTER UPDATE ON photo_embeddings BEGIN
+    INSERT INTO embedding_generations (model_id, generation) VALUES (NEW.model_id, 1)
+    ON CONFLICT (model_id) DO UPDATE SET generation = generation + 1;
+    INSERT INTO embedding_generations (model_id, generation) VALUES (OLD.model_id, 1)
+    ON CONFLICT (model_id) DO UPDATE SET generation = generation + 1;
+END;
+CREATE TRIGGER photo_embeddings_deleted AFTER DELETE ON photo_embeddings BEGIN
+    INSERT INTO embedding_generations (model_id, generation) VALUES (OLD.model_id, 1)
+    ON CONFLICT (model_id) DO UPDATE SET generation = generation + 1;
+END;
+"""
+
+
 @dataclass(frozen=True)
 class Migration:
     """One schema step. ``rebuilds`` marks steps that rewrite tables and so need a backup."""
@@ -350,6 +382,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(5, "roots", ROOTS_SQL),
     Migration(6, "hidden_files", HIDDEN_FILES_SQL),
     Migration(7, "removal", REMOVAL_SQL),
+    Migration(8, "embeddings_generation", EMBEDDINGS_GENERATION_SQL),
 )
 
 

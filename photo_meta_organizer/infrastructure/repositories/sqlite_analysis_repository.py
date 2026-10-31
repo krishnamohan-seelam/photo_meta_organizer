@@ -6,10 +6,9 @@ repository's schema. Both tables reference ``photos(file_hash)`` with ``ON DELET
 results leave with their photo, and ``replace()`` of a modified file (which deletes the old
 hash) discards the stale ones.
 
-Vectors are stored as little-endian float32 blobs of unit length. Similarity search is brute
-force: the candidate vectors (restricted to the search filters in SQL) are loaded into one numpy
-matrix and ranked with a single matrix-vector product, which stays fast into the low hundreds of
-thousands of photos (see ADR-002 for the measured limits and the next step if that is outgrown).
+Vectors are stored as little-endian float32 blobs of unit length. Similarity search turns the
+search filters into a set of candidate hashes in SQL and leaves the ranking to a
+:class:`VectorIndex` (brute force by default, kept on disk when given a directory; ticket 16).
 """
 
 import sqlite3
@@ -24,6 +23,7 @@ from photo_meta_organizer.application.interfaces.analysis_repository import (
     ReviewLabel,
 )
 from photo_meta_organizer.application.interfaces.search_types import SearchQuery
+from photo_meta_organizer.application.interfaces.vector_index import VectorIndex
 from photo_meta_organizer.domain.analysis import (
     AiTag,
     AiTagStatus,
@@ -32,6 +32,9 @@ from photo_meta_organizer.domain.analysis import (
     normalize,
 )
 from photo_meta_organizer.domain.datetimes import utc_now_naive
+from photo_meta_organizer.infrastructure.repositories.brute_force_vector_index import (
+    BruteForceVectorIndex,
+)
 from photo_meta_organizer.infrastructure.repositories.sqlite_repository import (
     search_source,
     search_where,
@@ -49,28 +52,26 @@ def _to_blob(vector: Sequence[float]) -> bytes:
 _CONFIDENCE_SLACK = 1e-6
 
 
-# Confidences are stored as 32-bit floats widened to 64-bit, so a threshold typed as 0.7 would miss
-# a suggestion stored as 0.69999999. A threshold counts as met within this slack.
-_CONFIDENCE_SLACK = 1e-6
-
-
 class SqliteAnalysisRepository:
     """SQLite-backed storage for embeddings and suggested tags."""
 
-    def __init__(self, connection: sqlite3.Connection, lock: threading.RLock) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        lock: threading.RLock,
+        index: VectorIndex | None = None,
+    ) -> None:
         self._conn = connection
         self._lock = lock
-        # (model_id, dim) -> (signature, hashes, matrix): the embeddings of one model as one
-        # matrix, so a search is a matrix-vector product, not a table read.
-        self._version = 0
-        self._matrices: dict[tuple[str, int], tuple[tuple[object, ...], list[str], np.ndarray]] = {}
+        # Follows the embeddings by itself (their generation counter), so writes here need not
+        # tell it anything.
+        self._index = index or BruteForceVectorIndex(connection, lock)
 
     # =========================================================================
     # Embeddings
     # =========================================================================
 
     def save_embeddings(self, items: Sequence[Embedding]) -> int:
-        self._version += 1
         saved = 0
         now = utc_now_naive().isoformat()
         with self._lock, self._conn:
@@ -143,7 +144,6 @@ class SqliteAnalysisRepository:
         return int(row[0])
 
     def clear_embeddings(self, model_id: str | None = None) -> int:
-        self._version += 1
         with self._lock, self._conn:
             if model_id is None:
                 return self._conn.execute("DELETE FROM photo_embeddings").rowcount
@@ -161,74 +161,19 @@ class SqliteAnalysisRepository:
     ) -> list[ScoredPhoto]:
         if k <= 0:
             return []
-        unit = np.asarray(normalize(vector), dtype=_FLOAT32)
-        dim = unit.shape[0]
-
-        with self._lock:
-            hashes, matrix = self._matrix(model_id, dim)
-            allowed: set[str] | None = None
-            where_sql, where_params = search_where(query) if query is not None else ("", [])
-            source = search_source(query) if query is not None else "assets"
+        allowed: set[str] | None = None
+        if query is not None:
+            where_sql, where_params = search_where(query)
             if where_sql:
-                allowed = {
-                    r[0]
-                    for r in self._conn.execute(
-                        f"SELECT file_hash FROM {source} {where_sql}", where_params
-                    )
-                }
-        if not hashes:
-            return []
-        if allowed is None and exclude_hash is None:
-            rows = np.arange(len(hashes))
-        else:
-            rows = np.fromiter(
-                (
-                    i
-                    for i, h in enumerate(hashes)
-                    if h != exclude_hash and (allowed is None or h in allowed)
-                ),
-                dtype=np.int64,
-            )
-        if rows.size == 0:
-            return []
-        scores = matrix[rows] @ unit if rows.size < len(hashes) else matrix @ unit
-        # ``rows`` is in hash order, so the stable sort breaks ties by hash.
-        best = np.argsort(-scores, kind="stable")[:k]
-        return [ScoredPhoto(file_hash=hashes[rows[i]], score=float(scores[i])) for i in best]
-
-    def _matrix(self, model_id: str, dim: int) -> tuple[list[str], np.ndarray]:
-        """The model's embeddings as (hashes in hash order, matrix), rebuilt only on change.
-
-        The signature is cheap: a counter bumped by this repository's own writes, SQLite's
-        ``data_version`` (writes from another connection) and the row count (a cascade delete
-        from the photos table). Caller holds the lock.
-        """
-        key = (model_id, dim)
-        count = self._conn.execute(
-            "SELECT COUNT(*) FROM photo_embeddings WHERE model_id = ? AND dim = ?",
-            (model_id, dim),
-        ).fetchone()[0]
-        data_version = self._conn.execute("PRAGMA data_version").fetchone()[0]
-        signature = (self._version, data_version, count)
-        cached = self._matrices.get(key)
-        if cached is not None and cached[0] == signature:
-            return cached[1], cached[2]
-        rows = self._conn.execute(
-            "SELECT file_hash, vector FROM photo_embeddings WHERE model_id = ? AND dim = ?",
-            (model_id, dim),
-        ).fetchall()
-        # Sorted here, not in SQL: with the model index the planner would sort the blobs.
-        rows.sort(key=lambda r: r["file_hash"])
-        hashes = [r["file_hash"] for r in rows]
-        matrix = (
-            np.frombuffer(b"".join(r["vector"] for r in rows), dtype=_FLOAT32).reshape(
-                len(rows), dim
-            )
-            if rows
-            else np.empty((0, dim), dtype=_FLOAT32)
-        )
-        self._matrices[key] = (signature, hashes, matrix)
-        return hashes, matrix
+                with self._lock:
+                    allowed = {
+                        r[0]
+                        for r in self._conn.execute(
+                            f"SELECT file_hash FROM {search_source(query)} {where_sql}",
+                            where_params,
+                        )
+                    }
+        return self._index.nearest(vector, k, model_id, allowed, exclude_hash)
 
     # =========================================================================
     # Suggested tags
