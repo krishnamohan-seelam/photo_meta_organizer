@@ -1745,12 +1745,48 @@ dl.kv dd.hash button:hover {
   display: grid;
   place-items: center;
   padding: 10px 72px;
+  overflow: hidden;
+  cursor: default;
+}
+.lb-stage--zoomed {
+  cursor: grab;
+}
+.lb-stage--zoomed:active {
+  cursor: grabbing;
 }
 .lb-stage img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  transform-origin: center;
+  will-change: transform;
+}
+.lb-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.lb-zoom-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+.lb-zoom-level {
+  min-width: 42px;
+  text-align: center;
+  font-size: 11px;
+  color: #a3a3a3;
+  padding: 0 4px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.lb-zoom-level:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ececec;
 }
 .lb-nav {
   position: absolute;

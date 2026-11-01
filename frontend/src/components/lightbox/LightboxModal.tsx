@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useReducer, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { PhotoMetadata } from '../../types/metadata'
 import { useUiStore } from '../../stores/useUiStore'
@@ -10,7 +10,7 @@ import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { filmstripWindow } from '../../utils/filmstrip'
 import { usePhotoSearch } from '../../hooks/usePhotos'
 import { displayTitle, exposureLine } from '../../utils/photoFormat'
-import { X, ChevronLeft, ChevronRight, Flag } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Flag, ZoomIn, ZoomOut } from 'lucide-react'
 
 export const LightboxModal: React.FC = () => {
   const { lightboxIndex, setLightboxIndex } = useUiStore(useShallow((s) => ({ lightboxIndex: s.lightboxIndex, setLightboxIndex: s.setLightboxIndex })))
@@ -27,6 +27,33 @@ export const LightboxModal: React.FC = () => {
 
 /** Thumbnails in the filmstrip: a window around the current photo, never the whole library. */
 const FILMSTRIP_SIZE = 13
+const ZOOM_STEP = 1.35
+const MAX_ZOOM = 8
+
+type ZoomState = { zoom: number; panX: number; panY: number }
+type ZoomAction =
+  | { type: 'scale'; factor: number; cursorDx?: number; cursorDy?: number }
+  | { type: 'reset' }
+  | { type: 'pan'; dx: number; dy: number }
+
+function zoomReducer(state: ZoomState, action: ZoomAction): ZoomState {
+  switch (action.type) {
+    case 'reset':
+      return { zoom: 1, panX: 0, panY: 0 }
+    case 'scale': {
+      const { factor, cursorDx = 0, cursorDy = 0 } = action
+      const nextZoom = Math.max(1, Math.min(MAX_ZOOM, state.zoom * factor))
+      if (nextZoom === state.zoom) return state
+      const ratio = nextZoom / state.zoom
+      const panX = cursorDx * (1 - ratio) + state.panX * ratio
+      const panY = cursorDy * (1 - ratio) + state.panY * ratio
+      // At zoom=1 (clamped back to fit), snap pan to zero.
+      return nextZoom === 1 ? { zoom: 1, panX: 0, panY: 0 } : { zoom: nextZoom, panX, panY }
+    }
+    case 'pan':
+      return { ...state, panX: state.panX + action.dx, panY: state.panY + action.dy }
+  }
+}
 
 interface LightboxProps {
   photos: PhotoMetadata[]
@@ -44,7 +71,32 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
   const { patchPhoto } = useCuration()
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ lastX: number; lastY: number } | null>(null)
   useDialogFocus(dialogRef, closeRef)
+
+  const [{ zoom, panX, panY }, dispatch] = useReducer(zoomReducer, { zoom: 1, panX: 0, panY: 0 })
+
+  // Reset zoom when the photo changes.
+  useEffect(() => {
+    dispatch({ type: 'reset' })
+  }, [currentPhoto.file_hash])
+
+  // Non-passive wheel listener so we can preventDefault and zoom without page scroll.
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = stage.getBoundingClientRect()
+      const cursorDx = e.clientX - (rect.left + rect.width / 2)
+      const cursorDy = e.clientY - (rect.top + rect.height / 2)
+      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+      dispatch({ type: 'scale', factor, cursorDx, cursorDy })
+    }
+    stage.addEventListener('wheel', onWheel, { passive: false })
+    return () => stage.removeEventListener('wheel', onWheel)
+  }, [])
 
   const showNext = () => {
     if (lightboxIndex + 1 < photos.length) setLightboxIndex(lightboxIndex + 1)
@@ -86,6 +138,10 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
       } else if (/^[0-5]$/.test(e.key)) {
         const rating = parseInt(e.key, 10)
         void patchPhoto(currentPhoto.file_hash, { rating: rating === 0 ? null : rating }, rating === 0 ? 'Rating cleared' : `Rated ${rating} ★`)
+      } else if (e.key === '+' || e.key === '=') {
+        dispatch({ type: 'scale', factor: ZOOM_STEP })
+      } else if (e.key === '-') {
+        dispatch({ type: 'scale', factor: 1 / ZOOM_STEP })
       }
     }
 
@@ -93,10 +149,40 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
     return () => window.removeEventListener('keydown', handleKeyDown)
   })
 
+  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = stageRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const cursorDx = e.clientX - (rect.left + rect.width / 2)
+    const cursorDy = e.clientY - (rect.top + rect.height / 2)
+    if (zoom > 1) {
+      dispatch({ type: 'reset' })
+    } else {
+      dispatch({ type: 'scale', factor: 2.5, cursorDx, cursorDy })
+    }
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (zoom <= 1) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = { lastX: e.clientX, lastY: e.clientY }
+  }
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return
+    const dx = e.clientX - dragRef.current.lastX
+    const dy = e.clientY - dragRef.current.lastY
+    dragRef.current = { lastX: e.clientX, lastY: e.clientY }
+    dispatch({ type: 'pan', dx, dy })
+  }
+  const handlePointerUp = () => { dragRef.current = null }
+
   const exif = currentPhoto.exif
   const [stripStart, stripEnd] = filmstripWindow(lightboxIndex, photos.length, FILMSTRIP_SIZE)
   const camera = [exif.camera_make, exif.camera_model].filter(Boolean).join(' ')
   const exposure = exposureLine(exif)
+
+  const imgStyle: React.CSSProperties = zoom === 1
+    ? {}
+    : { transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }
 
   return (
     <div
@@ -104,7 +190,7 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
       role="dialog"
       aria-modal="true"
       aria-label={`Photo viewer: ${currentPhoto.file_info.name}, ${lightboxIndex + 1} of ${total}`}
-      aria-keyshortcuts="ArrowLeft ArrowRight P 0 1 2 3 4 5 Escape"
+      aria-keyshortcuts="ArrowLeft ArrowRight P 0 1 2 3 4 5 Escape + -"
       className="lightbox"
       onClick={() => setLightboxIndex(null)}
     >
@@ -118,6 +204,17 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
           </span>
         </div>
         <div className="lb-actions">
+          <div className="lb-zoom-controls" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="btn-reset lb-icon lb-zoom-btn" onClick={() => dispatch({ type: 'scale', factor: 1 / ZOOM_STEP })} aria-label="Zoom out (-)">
+              <ZoomOut size={16} />
+            </button>
+            <button type="button" className="btn-reset lb-zoom-level num" onClick={() => dispatch({ type: 'reset' })} aria-label="Reset zoom" title="Click to reset">
+              {Math.round(zoom * 100)}%
+            </button>
+            <button type="button" className="btn-reset lb-icon lb-zoom-btn" onClick={() => dispatch({ type: 'scale', factor: ZOOM_STEP })} aria-label="Zoom in (+)">
+              <ZoomIn size={16} />
+            </button>
+          </div>
           <span className="lb-stars num" aria-label={currentPhoto.rating ? `${currentPhoto.rating} stars` : 'Not rated'}>
             {currentPhoto.rating ? '★'.repeat(currentPhoto.rating) : ''}
           </span>
@@ -132,11 +229,26 @@ const Lightbox: React.FC<LightboxProps> = ({ photos, total, index: lightboxIndex
         </div>
       </div>
 
-      <div className="lb-stage" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={stageRef}
+        className={`lb-stage${zoom > 1 ? ' lb-stage--zoomed' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={handleDoubleClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
         <button type="button" className="btn-reset lb-nav lb-prev" onClick={showPrevious} aria-label="Previous photo">
           <ChevronLeft size={24} />
         </button>
-        <img src={getPreviewUrl(currentPhoto.file_hash)} alt={currentPhoto.file_info.name} onError={swapToPlaceholder} />
+        <img
+          src={getPreviewUrl(currentPhoto.file_hash)}
+          alt={currentPhoto.file_info.name}
+          onError={swapToPlaceholder}
+          style={imgStyle}
+          draggable={false}
+        />
         <button type="button" className="btn-reset lb-nav lb-next" onClick={showNext} aria-label="Next photo">
           <ChevronRight size={24} />
         </button>
